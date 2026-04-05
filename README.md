@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="assets/logo.png" width="48" alt="MyTube logo" />
-
-# MyTube
+# <img src="assets/logo.png" width="40" alt="MyTube logo" valign="middle" /> MyTube
 
 **A privacy-focused YouTube frontend — no tracking, no ads, no Google.**
 
