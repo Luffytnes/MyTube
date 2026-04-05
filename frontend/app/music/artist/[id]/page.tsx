@@ -6,6 +6,7 @@ import { User, Play } from 'lucide-react'
 import TrackRow from '@/components/music/TrackRow'
 import AlbumCard from '@/components/music/AlbumCard'
 import { useMusic, type MusicTrack } from '@/lib/musicContext'
+import { useRegion } from '@/lib/regionContext'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -26,6 +27,7 @@ export default function MusicArtistPage() {
   const [artist, setArtist] = useState<Artist | null>(null)
   const [loading, setLoading] = useState(true)
   const { playTrack } = useMusic()
+  const { t } = useRegion()
 
   useEffect(() => {
     if (!id) return
@@ -53,7 +55,7 @@ export default function MusicArtistPage() {
     return (
       <div className="flex flex-col items-center justify-center py-32 min-h-screen">
         <User className="w-16 h-16 text-yt-text-muted mb-4" />
-        <p className="text-yt-text-muted">Artiste introuvable.</p>
+        <p className="text-yt-text-muted">{t('music_artist_not_found')}</p>
       </div>
     )
   }
@@ -72,7 +74,7 @@ export default function MusicArtistPage() {
         <div className="absolute bottom-4 left-4 right-4">
           <h1 className="text-yt-text text-3xl sm:text-4xl font-bold drop-shadow-lg">{artist.name}</h1>
           {artist.subscribers && (
-            <p className="text-yt-text-secondary text-sm mt-1">{artist.subscribers} abonnés</p>
+            <p className="text-yt-text-secondary text-sm mt-1">{artist.subscribers} {t('music_subscribers')}</p>
           )}
         </div>
       </div>
@@ -85,14 +87,14 @@ export default function MusicArtistPage() {
             className="flex items-center gap-2 px-6 py-2.5 bg-yt-red hover:bg-yt-red-hover text-white rounded-full text-sm font-medium transition-colors"
           >
             <Play className="w-4 h-4 fill-white" />
-            Écouter
+            {t('music_listen')}
           </button>
         )}
 
         {/* Top songs */}
         {artist.songs.length > 0 && (
           <section>
-            <h2 className="text-yt-text text-lg font-semibold mb-3">Titres populaires</h2>
+            <h2 className="text-yt-text text-lg font-semibold mb-3">{t('music_top_songs')}</h2>
             <div className="bg-yt-secondary rounded-2xl py-2">
               {artist.songs.map((track, i) => (
                 <TrackRow key={track.videoId} track={track} queue={artist.songs} index={i} showThumbnail showAlbum />
@@ -104,7 +106,7 @@ export default function MusicArtistPage() {
         {/* Albums */}
         {artist.albums.length > 0 && (
           <section>
-            <h2 className="text-yt-text text-lg font-semibold mb-4">Albums</h2>
+            <h2 className="text-yt-text text-lg font-semibold mb-4">{t('music_albums')}</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
               {artist.albums.map((album) => (
                 <AlbumCard
@@ -123,7 +125,7 @@ export default function MusicArtistPage() {
         {/* Singles */}
         {artist.singles.length > 0 && (
           <section>
-            <h2 className="text-yt-text text-lg font-semibold mb-4">Singles & EPs</h2>
+            <h2 className="text-yt-text text-lg font-semibold mb-4">{t('music_singles')}</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
               {artist.singles.map((s) => (
                 <AlbumCard key={s.browseId} browseId={s.browseId} title={s.title} year={s.year} thumbnail={s.thumbnail} type="Single" />
@@ -135,7 +137,7 @@ export default function MusicArtistPage() {
         {/* Related artists */}
         {artist.related.length > 0 && (
           <section>
-            <h2 className="text-yt-text text-lg font-semibold mb-4">Artistes similaires</h2>
+            <h2 className="text-yt-text text-lg font-semibold mb-4">{t('music_related_artists')}</h2>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
               {artist.related.map((r) => (
                 <a key={r.browseId} href={`/music/artist/${r.browseId}`} className="flex flex-col items-center gap-2 group">
@@ -159,7 +161,7 @@ export default function MusicArtistPage() {
         {/* Description */}
         {artist.description && (
           <section>
-            <h2 className="text-yt-text text-lg font-semibold mb-2">À propos</h2>
+            <h2 className="text-yt-text text-lg font-semibold mb-2">{t('music_about')}</h2>
             <p className="text-yt-text-muted text-sm leading-relaxed whitespace-pre-line">{artist.description}</p>
           </section>
         )}

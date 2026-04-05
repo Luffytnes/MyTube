@@ -7,6 +7,7 @@ import {
   getMusicPlaylists, createMusicPlaylist, deleteMusicPlaylist,
   renameMusicPlaylist, type MusicPlaylist,
 } from '@/lib/musicPlaylists'
+import { useRegion } from '@/lib/regionContext'
 
 export default function MusicPlaylistsPage() {
   const [playlists, setPlaylists] = useState<MusicPlaylist[]>([])
@@ -14,6 +15,7 @@ export default function MusicPlaylistsPage() {
   const [newName, setNewName] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
+  const { t } = useRegion()
 
   useEffect(() => { setPlaylists(getMusicPlaylists()) }, [])
 
@@ -48,14 +50,14 @@ export default function MusicPlaylistsPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-yt-text text-2xl font-bold flex items-center gap-3">
           <ListMusic className="w-7 h-7 text-yt-red" />
-          Mes playlists
+          {t('music_my_playlists')}
         </h1>
         <button
           onClick={() => { setCreating(true); setNewName('') }}
           className="flex items-center gap-2 px-4 py-2 rounded-full bg-yt-red hover:bg-yt-red-hover text-white text-sm font-medium transition-colors"
         >
           <Plus className="w-4 h-4" />
-          Nouvelle playlist
+          {t('music_new_playlist')}
         </button>
       </div>
 
@@ -68,7 +70,7 @@ export default function MusicPlaylistsPage() {
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setCreating(false) }}
-            placeholder="Nom de la playlist..."
+            placeholder={t('music_playlist_name')}
             className="flex-1 bg-transparent text-sm text-yt-text placeholder-yt-text-muted focus:outline-none px-2"
           />
           <button onClick={handleCreate} className="p-1.5 rounded-full bg-yt-red text-white hover:bg-yt-red-hover transition-colors">
@@ -83,8 +85,8 @@ export default function MusicPlaylistsPage() {
       {playlists.length === 0 && !creating ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <ListMusic className="w-16 h-16 text-yt-text-muted mb-4" />
-          <p className="text-yt-text text-lg font-medium mb-1">Aucune playlist</p>
-          <p className="text-yt-text-muted text-sm">Crée ta première playlist pour organiser ta musique.</p>
+          <p className="text-yt-text text-lg font-medium mb-1">{t('music_no_playlists')}</p>
+          <p className="text-yt-text-muted text-sm">{t('music_no_playlists_desc')}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -124,7 +126,7 @@ export default function MusicPlaylistsPage() {
                 ) : (
                   <Link href={`/music/playlists/${p.id}`}>
                     <p className="text-yt-text text-sm font-medium truncate hover:text-yt-red transition-colors">{p.name}</p>
-                    <p className="text-yt-text-muted text-xs mt-0.5">{p.tracks.length} titre{p.tracks.length !== 1 ? 's' : ''}</p>
+                    <p className="text-yt-text-muted text-xs mt-0.5">{p.tracks.length} {p.tracks.length !== 1 ? t('music_tracks') : t('music_track')}</p>
                   </Link>
                 )}
               </div>
@@ -132,10 +134,10 @@ export default function MusicPlaylistsPage() {
               {/* Actions */}
               {editingId !== p.id && (
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => startEdit(p)} className="p-1.5 rounded-full hover:bg-yt-hover text-yt-text-muted hover:text-yt-text transition-colors" aria-label="Renommer">
+                  <button onClick={() => startEdit(p)} className="p-1.5 rounded-full hover:bg-yt-hover text-yt-text-muted hover:text-yt-text transition-colors" aria-label={t('music_rename')}>
                     <Pencil className="w-4 h-4" />
                   </button>
-                  <button onClick={() => handleDelete(p.id)} className="p-1.5 rounded-full hover:bg-yt-hover text-yt-text-muted hover:text-red-400 transition-colors" aria-label="Supprimer">
+                  <button onClick={() => handleDelete(p.id)} className="p-1.5 rounded-full hover:bg-yt-hover text-yt-text-muted hover:text-red-400 transition-colors" aria-label={t('music_delete')}>
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>

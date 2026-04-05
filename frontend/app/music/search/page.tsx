@@ -8,8 +8,11 @@ import TrackRow from '@/components/music/TrackRow'
 import AlbumCard from '@/components/music/AlbumCard'
 import type { MusicTrack } from '@/lib/musicContext'
 import { cn } from '@/lib/utils'
+import { useRegion } from '@/lib/regionContext'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+import type { Translations } from '@/lib/translations'
 
 type FilterType = 'songs' | 'albums' | 'artists' | 'playlists'
 
@@ -32,15 +35,16 @@ interface Result {
   itemCount?: number
 }
 
-const FILTERS: { key: FilterType; label: string; icon: typeof Music2 }[] = [
-  { key: 'songs', label: 'Chansons', icon: Music2 },
-  { key: 'albums', label: 'Albums', icon: Disc3 },
-  { key: 'artists', label: 'Artistes', icon: User },
-  { key: 'playlists', label: 'Playlists', icon: ListMusic },
+const FILTERS: { key: FilterType; labelKey: keyof Translations; icon: typeof Music2 }[] = [
+  { key: 'songs', labelKey: 'music_songs', icon: Music2 },
+  { key: 'albums', labelKey: 'music_albums', icon: Disc3 },
+  { key: 'artists', labelKey: 'music_artists_label', icon: User },
+  { key: 'playlists', labelKey: 'music_playlists_label', icon: ListMusic },
 ]
 
 export default function MusicSearchPage() {
   const params = useSearchParams()
+  const { t } = useRegion()
   const initialQ = params.get('q') || ''
   const [filter, setFilter] = useState<FilterType>('songs')
   const [results, setResults] = useState<Result[]>([])
@@ -77,7 +81,7 @@ export default function MusicSearchPage() {
     <div className="px-4 py-6 max-w-5xl mx-auto min-h-screen">
       {/* Filter chips */}
       <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
-        {FILTERS.map(({ key, label, icon: Icon }) => (
+        {FILTERS.map(({ key, labelKey, icon: Icon }) => (
           <button
             key={key}
             onClick={() => { setFilter(key); if (initialQ.trim()) doSearch(initialQ, key) }}
@@ -87,7 +91,7 @@ export default function MusicSearchPage() {
             )}
           >
             <Icon className="w-3.5 h-3.5" />
-            {label}
+            {t(labelKey)}
           </button>
         ))}
       </div>
@@ -101,7 +105,7 @@ export default function MusicSearchPage() {
       ) : results.length === 0 && initialQ ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <Music2 className="w-12 h-12 text-yt-text-muted mb-3" />
-          <p className="text-yt-text-muted">Aucun résultat pour « {initialQ} »</p>
+          <p className="text-yt-text-muted">{t('music_no_results_music')} « {initialQ} »</p>
         </div>
       ) : (
         <>

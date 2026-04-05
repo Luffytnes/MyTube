@@ -8,6 +8,7 @@ import AlbumCard from '@/components/music/AlbumCard'
 import type { MusicTrack } from '@/lib/musicContext'
 import { getMusicPlaylists, type MusicPlaylist } from '@/lib/musicPlaylists'
 import { getMusicSearchHistory } from '@/lib/musicSearchHistory'
+import { useRegion } from '@/lib/regionContext'
 
 interface ArtistSuggestion {
   browseId: string
@@ -40,6 +41,7 @@ interface SearchResult {
 }
 
 export default function MusicHomePage() {
+  const { t } = useRegion()
   const [data, setData] = useState<HomeData | null>(null)
   const [loading, setLoading] = useState(true)
   const [forYouTracks, setForYouTracks] = useState<MusicTrack[]>([])
@@ -149,10 +151,10 @@ export default function MusicHomePage() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <ListMusic className="w-5 h-5 text-yt-red" />
-              <h2 className="text-yt-text text-lg font-semibold">Mes playlists</h2>
+              <h2 className="text-yt-text text-lg font-semibold">{t('music_my_playlists')}</h2>
             </div>
             <Link href="/music/playlists" className="flex items-center gap-1 text-xs text-yt-text-muted hover:text-yt-text transition-colors">
-              Voir tout <ChevronRight className="w-3.5 h-3.5" />
+              {t('music_see_all')} <ChevronRight className="w-3.5 h-3.5" />
             </Link>
           </div>
 
@@ -165,8 +167,8 @@ export default function MusicHomePage() {
                 <Plus className="w-5 h-5 text-yt-text-muted group-hover:text-yt-red transition-colors" />
               </div>
               <div>
-                <p className="text-sm font-medium text-yt-text">Créer une playlist</p>
-                <p className="text-xs text-yt-text-muted">Organise ta musique</p>
+                <p className="text-sm font-medium text-yt-text">{t('music_create_playlist')}</p>
+                <p className="text-xs text-yt-text-muted">{t('music_organize')}</p>
               </div>
             </Link>
           ) : (
@@ -185,7 +187,7 @@ export default function MusicHomePage() {
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-yt-text truncate group-hover:text-yt-red transition-colors">{p.name}</p>
-                    <p className="text-xs text-yt-text-muted">{p.tracks.length} titre{p.tracks.length !== 1 ? 's' : ''}</p>
+                    <p className="text-xs text-yt-text-muted">{p.tracks.length} {p.tracks.length !== 1 ? t('music_tracks') : t('music_track')}</p>
                   </div>
                 </Link>
               ))}
@@ -197,7 +199,7 @@ export default function MusicHomePage() {
                   <div className="w-12 h-12 rounded-lg flex-shrink-0 bg-yt-secondary flex items-center justify-center">
                     <Plus className="w-5 h-5 text-yt-text-muted group-hover:text-yt-red transition-colors" />
                   </div>
-                  <p className="text-sm text-yt-text-muted group-hover:text-yt-text transition-colors">Nouvelle</p>
+                  <p className="text-sm text-yt-text-muted group-hover:text-yt-text transition-colors">{t('music_new')}</p>
                 </Link>
               )}
             </div>
@@ -209,8 +211,8 @@ export default function MusicHomePage() {
           <section>
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="w-5 h-5 text-yt-red" />
-              <h2 className="text-yt-text text-lg font-semibold">Pour toi</h2>
-              <span className="text-yt-text-muted text-xs">Basé sur tes recherches</span>
+              <h2 className="text-yt-text text-lg font-semibold">{t('music_for_you')}</h2>
+              <span className="text-yt-text-muted text-xs">{t('music_based_on_searches')}</span>
             </div>
             {forYouLoading ? (
               <div className="space-y-2">
@@ -233,8 +235,8 @@ export default function MusicHomePage() {
           <section>
             <div className="flex items-center gap-2 mb-3">
               <Disc3 className="w-5 h-5 text-yt-red" />
-              <h2 className="text-yt-text text-lg font-semibold">Albums suggérés</h2>
-              <span className="text-yt-text-muted text-xs">Basé sur tes recherches</span>
+              <h2 className="text-yt-text text-lg font-semibold">{t('music_suggested_albums')}</h2>
+              <span className="text-yt-text-muted text-xs">{t('music_based_on_searches')}</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
               {suggestedAlbums.map((a) => (
@@ -257,8 +259,8 @@ export default function MusicHomePage() {
           <section>
             <div className="flex items-center gap-2 mb-3">
               <User className="w-5 h-5 text-yt-red" />
-              <h2 className="text-yt-text text-lg font-semibold">Artistes suggérés</h2>
-              <span className="text-yt-text-muted text-xs">Basé sur tes recherches</span>
+              <h2 className="text-yt-text text-lg font-semibold">{t('music_suggested_artists')}</h2>
+              <span className="text-yt-text-muted text-xs">{t('music_based_on_searches')}</span>
             </div>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
               {suggestedArtists.map((a) => (
@@ -294,7 +296,7 @@ export default function MusicHomePage() {
               <section>
                 <div className="flex items-center gap-2 mb-3">
                   <TrendingUp className="w-5 h-5 text-yt-red" />
-                  <h2 className="text-yt-text text-lg font-semibold">Top mondial</h2>
+                  <h2 className="text-yt-text text-lg font-semibold">{t('music_top_world')}</h2>
                 </div>
                 <div className="bg-yt-secondary rounded-2xl py-2">
                   {data.topSongs.map((track, i) => (
@@ -308,7 +310,7 @@ export default function MusicHomePage() {
               <section>
                 <div className="flex items-center gap-2 mb-3">
                   <Music2 className="w-5 h-5 text-yt-red" />
-                  <h2 className="text-yt-text text-lg font-semibold">Tendances</h2>
+                  <h2 className="text-yt-text text-lg font-semibold">{t('music_trending_music')}</h2>
                 </div>
                 <div className="bg-yt-secondary rounded-2xl py-2">
                   {data.trending.map((track, i) => (

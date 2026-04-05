@@ -8,10 +8,12 @@ import { useTheme, type ThemeMode } from '@/lib/themeContext'
 import { saveMusicSearchQuery } from '@/lib/musicSearchHistory'
 import RegionSelector from '@/components/layout/RegionSelector'
 import InvidiousSelector from '@/components/layout/InvidiousSelector'
+import { useRegion } from '@/lib/regionContext'
 
 export default function MusicHeader() {
   const router = useRouter()
   const { mode, theme, setMode } = useTheme()
+  const { t } = useRegion()
   const [query, setQuery] = useState('')
   const [showThemeMenu, setShowThemeMenu] = useState(false)
   const themeMenuRef = useRef<HTMLDivElement>(null)
@@ -55,7 +57,7 @@ export default function MusicHeader() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Artistes, chansons, albums..."
+            placeholder={t('music_search_placeholder')}
             className="flex-1 bg-transparent text-sm text-yt-text placeholder-yt-text-muted focus:outline-none"
           />
           {query && (
@@ -85,17 +87,17 @@ export default function MusicHeader() {
           {showThemeMenu && (
             <div className="absolute right-0 top-full mt-1 bg-yt-secondary border border-yt-border rounded-xl shadow-2xl py-1 z-50 min-w-[150px]">
               {([
-                { value: 'light' as ThemeMode, label: 'Clair', icon: Sun },
-                { value: 'dark' as ThemeMode, label: 'Sombre', icon: Moon },
-                { value: 'auto' as ThemeMode, label: 'Automatique', icon: Monitor },
-              ]).map(({ value, label, icon: Icon }) => (
+                { value: 'light' as ThemeMode, labelKey: 'theme_light', icon: Sun },
+                { value: 'dark' as ThemeMode, labelKey: 'theme_dark', icon: Moon },
+                { value: 'auto' as ThemeMode, labelKey: 'theme_auto', icon: Monitor },
+              ] as const).map(({ value, labelKey, icon: Icon }) => (
                 <button
                   key={value}
                   onClick={() => { setMode(value); setShowThemeMenu(false) }}
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-yt-hover transition-colors text-yt-text"
                 >
                   <Icon className="w-4 h-4 text-yt-text-muted flex-shrink-0" />
-                  <span className="flex-1 text-left">{label}</span>
+                  <span className="flex-1 text-left">{t(labelKey)}</span>
                   {mode === value && <Check className="w-3.5 h-3.5 text-yt-red" />}
                 </button>
               ))}
@@ -109,7 +111,7 @@ export default function MusicHeader() {
           title="Privacy-focused: no tracking, no ads, no Google fonts"
         >
           <Shield className="w-3.5 h-3.5 text-green-400" />
-          <span className="hidden md:block">Privé</span>
+          <span className="hidden md:block">{t('privacy_badge')}</span>
         </div>
 
         {/* Back to MyTube */}
@@ -117,7 +119,7 @@ export default function MusicHeader() {
           href="/"
           className="hidden sm:flex items-center gap-1.5 px-3 h-9 rounded-full bg-yt-secondary hover:bg-yt-hover border border-yt-border text-xs text-yt-text-secondary hover:text-yt-text transition-colors"
         >
-          ← MyTube
+          ← {t('music_back')}
         </Link>
       </div>
     </header>
