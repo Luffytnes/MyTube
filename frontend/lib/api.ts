@@ -1,0 +1,165 @@
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+export interface VideoChannel {
+  id: string
+  name: string
+  thumbnail?: string | null
+  subscriberCount?: number
+}
+
+export interface VideoCard {
+  id: string
+  title: string
+  thumbnail: string
+  duration: string
+  views: string
+  published: string
+  channel: VideoChannel
+}
+
+export interface VideoFormat {
+  itag: string
+  ext: string
+  quality: string
+  filesize?: number | null
+  hasAudio: boolean
+  hasVideo: boolean
+  height?: number
+  abr?: number
+}
+
+export interface VideoDetail extends VideoCard {
+  description: string
+  likes: string
+  viewCount: number
+  uploadDate: string
+  formats: VideoFormat[]
+  related: VideoCard[]
+  isLive?: boolean
+}
+
+export interface ChannelInfo {
+  id: string
+  name: string
+  description: string
+  subscriberCount: number
+  videoCount: number
+  thumbnail: string | null
+  banner: string | null
+}
+
+export interface SearchResult {
+  videos: VideoCard[]
+  query: string
+  page: number
+}
+
+export interface TrendingResult {
+  videos: VideoCard[]
+}
+
+export interface ChannelVideosResult {
+  videos: VideoCard[]
+  channelId: string
+  page: number
+}
+
+function buildThumbnailUrl(videoId: string): string {
+  // Use YouTube's CDN directly — faster than proxying through our backend
+  return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+}
+
+function normalizeThumbnail(video: VideoCard): VideoCard {
+  return {
+    ...video,
+    thumbnail: buildThumbnailUrl(video.id),
+  }
+}
+
+export async function getTrending(region = 'US', category = 'all', lang = 'en'): Promise<TrendingResult> {
+  const params = new URLSearchParams({ region, category, lang })
+  const res = await fetch(`${API_BASE}/api/trending?${params}`, { cache: 'no-store' })
+  if (!res.ok) {
+    throw new Error(`Failed to fetch trending: ${res.statusText}`)
+  }
+  const data: TrendingResult = await res.json()
+  return {
+    videos: data.videos.map(normalizeThumbnail),
+  }
+}
+
+export async function searchVideos(q: string, page = 1): Promise<SearchResult> {
+  const params = new URLSearchParams({ q, page: String(page) })
+  const res = await fetch(`${API_BASE}/api/search?${params}`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) {
+    throw new Error(`Search failed: ${res.statusText}`)
+  }
+  const data: SearchResult = await res.json()
+  return {
+    ...data,
+    videos: data.videos.map(normalizeThumbnail),
+  }
+}
+
+export async function getVideo(id: string): Promise<VideoDetail> {
+  const res = await fetch(`${API_BASE}/api/video/${id}`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.detail || `Failed to fetch video: ${res.statusText}`)
+  }
+  const data: VideoDetail = await res.json()
+  return {
+    ...data,
+    thumbnail: buildThumbnailUrl(id),
+    related: data.related.map(normalizeThumbnail),
+  }
+}
+
+export async function getChannel(id: string): Promise<ChannelInfo> {
+  const res = await fetch(`${API_BASE}/api/channel/${id}`, {
+    next: { revalidate: 60 },
+  })
+  if (!res.ok) {
+    throw new Error(`Failed to fetch channel: ${res.statusText}`)
+  }
+  return res.json()
+}
+
+export async function getChannelVideos(
+  id: string,
+  page = 1
+): Promise<ChannelVideosResult> {
+  const params = new URLSearchParams({ page: String(page) })
+  const res = await fetch(`${API_BASE}/api/channel/${id}/videos?${params}`, {
+    cache: 'no-store',
+  })
+  if (!res.ok) {
+    throw new Error(`Failed to fetch channel videos: ${res.statusText}`)
+  }
+  const data: ChannelVideosResult = await res.json()
+  return {
+    ...data,
+    videos: data.videos.map(normalizeThumbnail),
+  }
+}
+
+export function getStreamUrl(videoId: string, itag?: string): string {
+  const params = itag ? `?itag=${encodeURIComponent(itag)}` : ''
+  return `${API_BASE}/api/stream/${videoId}${params}`
+}
+
+export function getAudioUrl(videoId: string): string {
+  return `${API_BASE}/api/stream/${videoId}/audio`
+}
+
+export function getLiveUrl(videoId: string): string {
+  return `${API_BASE}/api/live/${videoId}`
+}
+
+export function getDownloadUrl(videoId: string, itag: string): string {
+  return `${API_BASE}/api/download/${videoId}?itag=${encodeURIComponent(itag)}`
+}
