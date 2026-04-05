@@ -1,6 +1,8 @@
 <div align="center">
 
-# 📺 MyTube
+<img src="assets/logo.png" width="48" alt="MyTube logo" />
+
+# MyTube
 
 **A privacy-focused YouTube frontend — no tracking, no ads, no Google.**
 
@@ -14,7 +16,7 @@
 
 ---
 
-## 🤔 What is MyTube?
+## What is MyTube?
 
 MyTube is a **self-hosted YouTube frontend** that lets you browse, search, and watch YouTube videos without Google ever knowing you're there. All requests are proxied through your own server — your browser never contacts Google directly.
 
