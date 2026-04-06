@@ -47,7 +47,8 @@ export default function MusicSearchPage() {
   const params = useSearchParams()
   const { t, lang } = useRegion()
   const initialQ = params.get('q') || ''
-  const [filter, setFilter] = useState<FilterType>('songs')
+  const initialFilter = (params.get('filter') as FilterType) || 'songs'
+  const [filter, setFilter] = useState<FilterType>(initialFilter)
   const [results, setResults] = useState<Result[]>([])
   const [loading, setLoading] = useState(false)
 

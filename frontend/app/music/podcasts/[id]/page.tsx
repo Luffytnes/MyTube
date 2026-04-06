@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { Mic2, Play, Clock } from 'lucide-react'
+import { Mic2, Play, Pause, Clock } from 'lucide-react'
 import { useMusic } from '@/lib/musicContext'
 import { useRegion } from '@/lib/regionContext'
 
@@ -31,7 +31,7 @@ export default function PodcastPage() {
   const { id } = useParams<{ id: string }>()
   const [podcast, setPodcast] = useState<Podcast | null>(null)
   const [loading, setLoading] = useState(true)
-  const { playTrack } = useMusic()
+  const { playTrack, playPause, currentTrack, playing } = useMusic()
   const { t, lang } = useRegion()
 
   useEffect(() => {
@@ -104,15 +104,18 @@ export default function PodcastPage() {
           <p className="text-yt-text-muted text-xs mb-4">
             {podcast.episodes.length} {podcast.episodes.length !== 1 ? t('podcast_episodes') : t('podcast_episode')}
           </p>
-          {podcast.episodes.length > 0 && (
-            <button
-              onClick={() => playTrack(allTracks[0], allTracks)}
-              className="flex items-center gap-2 px-6 py-2.5 bg-yt-red hover:bg-yt-red-hover text-white rounded-full text-sm font-medium transition-colors self-start"
-            >
-              <Play className="w-4 h-4 fill-white" />
-              {t('music_listen')}
-            </button>
-          )}
+          {podcast.episodes.length > 0 && (() => {
+            const firstActive = currentTrack?.videoId === allTracks[0]?.videoId
+            return (
+              <button
+                onClick={() => firstActive ? playPause() : playTrack(allTracks[0], allTracks)}
+                className="flex items-center gap-2 px-6 py-2.5 bg-yt-red hover:bg-yt-red-hover text-white rounded-full text-sm font-medium transition-colors self-start"
+              >
+                {firstActive && playing ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white" />}
+                {t('music_listen')}
+              </button>
+            )
+          })()}
         </div>
       </div>
 
@@ -131,11 +134,14 @@ export default function PodcastPage() {
         </div>
       ) : (
         <div className="space-y-1">
-          {podcast.episodes.map((ep, i) => (
+          {podcast.episodes.map((ep, i) => {
+            const isThisPlaying = currentTrack?.videoId === ep.videoId && playing
+            const isThisActive = currentTrack?.videoId === ep.videoId
+            return (
             <button
               key={ep.videoId}
-              onClick={() => playTrack(episodeAsTrack(ep), allTracks)}
-              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-yt-secondary transition-colors group text-left"
+              onClick={() => isThisActive ? playPause() : playTrack(episodeAsTrack(ep), allTracks)}
+              className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-colors group text-left ${isThisActive ? 'bg-yt-secondary' : 'hover:bg-yt-secondary'}`}
             >
               {/* Thumbnail */}
               <div className="w-14 h-14 rounded-lg overflow-hidden bg-yt-secondary flex-shrink-0">
@@ -155,7 +161,7 @@ export default function PodcastPage() {
 
               {/* Info */}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-yt-text truncate group-hover:text-yt-red transition-colors">
+                <p className={`text-sm font-medium truncate transition-colors ${isThisActive ? 'text-yt-red' : 'text-yt-text group-hover:text-yt-red'}`}>
                   {ep.title}
                 </p>
                 {ep.description && (
@@ -166,7 +172,7 @@ export default function PodcastPage() {
                 )}
               </div>
 
-              {/* Duration + play */}
+              {/* Duration + play/pause */}
               <div className="flex items-center gap-2 flex-shrink-0">
                 {ep.duration && (
                   <span className="flex items-center gap-1 text-xs text-yt-text-muted">
@@ -174,12 +180,16 @@ export default function PodcastPage() {
                     {ep.duration}
                   </span>
                 )}
-                <div className="w-8 h-8 rounded-full bg-yt-red opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                  <Play className="w-3.5 h-3.5 fill-white text-white" />
+                <div className={`w-8 h-8 rounded-full bg-yt-red flex items-center justify-center transition-opacity ${isThisActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                  {isThisPlaying
+                    ? <Pause className="w-3.5 h-3.5 fill-white text-white" />
+                    : <Play className="w-3.5 h-3.5 fill-white text-white" />
+                  }
                 </div>
               </div>
             </button>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
