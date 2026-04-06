@@ -38,7 +38,7 @@ export default function PodcastPage() {
     if (!id) return
     fetch(`${API_BASE}/api/music/podcast/${id}`)
       .then((r) => r.json())
-      .then(setPodcast)
+      .then((data) => setPodcast({ ...data, episodes: data?.episodes || [] }))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [id])

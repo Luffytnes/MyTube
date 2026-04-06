@@ -1988,7 +1988,8 @@ async def music_podcast(browse_id: str):
             ytm = get_ytm()
             data = ytm.get_podcast(browse_id)
             episodes = []
-            for ep in (data.get("episodes", {}).get("results", []) or [])[:50]:
+            episodes_data = data.get("episodes") or {}
+            for ep in (episodes_data.get("results", []) or [])[:50]:
                 episodes.append({
                     "videoId": ep.get("videoId"),
                     "title": ep.get("title"),
