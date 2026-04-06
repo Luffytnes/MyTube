@@ -48,6 +48,9 @@ export interface Translations {
   music_playlist_not_found: string; music_no_tracks: string; music_add_tracks_hint: string; music_remove: string
   music_search_placeholder: string
   music_albums: string; music_artists_label: string; music_playlists_label: string; music_subscribers: string
+  podcast_nav: string; podcast_search_placeholder: string; podcast_suggested: string; podcast_results: string
+  podcast_no_results: string; podcast_not_found: string; podcast_label: string
+  podcast_episode: string; podcast_episodes: string; podcast_episodes_title: string; podcast_no_episodes: string
   theme_light: string; theme_dark: string; theme_auto: string
 }
 
@@ -110,6 +113,9 @@ export const translations: Record<Lang, Translations> = {
     music_playlist_not_found: 'Playlist not found.', music_no_tracks: 'No tracks in this playlist.', music_add_tracks_hint: 'Add tracks from search or artist pages.', music_remove: 'Remove',
     music_search_placeholder: 'Artists, songs, albums...',
     music_albums: 'Albums', music_artists_label: 'Artists', music_playlists_label: 'Playlists', music_subscribers: 'subscribers',
+    podcast_nav: 'Podcasts', podcast_search_placeholder: 'Search podcasts...', podcast_suggested: 'Suggested podcasts', podcast_results: 'Search results',
+    podcast_no_results: 'No podcasts found.', podcast_not_found: 'Podcast not found.', podcast_label: 'Podcast',
+    podcast_episode: 'episode', podcast_episodes: 'episodes', podcast_episodes_title: 'Episodes', podcast_no_episodes: 'No episodes available.',
     theme_light: 'Light', theme_dark: 'Dark', theme_auto: 'Auto',
   },
   fr: {
@@ -170,6 +176,9 @@ export const translations: Record<Lang, Translations> = {
     music_playlist_not_found: 'Playlist introuvable.', music_no_tracks: 'Aucun titre dans cette playlist.', music_add_tracks_hint: 'Ajoute des titres depuis la recherche ou les pages artistes.', music_remove: 'Retirer',
     music_search_placeholder: 'Artistes, chansons, albums...',
     music_albums: 'Albums', music_artists_label: 'Artistes', music_playlists_label: 'Playlists', music_subscribers: 'abonnés',
+    podcast_nav: 'Podcasts', podcast_search_placeholder: 'Rechercher des podcasts...', podcast_suggested: 'Podcasts suggérés', podcast_results: 'Résultats',
+    podcast_no_results: 'Aucun podcast trouvé.', podcast_not_found: 'Podcast introuvable.', podcast_label: 'Podcast',
+    podcast_episode: 'épisode', podcast_episodes: 'épisodes', podcast_episodes_title: 'Épisodes', podcast_no_episodes: 'Aucun épisode disponible.',
     theme_light: 'Clair', theme_dark: 'Sombre', theme_auto: 'Automatique',
   },
   es: {
@@ -230,6 +239,9 @@ export const translations: Record<Lang, Translations> = {
     music_playlist_not_found: 'Playlist no encontrada.', music_no_tracks: 'Sin pistas en esta playlist.', music_add_tracks_hint: 'Añade pistas desde la búsqueda o páginas de artistas.', music_remove: 'Quitar',
     music_search_placeholder: 'Artistas, canciones, álbumes...',
     music_albums: 'Álbumes', music_artists_label: 'Artistas', music_playlists_label: 'Playlists', music_subscribers: 'suscriptores',
+    podcast_nav: 'Podcasts', podcast_search_placeholder: 'Buscar podcasts...', podcast_suggested: 'Podcasts sugeridos', podcast_results: 'Resultados',
+    podcast_no_results: 'No se encontraron podcasts.', podcast_not_found: 'Podcast no encontrado.', podcast_label: 'Podcast',
+    podcast_episode: 'episodio', podcast_episodes: 'episodios', podcast_episodes_title: 'Episodios', podcast_no_episodes: 'No hay episodios disponibles.',
     theme_light: 'Claro', theme_dark: 'Oscuro', theme_auto: 'Automático',
   },
   de: {
@@ -290,6 +302,9 @@ export const translations: Record<Lang, Translations> = {
     music_playlist_not_found: 'Playlist nicht gefunden.', music_no_tracks: 'Keine Titel in dieser Playlist.', music_add_tracks_hint: 'Füge Titel aus der Suche oder Künstlerseiten hinzu.', music_remove: 'Entfernen',
     music_search_placeholder: 'Künstler, Songs, Alben...',
     music_albums: 'Alben', music_artists_label: 'Künstler', music_playlists_label: 'Playlists', music_subscribers: 'Abonnenten',
+    podcast_nav: 'Podcasts', podcast_search_placeholder: 'Podcasts suchen...', podcast_suggested: 'Vorgeschlagene Podcasts', podcast_results: 'Ergebnisse',
+    podcast_no_results: 'Keine Podcasts gefunden.', podcast_not_found: 'Podcast nicht gefunden.', podcast_label: 'Podcast',
+    podcast_episode: 'Folge', podcast_episodes: 'Folgen', podcast_episodes_title: 'Folgen', podcast_no_episodes: 'Keine Folgen verfügbar.',
     theme_light: 'Hell', theme_dark: 'Dunkel', theme_auto: 'Automatisch',
   },
   pt: {
@@ -350,6 +365,9 @@ export const translations: Record<Lang, Translations> = {
     music_playlist_not_found: 'Playlist não encontrada.', music_no_tracks: 'Sem faixas nesta playlist.', music_add_tracks_hint: 'Adicione faixas da pesquisa ou páginas de artistas.', music_remove: 'Remover',
     music_search_placeholder: 'Artistas, músicas, álbuns...',
     music_albums: 'Álbuns', music_artists_label: 'Artistas', music_playlists_label: 'Playlists', music_subscribers: 'inscritos',
+    podcast_nav: 'Podcasts', podcast_search_placeholder: 'Pesquisar podcasts...', podcast_suggested: 'Podcasts sugeridos', podcast_results: 'Resultados',
+    podcast_no_results: 'Nenhum podcast encontrado.', podcast_not_found: 'Podcast não encontrado.', podcast_label: 'Podcast',
+    podcast_episode: 'episódio', podcast_episodes: 'episódios', podcast_episodes_title: 'Episódios', podcast_no_episodes: 'Nenhum episódio disponível.',
     theme_light: 'Claro', theme_dark: 'Escuro', theme_auto: 'Automático',
   },
   it: {
@@ -410,6 +428,9 @@ export const translations: Record<Lang, Translations> = {
     music_playlist_not_found: 'Playlist non trovata.', music_no_tracks: 'Nessun brano in questa playlist.', music_add_tracks_hint: 'Aggiungi brani dalla ricerca o dalle pagine artisti.', music_remove: 'Rimuovi',
     music_search_placeholder: 'Artisti, canzoni, album...',
     music_albums: 'Album', music_artists_label: 'Artisti', music_playlists_label: 'Playlist', music_subscribers: 'iscritti',
+    podcast_nav: 'Podcast', podcast_search_placeholder: 'Cerca podcast...', podcast_suggested: 'Podcast suggeriti', podcast_results: 'Risultati',
+    podcast_no_results: 'Nessun podcast trovato.', podcast_not_found: 'Podcast non trovato.', podcast_label: 'Podcast',
+    podcast_episode: 'episodio', podcast_episodes: 'episodi', podcast_episodes_title: 'Episodi', podcast_no_episodes: 'Nessun episodio disponibile.',
     theme_light: 'Chiaro', theme_dark: 'Scuro', theme_auto: 'Automatico',
   },
   ja: {
@@ -470,6 +491,9 @@ export const translations: Record<Lang, Translations> = {
     music_playlist_not_found: 'プレイリストが見つかりません。', music_no_tracks: 'このプレイリストに曲がありません。', music_add_tracks_hint: '検索やアーティストページから曲を追加しましょう。', music_remove: '削除',
     music_search_placeholder: 'アーティスト、曲、アルバム...',
     music_albums: 'アルバム', music_artists_label: 'アーティスト', music_playlists_label: 'プレイリスト', music_subscribers: '登録者',
+    podcast_nav: 'ポッドキャスト', podcast_search_placeholder: 'ポッドキャストを検索...', podcast_suggested: 'おすすめポッドキャスト', podcast_results: '検索結果',
+    podcast_no_results: 'ポッドキャストが見つかりません。', podcast_not_found: 'ポッドキャストが見つかりません。', podcast_label: 'ポッドキャスト',
+    podcast_episode: 'エピソード', podcast_episodes: 'エピソード', podcast_episodes_title: 'エピソード', podcast_no_episodes: 'エピソードがありません。',
     theme_light: 'ライト', theme_dark: 'ダーク', theme_auto: '自動',
   },
   ko: {
@@ -530,6 +554,9 @@ export const translations: Record<Lang, Translations> = {
     music_playlist_not_found: '플레이리스트를 찾을 수 없습니다.', music_no_tracks: '이 플레이리스트에 곡이 없습니다.', music_add_tracks_hint: '검색이나 아티스트 페이지에서 곡을 추가하세요.', music_remove: '제거',
     music_search_placeholder: '아티스트, 노래, 앨범...',
     music_albums: '앨범', music_artists_label: '아티스트', music_playlists_label: '플레이리스트', music_subscribers: '구독자',
+    podcast_nav: '팟캐스트', podcast_search_placeholder: '팟캐스트 검색...', podcast_suggested: '추천 팟캐스트', podcast_results: '검색 결과',
+    podcast_no_results: '팟캐스트를 찾을 수 없습니다.', podcast_not_found: '팟캐스트를 찾을 수 없습니다.', podcast_label: '팟캐스트',
+    podcast_episode: '에피소드', podcast_episodes: '에피소드', podcast_episodes_title: '에피소드', podcast_no_episodes: '에피소드가 없습니다.',
     theme_light: '라이트', theme_dark: '다크', theme_auto: '자동',
   },
   ru: {
@@ -590,6 +617,9 @@ export const translations: Record<Lang, Translations> = {
     music_playlist_not_found: 'Плейлист не найден.', music_no_tracks: 'В этом плейлисте нет треков.', music_add_tracks_hint: 'Добавьте треки из поиска или страниц артистов.', music_remove: 'Убрать',
     music_search_placeholder: 'Артисты, песни, альбомы...',
     music_albums: 'Альбомы', music_artists_label: 'Артисты', music_playlists_label: 'Плейлисты', music_subscribers: 'подписчиков',
+    podcast_nav: 'Подкасты', podcast_search_placeholder: 'Поиск подкастов...', podcast_suggested: 'Рекомендуемые подкасты', podcast_results: 'Результаты',
+    podcast_no_results: 'Подкасты не найдены.', podcast_not_found: 'Подкаст не найден.', podcast_label: 'Подкаст',
+    podcast_episode: 'эпизод', podcast_episodes: 'эпизодов', podcast_episodes_title: 'Эпизоды', podcast_no_episodes: 'Нет доступных эпизодов.',
     theme_light: 'Светлая', theme_dark: 'Тёмная', theme_auto: 'Авто',
   },
 }

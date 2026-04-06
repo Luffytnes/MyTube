@@ -1954,6 +1954,65 @@ async def music_song(video_id: str):
         raise HTTPException(status_code=500, detail=f"Song error: {str(e)}")
 
 
+@app.get("/api/music/podcasts/search")
+async def music_podcasts_search(q: str = "", lang: str = "en"):
+    """Search podcasts on YouTube Music."""
+    loop = asyncio.get_event_loop()
+    try:
+        def _get():
+            ytm = get_ytm()
+            results = ytm.search(q if q.strip() else "podcast", filter="podcasts")
+            podcasts = []
+            for item in results[:20]:
+                podcasts.append({
+                    "browseId": item.get("browseId"),
+                    "playlistId": item.get("browseId"),
+                    "title": item.get("title"),
+                    "author": item.get("author") or (item.get("podcasters", [{}])[0].get("name") if item.get("podcasters") else None),
+                    "thumbnail": _thumb_url(item.get("thumbnails", [])),
+                    "episodes": item.get("episodes"),
+                })
+            return [p for p in podcasts if p["browseId"]]
+        result = await loop.run_in_executor(None, _get)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Podcast search error: {str(e)}")
+
+
+@app.get("/api/music/podcast/{browse_id}")
+async def music_podcast(browse_id: str):
+    """Get podcast details and episodes from YouTube Music."""
+    loop = asyncio.get_event_loop()
+    try:
+        def _get():
+            ytm = get_ytm()
+            data = ytm.get_podcast(browse_id)
+            episodes = []
+            for ep in (data.get("episodes", {}).get("results", []) or [])[:50]:
+                episodes.append({
+                    "videoId": ep.get("videoId"),
+                    "title": ep.get("title"),
+                    "description": ep.get("description", {}).get("text") if isinstance(ep.get("description"), dict) else ep.get("description"),
+                    "thumbnail": _thumb_url(ep.get("thumbnails", [])),
+                    "duration": ep.get("duration"),
+                    "date": ep.get("date"),
+                    "index": ep.get("index"),
+                })
+            podcasters = data.get("author", {})
+            return {
+                "browseId": browse_id,
+                "title": data.get("title"),
+                "author": podcasters.get("name") if isinstance(podcasters, dict) else str(podcasters),
+                "description": data.get("description", {}).get("text") if isinstance(data.get("description"), dict) else data.get("description"),
+                "thumbnail": _thumb_url(data.get("thumbnails", [])),
+                "episodes": [e for e in episodes if e["videoId"]],
+            }
+        result = await loop.run_in_executor(None, _get)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Podcast error: {str(e)}")
+
+
 @app.get("/api/music/home")
 async def music_home():
     """YouTube Music home — mix of charts + new releases."""
