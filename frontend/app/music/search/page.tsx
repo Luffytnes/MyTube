@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Music2, Disc3, User, ListMusic } from 'lucide-react'
+import { Music2, Disc3, User, ListMusic, Mic2 } from 'lucide-react'
 import Link from 'next/link'
 import TrackRow from '@/components/music/TrackRow'
 import AlbumCard from '@/components/music/AlbumCard'
@@ -14,7 +14,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 import type { Translations } from '@/lib/translations'
 
-type FilterType = 'songs' | 'albums' | 'artists' | 'playlists'
+type FilterType = 'songs' | 'albums' | 'artists' | 'playlists' | 'podcasts'
 
 interface Result {
   type: string
@@ -40,11 +40,12 @@ const FILTERS: { key: FilterType; labelKey: keyof Translations; icon: typeof Mus
   { key: 'albums', labelKey: 'music_albums', icon: Disc3 },
   { key: 'artists', labelKey: 'music_artists_label', icon: User },
   { key: 'playlists', labelKey: 'music_playlists_label', icon: ListMusic },
+  { key: 'podcasts', labelKey: 'podcast_nav', icon: Mic2 },
 ]
 
 export default function MusicSearchPage() {
   const params = useSearchParams()
-  const { t } = useRegion()
+  const { t, lang } = useRegion()
   const initialQ = params.get('q') || ''
   const [filter, setFilter] = useState<FilterType>('songs')
   const [results, setResults] = useState<Result[]>([])
@@ -55,12 +56,15 @@ export default function MusicSearchPage() {
     setLoading(true)
     setResults([])
     try {
-      const res = await fetch(`${API_BASE}/api/music/search?q=${encodeURIComponent(q)}&filter=${f}`)
+      const url = f === 'podcasts'
+        ? `${API_BASE}/api/music/podcasts/search?q=${encodeURIComponent(q)}&lang=${lang}`
+        : `${API_BASE}/api/music/search?q=${encodeURIComponent(q)}&filter=${f}`
+      const res = await fetch(url)
       const data = await res.json()
       setResults(Array.isArray(data) ? data : [])
     } catch { setResults([]) }
     finally { setLoading(false) }
-  }, [])
+  }, [lang])
 
   useEffect(() => {
     if (initialQ) doSearch(initialQ, filter)
@@ -152,6 +156,30 @@ export default function MusicSearchPage() {
                   </div>
                   <p className="text-sm font-medium text-yt-text text-center truncate w-full group-hover:text-yt-red transition-colors">{r.name}</p>
                   {r.subscribers && <p className="text-xs text-yt-text-muted">{r.subscribers}</p>}
+                </Link>
+              ))}
+            </div>
+          )}
+
+          {/* Podcasts */}
+          {filter === 'podcasts' && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {results.map((r) => r.browseId && (
+                <Link key={r.browseId} href={`/music/podcasts/${r.browseId}`} className="flex flex-col gap-2 group">
+                  <div className="aspect-square rounded-xl overflow-hidden bg-yt-secondary shadow">
+                    {r.thumbnail ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={r.thumbnail} alt={r.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Mic2 className="w-10 h-10 text-yt-text-muted" />
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-yt-text truncate group-hover:text-yt-red transition-colors">{r.title}</p>
+                    {r.author && <p className="text-xs text-yt-text-muted truncate">{r.author}</p>}
+                  </div>
                 </Link>
               ))}
             </div>

@@ -32,11 +32,11 @@ export default function PodcastPage() {
   const [podcast, setPodcast] = useState<Podcast | null>(null)
   const [loading, setLoading] = useState(true)
   const { playTrack } = useMusic()
-  const { t } = useRegion()
+  const { t, lang } = useRegion()
 
   useEffect(() => {
     if (!id) return
-    fetch(`${API_BASE}/api/music/podcast/${id}`)
+    fetch(`${API_BASE}/api/music/podcast/${id}?lang=${lang}`)
       .then((r) => r.json())
       .then((data) => setPodcast({ ...data, episodes: data?.episodes || [] }))
       .catch(() => {})

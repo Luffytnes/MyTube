@@ -1665,13 +1665,13 @@ async def get_channel_videos(channel_id: str, page: int = Query(1, ge=1)):
 
 from ytmusicapi import YTMusic as _YTMusic
 
-_ytm: Optional[_YTMusic] = None
+_ytm_cache: dict = {}
 
-def get_ytm() -> _YTMusic:
-    global _ytm
-    if _ytm is None:
-        _ytm = _YTMusic()
-    return _ytm
+def get_ytm(language: str = "en") -> _YTMusic:
+    global _ytm_cache
+    if language not in _ytm_cache:
+        _ytm_cache[language] = _YTMusic(language=language)
+    return _ytm_cache[language]
 
 
 def _thumb_url(thumbnails: list) -> Optional[str]:
@@ -1960,7 +1960,7 @@ async def music_podcasts_search(q: str = "", lang: str = "en"):
     loop = asyncio.get_event_loop()
     try:
         def _get():
-            ytm = get_ytm()
+            ytm = get_ytm(language=lang)
             results = ytm.search(q if q.strip() else "podcast", filter="podcasts")
             podcasts = []
             for item in results[:20]:
@@ -1980,12 +1980,12 @@ async def music_podcasts_search(q: str = "", lang: str = "en"):
 
 
 @app.get("/api/music/podcast/{browse_id}")
-async def music_podcast(browse_id: str):
+async def music_podcast(browse_id: str, lang: str = "en"):
     """Get podcast details and episodes from YouTube Music."""
     loop = asyncio.get_event_loop()
     try:
         def _get():
-            ytm = get_ytm()
+            ytm = get_ytm(language=lang)
             data = ytm.get_podcast(browse_id)
             episodes = []
             raw_eps = data.get("episodes") or []

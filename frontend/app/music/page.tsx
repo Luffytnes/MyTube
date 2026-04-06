@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { TrendingUp, Music2, ListMusic, Sparkles, Plus, ChevronRight, User, Disc3 } from 'lucide-react'
+import { TrendingUp, Music2, ListMusic, Sparkles, Plus, ChevronRight, User, Disc3, Mic2 } from 'lucide-react'
 import TrackRow from '@/components/music/TrackRow'
 import AlbumCard from '@/components/music/AlbumCard'
 import type { MusicTrack } from '@/lib/musicContext'
@@ -15,6 +15,13 @@ interface ArtistSuggestion {
   name: string
   thumbnail?: string
   subscribers?: string
+}
+
+interface PodcastSuggestion {
+  browseId: string
+  title: string
+  author?: string
+  thumbnail?: string
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -41,13 +48,14 @@ interface SearchResult {
 }
 
 export default function MusicHomePage() {
-  const { t } = useRegion()
+  const { t, lang } = useRegion()
   const [data, setData] = useState<HomeData | null>(null)
   const [loading, setLoading] = useState(true)
   const [forYouTracks, setForYouTracks] = useState<MusicTrack[]>([])
   const [forYouLoading, setForYouLoading] = useState(false)
   const [suggestedAlbums, setSuggestedAlbums] = useState<SearchResult[]>([])
   const [suggestedArtists, setSuggestedArtists] = useState<ArtistSuggestion[]>([])
+  const [suggestedPodcasts, setSuggestedPodcasts] = useState<PodcastSuggestion[]>([])
   const [playlists, setPlaylists] = useState<MusicPlaylist[]>([])
 
   // Load home charts
@@ -135,12 +143,24 @@ export default function MusicHomePage() {
             .catch(() => [] as ArtistSuggestion[])
         )
       ),
-    ]).then(([songBuckets, albumBuckets, artistBuckets]) => {
+      // Podcasts
+      Promise.all(
+        history.map((q) =>
+          fetch(`${API_BASE}/api/music/podcasts/search?q=${encodeURIComponent(q)}&lang=${lang}`)
+            .then((r) => r.json())
+            .then((results: PodcastSuggestion[]) =>
+              Array.isArray(results) ? results.filter((r) => r.browseId).slice(0, 4) : []
+            )
+            .catch(() => [] as PodcastSuggestion[])
+        )
+      ),
+    ]).then(([songBuckets, albumBuckets, artistBuckets, podcastBuckets]) => {
       setForYouTracks(interleave(songBuckets).slice(0, 20))
       setSuggestedAlbums(interleave(albumBuckets).slice(0, 10))
       setSuggestedArtists(interleave(artistBuckets).slice(0, 10))
+      setSuggestedPodcasts(interleave(podcastBuckets as PodcastSuggestion[][]).slice(0, 10))
     }).finally(() => setForYouLoading(false))
-  }, [])
+  }, [lang])
 
   return (
     <div className="px-4 py-6 max-w-5xl mx-auto">
@@ -277,6 +297,37 @@ export default function MusicHomePage() {
                   </div>
                   <p className="text-xs font-medium text-yt-text text-center truncate w-full group-hover:text-yt-red transition-colors">{a.name}</p>
                   {a.subscribers && <p className="text-xs text-yt-text-muted">{a.subscribers}</p>}
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Suggested Podcasts */}
+        {suggestedPodcasts.length > 0 && !forYouLoading && (
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <Mic2 className="w-5 h-5 text-yt-red" />
+              <h2 className="text-yt-text text-lg font-semibold">{t('podcast_nav')}</h2>
+              <span className="text-yt-text-muted text-xs">{t('music_based_on_searches')}</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {suggestedPodcasts.map((p) => (
+                <Link key={p.browseId} href={`/music/podcasts/${p.browseId}`} className="flex flex-col gap-2 group">
+                  <div className="aspect-square rounded-xl overflow-hidden bg-yt-secondary shadow">
+                    {p.thumbnail ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.thumbnail} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Mic2 className="w-8 h-8 text-yt-text-muted" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-yt-text truncate group-hover:text-yt-red transition-colors">{p.title}</p>
+                    {p.author && <p className="text-xs text-yt-text-muted truncate mt-0.5">{p.author}</p>}
+                  </div>
                 </Link>
               ))}
             </div>

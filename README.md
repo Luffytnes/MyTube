@@ -35,8 +35,9 @@ MyTube is a **self-hosted YouTube frontend** that lets you browse, search, and w
 ### 🎵 MyTube Music
 - Dedicated music section powered by YouTube Music
 - Browse trending **albums, artists, playlists**
-- Full **search** with filters (songs, albums, artists, playlists)
+- Full **search** with filters (songs, albums, artists, playlists, podcasts)
 - Inline **audio player** with queue
+- **Podcasts** — browse & play episodes from YouTube Music, personalised by language and search history
 
 ### 📡 Channels
 - Full channel pages with **banner, avatar, subscriber count**
