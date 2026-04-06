@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Search, ListMusic, ChevronLeft, Mic2 } from 'lucide-react'
+import { Home, Search, ListMusic, ChevronLeft, Mic2, Bell } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useRegion } from '@/lib/regionContext'
 import type { Translations } from '@/lib/translations'
@@ -11,6 +11,7 @@ const NAV_KEYS: { icon: typeof Home; labelKey: keyof Translations; href: string 
   { icon: Home, labelKey: 'music_home', href: '/music' },
   { icon: Search, labelKey: 'music_search', href: '/music/search' },
   { icon: Mic2, labelKey: 'podcast_nav', href: '/music/podcasts' },
+  { icon: Bell, labelKey: 'podcast_my_subscriptions', href: '/music/podcasts/subscriptions' },
   { icon: ListMusic, labelKey: 'music_my_playlists', href: '/music/playlists' },
 ]
 

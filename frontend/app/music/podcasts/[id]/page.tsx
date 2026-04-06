@@ -2,9 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { Mic2, Play, Pause, Clock } from 'lucide-react'
+import { Mic2, Play, Pause, Clock, Bell, BellOff } from 'lucide-react'
 import { useMusic } from '@/lib/musicContext'
 import { useRegion } from '@/lib/regionContext'
+import {
+  isPodcastSubscribed, togglePodcastSubscription,
+} from '@/lib/podcastSubscriptions'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -31,17 +34,30 @@ export default function PodcastPage() {
   const { id } = useParams<{ id: string }>()
   const [podcast, setPodcast] = useState<Podcast | null>(null)
   const [loading, setLoading] = useState(true)
+  const [subscribed, setSubscribed] = useState(false)
   const { playTrack, playPause, currentTrack, playing } = useMusic()
   const { t, lang } = useRegion()
 
   useEffect(() => {
     if (!id) return
+    setSubscribed(isPodcastSubscribed(id))
     fetch(`${API_BASE}/api/music/podcast/${id}?lang=${lang}`)
       .then((r) => r.json())
       .then((data) => setPodcast({ ...data, episodes: data?.episodes || [] }))
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [id])
+  }, [id, lang])
+
+  function handleToggleSubscription() {
+    if (!podcast) return
+    const nowSubscribed = togglePodcastSubscription({
+      browseId: podcast.browseId,
+      title: podcast.title,
+      author: podcast.author,
+      thumbnail: podcast.thumbnail,
+    })
+    setSubscribed(nowSubscribed)
+  }
 
   function episodeAsTrack(ep: Episode) {
     return {
@@ -104,18 +120,33 @@ export default function PodcastPage() {
           <p className="text-yt-text-muted text-xs mb-4">
             {podcast.episodes.length} {podcast.episodes.length !== 1 ? t('podcast_episodes') : t('podcast_episode')}
           </p>
-          {podcast.episodes.length > 0 && (() => {
-            const firstActive = currentTrack?.videoId === allTracks[0]?.videoId
-            return (
-              <button
-                onClick={() => firstActive ? playPause() : playTrack(allTracks[0], allTracks)}
-                className="flex items-center gap-2 px-6 py-2.5 bg-yt-red hover:bg-yt-red-hover text-white rounded-full text-sm font-medium transition-colors self-start"
-              >
-                {firstActive && playing ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white" />}
-                {t('music_listen')}
-              </button>
-            )
-          })()}
+          <div className="flex items-center gap-3 mt-5 flex-wrap">
+            {podcast.episodes.length > 0 && (() => {
+              const firstActive = currentTrack?.videoId === allTracks[0]?.videoId
+              return (
+                <button
+                  onClick={() => firstActive ? playPause() : playTrack(allTracks[0], allTracks)}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-yt-red hover:bg-yt-red-hover text-white rounded-full text-sm font-medium transition-colors"
+                >
+                  {firstActive && playing ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white" />}
+                  {t('music_listen')}
+                </button>
+              )
+            })()}
+            <button
+              onClick={handleToggleSubscription}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium border transition-colors ${
+                subscribed
+                  ? 'bg-yt-hover border-yt-border text-yt-text hover:border-red-400 hover:text-red-400'
+                  : 'bg-yt-secondary border-yt-border text-yt-text-secondary hover:border-yt-text hover:text-yt-text'
+              }`}
+            >
+              {subscribed
+                ? <><BellOff className="w-4 h-4" />{t('podcast_unfollow')}</>
+                : <><Bell className="w-4 h-4" />{t('podcast_follow')}</>
+              }
+            </button>
+          </div>
         </div>
       </div>
 
