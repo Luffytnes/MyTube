@@ -38,6 +38,7 @@ MyTube is a **self-hosted YouTube frontend** that lets you browse, search, and w
 - Full **search** with filters (songs, albums, artists, playlists, podcasts)
 - Inline **audio player** with queue
 - **Podcasts** — browse & play episodes from YouTube Music, personalised by language and search history
+- Follow/unfollow podcasts — stored locally in **My Podcasts**
 
 ### 📡 Channels
 - Full channel pages with **banner, avatar, subscriber count**
@@ -47,6 +48,11 @@ MyTube is a **self-hosted YouTube frontend** that lets you browse, search, and w
 ### 🌍 Multilingual
 - **9 languages**: 🇬🇧 English · 🇫🇷 French · 🇪🇸 Spanish · 🇩🇪 German · 🇧🇷 Portuguese · 🇮🇹 Italian · 🇯🇵 Japanese · 🇰🇷 Korean · 🇷🇺 Russian
 - **Region selector** for country-specific trending content
+
+### ⚙️ Settings panel
+- Theme selector (Light / Dark / Auto) in a single dropdown
+- Language & Region picker
+- **WireGuard VPN** integration via wireproxy — route all MyTube traffic through a personal VPN (e.g. ProtonVPN) without touching the rest of the system
 
 ### ⌨️ Keyboard Shortcuts
 | Key | Action |
@@ -65,9 +71,10 @@ MyTube is a **self-hosted YouTube frontend** that lets you browse, search, and w
 |-------|-----------|
 | Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS |
 | Backend | Python, FastAPI, yt-dlp, httpx |
-| Music | ytmusicapi |
+| Music & Podcasts | ytmusicapi |
+| VPN tunnel | wireproxy (WireGuard userspace) |
 | Icons | Lucide React |
-| Data | YouTube internal API + Invidious fallback + yt-dlp fallback |
+| Data | YouTube internal API + yt-dlp fallback |
 
 ---
 
@@ -109,6 +116,66 @@ npm run dev
 
 ---
 
+## 🔒 VPN WireGuard (optional)
+
+MyTube can route all its backend traffic (API calls to YouTube/Google) through a personal WireGuard VPN such as **ProtonVPN**, without affecting the rest of your system. This is done via **wireproxy** — a userspace WireGuard implementation that exposes a local SOCKS5 proxy. No root access required.
+
+### 1. Install wireproxy
+
+**macOS (Apple Silicon M1/M2/M3)**
+```bash
+curl -L https://github.com/windtf/wireproxy/releases/download/v1.1.2/wireproxy_darwin_arm64.tar.gz -o /tmp/wireproxy.tar.gz && \
+tar -xzf /tmp/wireproxy.tar.gz -C /tmp && \
+sudo mv /tmp/wireproxy /usr/local/bin/wireproxy && \
+sudo chmod +x /usr/local/bin/wireproxy && \
+wireproxy --version
+```
+
+**macOS (Intel x86_64)**
+```bash
+curl -L https://github.com/windtf/wireproxy/releases/download/v1.1.2/wireproxy_darwin_amd64.tar.gz -o /tmp/wireproxy.tar.gz && \
+tar -xzf /tmp/wireproxy.tar.gz -C /tmp && \
+sudo mv /tmp/wireproxy /usr/local/bin/wireproxy && \
+sudo chmod +x /usr/local/bin/wireproxy && \
+wireproxy --version
+```
+
+**Linux**
+```bash
+# Replace amd64 with arm64 if needed
+curl -L https://github.com/windtf/wireproxy/releases/download/v1.1.2/wireproxy_linux_amd64.tar.gz -o /tmp/wireproxy.tar.gz && \
+tar -xzf /tmp/wireproxy.tar.gz -C /tmp && \
+sudo mv /tmp/wireproxy /usr/local/bin/wireproxy && \
+sudo chmod +x /usr/local/bin/wireproxy
+```
+
+### 2. Get a WireGuard config from ProtonVPN
+
+1. Log in to [protonvpn.com](https://protonvpn.com) → Downloads → WireGuard
+2. Select platform: **GNU/Linux**
+3. Choose a server and download the `.conf` file
+
+### 3. Activate from MyTube Settings
+
+1. Start MyTube (`./start.sh`)
+2. Click the **⚙️ Settings** button (top right)
+3. Under **VPN WireGuard** → click **Import .conf file** → select your ProtonVPN file
+4. Click **Connect** — status turns green (Connected)
+
+All MyTube traffic to YouTube/Google now goes through ProtonVPN. Your other apps are unaffected.
+
+### Verify it works
+
+```bash
+# With VPN connected in MyTube — should show a ProtonVPN IP
+curl --socks5 127.0.0.1:25344 https://ipinfo.io
+
+# Without VPN — your real IP
+curl https://ipinfo.io
+```
+
+---
+
 ## ⚙️ Configuration
 
 To use a remote backend, create `frontend/.env.local`:
@@ -128,9 +195,11 @@ Every request your browser makes goes through **your own backend**, never direct
 | Video streams | Proxied through your server |
 | Thumbnails | Fetched server-side |
 | Search & trending | YouTube internal API via your server |
+| Music & Podcasts | ytmusicapi via your server |
 | Channel avatars & banners | Fetched server-side |
 | Watch history | `localStorage` only — never leaves your browser |
 | Subscriptions | `localStorage` only — never leaves your browser |
+| VPN (optional) | wireproxy — userspace WireGuard, no system impact |
 | Analytics | ❌ None |
 
 ---
@@ -149,6 +218,13 @@ Every request your browser makes goes through **your own backend**, never direct
 | `GET /api/channel/{id}/videos` | Channel videos |
 | `GET /api/channel_thumbnail/{id}` | Channel avatar |
 | `GET /api/channel_banner/{id}` | Channel banner |
+| `GET /api/music/search?q=...&lang=fr` | Music search |
+| `GET /api/music/podcasts/search?q=...&lang=fr` | Podcast search |
+| `GET /api/music/podcast/{id}?lang=fr` | Podcast detail + episodes |
+| `GET /api/vpn/status` | VPN status |
+| `POST /api/vpn/upload` | Upload WireGuard .conf |
+| `POST /api/vpn/start` | Start VPN tunnel |
+| `POST /api/vpn/stop` | Stop VPN tunnel |
 
 Interactive docs → **http://localhost:8000/docs**
 
@@ -157,8 +233,8 @@ Interactive docs → **http://localhost:8000/docs**
 ## ⚠️ Notes
 
 - Age-restricted content requires YouTube authentication (not supported)
-- Bot detection by YouTube may occasionally limit quality — a VPN helps
-- Your server's IP is used for requests to YouTube
+- Bot detection by YouTube may occasionally limit quality — the built-in VPN feature helps
+- Your server's IP is used for requests to YouTube (or your VPN's IP if enabled)
 
 ---
 

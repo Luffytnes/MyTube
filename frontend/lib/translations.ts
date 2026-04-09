@@ -55,6 +55,12 @@ export interface Translations {
   podcast_follow: string; podcast_unfollow: string
   podcast_my_subscriptions: string; podcast_no_subscriptions: string; podcast_no_subscriptions_desc: string; podcast_discover: string
   theme_light: string; theme_dark: string; theme_auto: string
+  settings_title: string; settings_appearance: string; settings_language: string
+  settings_vpn: string; settings_vpn_desc: string; settings_vpn_upload: string
+  settings_vpn_connected: string; settings_vpn_disconnected: string
+  settings_vpn_connect: string; settings_vpn_disconnect: string
+  settings_vpn_no_conf: string; settings_vpn_error: string; settings_vpn_conf_loaded: string
+  settings_vpn_starting: string; settings_vpn_stopping: string
 }
 
 export const translations: Record<Lang, Translations> = {
@@ -123,6 +129,12 @@ export const translations: Record<Lang, Translations> = {
     podcast_follow: 'Follow', podcast_unfollow: 'Unfollow',
     podcast_my_subscriptions: 'My Podcasts', podcast_no_subscriptions: 'No subscriptions yet', podcast_no_subscriptions_desc: 'Follow podcasts to find them here easily.', podcast_discover: 'Discover podcasts',
     theme_light: 'Light', theme_dark: 'Dark', theme_auto: 'Auto',
+    settings_title: 'Settings', settings_appearance: 'Appearance', settings_language: 'Language & Region',
+    settings_vpn: 'VPN WireGuard', settings_vpn_desc: 'Route MyTube traffic through a WireGuard VPN (e.g. ProtonVPN). No impact on other apps.',
+    settings_vpn_upload: 'Import .conf file', settings_vpn_connected: 'Connected', settings_vpn_disconnected: 'Disconnected',
+    settings_vpn_connect: 'Connect', settings_vpn_disconnect: 'Disconnect',
+    settings_vpn_no_conf: 'No configuration file loaded', settings_vpn_error: 'VPN error',
+    settings_vpn_conf_loaded: 'Configuration loaded', settings_vpn_starting: 'Connecting...', settings_vpn_stopping: 'Disconnecting...',
   },
   fr: {
     nav_home: 'Accueil', nav_trending: 'Tendances', nav_history: 'Historique',
@@ -189,6 +201,12 @@ export const translations: Record<Lang, Translations> = {
     podcast_follow: 'Suivre', podcast_unfollow: 'Ne plus suivre',
     podcast_my_subscriptions: 'Mes podcasts', podcast_no_subscriptions: 'Aucun abonnement', podcast_no_subscriptions_desc: 'Suis des podcasts pour les retrouver ici facilement.', podcast_discover: 'Découvrir des podcasts',
     theme_light: 'Clair', theme_dark: 'Sombre', theme_auto: 'Automatique',
+    settings_title: 'Réglages', settings_appearance: 'Apparence', settings_language: 'Langue & Région',
+    settings_vpn: 'VPN WireGuard', settings_vpn_desc: 'Fait passer le trafic MyTube par un VPN WireGuard (ex. ProtonVPN). Aucun impact sur les autres applis.',
+    settings_vpn_upload: 'Importer le fichier .conf', settings_vpn_connected: 'Connecté', settings_vpn_disconnected: 'Déconnecté',
+    settings_vpn_connect: 'Connecter', settings_vpn_disconnect: 'Déconnecter',
+    settings_vpn_no_conf: 'Aucun fichier de configuration', settings_vpn_error: 'Erreur VPN',
+    settings_vpn_conf_loaded: 'Configuration chargée', settings_vpn_starting: 'Connexion...', settings_vpn_stopping: 'Déconnexion...',
   },
   es: {
     nav_home: 'Inicio', nav_trending: 'Tendencias', nav_history: 'Historial',
@@ -255,6 +273,12 @@ export const translations: Record<Lang, Translations> = {
     podcast_follow: 'Seguir', podcast_unfollow: 'Dejar de seguir',
     podcast_my_subscriptions: 'Mis podcasts', podcast_no_subscriptions: 'Sin suscripciones', podcast_no_subscriptions_desc: 'Sigue podcasts para encontrarlos aquí fácilmente.', podcast_discover: 'Descubrir podcasts',
     theme_light: 'Claro', theme_dark: 'Oscuro', theme_auto: 'Automático',
+    settings_title: 'Ajustes', settings_appearance: 'Apariencia', settings_language: 'Idioma & Región',
+    settings_vpn: 'VPN WireGuard', settings_vpn_desc: 'Enruta el tráfico de MyTube a través de una VPN WireGuard. Sin impacto en otras apps.',
+    settings_vpn_upload: 'Importar archivo .conf', settings_vpn_connected: 'Conectado', settings_vpn_disconnected: 'Desconectado',
+    settings_vpn_connect: 'Conectar', settings_vpn_disconnect: 'Desconectar',
+    settings_vpn_no_conf: 'Ningún archivo de configuración', settings_vpn_error: 'Error de VPN',
+    settings_vpn_conf_loaded: 'Configuración cargada', settings_vpn_starting: 'Conectando...', settings_vpn_stopping: 'Desconectando...',
   },
   de: {
     nav_home: 'Startseite', nav_trending: 'Trends', nav_history: 'Verlauf',
@@ -321,6 +345,12 @@ export const translations: Record<Lang, Translations> = {
     podcast_follow: 'Folgen', podcast_unfollow: 'Entfolgen',
     podcast_my_subscriptions: 'Meine Podcasts', podcast_no_subscriptions: 'Keine Abonnements', podcast_no_subscriptions_desc: 'Folge Podcasts, um sie hier leicht zu finden.', podcast_discover: 'Podcasts entdecken',
     theme_light: 'Hell', theme_dark: 'Dunkel', theme_auto: 'Automatisch',
+    settings_title: 'Einstellungen', settings_appearance: 'Darstellung', settings_language: 'Sprache & Region',
+    settings_vpn: 'VPN WireGuard', settings_vpn_desc: 'MyTube-Datenverkehr über ein WireGuard-VPN leiten. Keine Auswirkung auf andere Apps.',
+    settings_vpn_upload: '.conf-Datei importieren', settings_vpn_connected: 'Verbunden', settings_vpn_disconnected: 'Getrennt',
+    settings_vpn_connect: 'Verbinden', settings_vpn_disconnect: 'Trennen',
+    settings_vpn_no_conf: 'Keine Konfigurationsdatei', settings_vpn_error: 'VPN-Fehler',
+    settings_vpn_conf_loaded: 'Konfiguration geladen', settings_vpn_starting: 'Verbinde...', settings_vpn_stopping: 'Trenne...',
   },
   pt: {
     nav_home: 'Início', nav_trending: 'Em Alta', nav_history: 'Histórico',
@@ -387,6 +417,12 @@ export const translations: Record<Lang, Translations> = {
     podcast_follow: 'Seguir', podcast_unfollow: 'Deixar de seguir',
     podcast_my_subscriptions: 'Meus podcasts', podcast_no_subscriptions: 'Sem assinaturas', podcast_no_subscriptions_desc: 'Siga podcasts para encontrá-los aqui facilmente.', podcast_discover: 'Descobrir podcasts',
     theme_light: 'Claro', theme_dark: 'Escuro', theme_auto: 'Automático',
+    settings_title: 'Configurações', settings_appearance: 'Aparência', settings_language: 'Idioma & Região',
+    settings_vpn: 'VPN WireGuard', settings_vpn_desc: 'Roteia o tráfego do MyTube por uma VPN WireGuard. Sem impacto em outros apps.',
+    settings_vpn_upload: 'Importar arquivo .conf', settings_vpn_connected: 'Conectado', settings_vpn_disconnected: 'Desconectado',
+    settings_vpn_connect: 'Conectar', settings_vpn_disconnect: 'Desconectar',
+    settings_vpn_no_conf: 'Nenhum arquivo de configuração', settings_vpn_error: 'Erro de VPN',
+    settings_vpn_conf_loaded: 'Configuração carregada', settings_vpn_starting: 'Conectando...', settings_vpn_stopping: 'Desconectando...',
   },
   it: {
     nav_home: 'Home', nav_trending: 'Di tendenza', nav_history: 'Cronologia',
@@ -453,6 +489,12 @@ export const translations: Record<Lang, Translations> = {
     podcast_follow: 'Segui', podcast_unfollow: 'Non seguire più',
     podcast_my_subscriptions: 'I miei podcast', podcast_no_subscriptions: 'Nessun abbonamento', podcast_no_subscriptions_desc: 'Segui i podcast per trovarli qui facilmente.', podcast_discover: 'Scopri i podcast',
     theme_light: 'Chiaro', theme_dark: 'Scuro', theme_auto: 'Automatico',
+    settings_title: 'Impostazioni', settings_appearance: 'Aspetto', settings_language: 'Lingua & Regione',
+    settings_vpn: 'VPN WireGuard', settings_vpn_desc: 'Instrada il traffico di MyTube tramite una VPN WireGuard. Nessun impatto sulle altre app.',
+    settings_vpn_upload: 'Importa file .conf', settings_vpn_connected: 'Connesso', settings_vpn_disconnected: 'Disconnesso',
+    settings_vpn_connect: 'Connetti', settings_vpn_disconnect: 'Disconnetti',
+    settings_vpn_no_conf: 'Nessun file di configurazione', settings_vpn_error: 'Errore VPN',
+    settings_vpn_conf_loaded: 'Configurazione caricata', settings_vpn_starting: 'Connessione...', settings_vpn_stopping: 'Disconnessione...',
   },
   ja: {
     nav_home: 'ホーム', nav_trending: 'トレンド', nav_history: '履歴',
@@ -519,6 +561,12 @@ export const translations: Record<Lang, Translations> = {
     podcast_follow: 'フォロー', podcast_unfollow: 'フォロー解除',
     podcast_my_subscriptions: 'マイポッドキャスト', podcast_no_subscriptions: 'サブスクリプションなし', podcast_no_subscriptions_desc: 'ポッドキャストをフォローしてここで簡単に見つけましょう。', podcast_discover: 'ポッドキャストを探す',
     theme_light: 'ライト', theme_dark: 'ダーク', theme_auto: '自動',
+    settings_title: '設定', settings_appearance: '外観', settings_language: '言語 & 地域',
+    settings_vpn: 'VPN WireGuard', settings_vpn_desc: 'MyTubeのトラフィックをWireGuard VPN経由にします。他のアプリへの影響はありません。',
+    settings_vpn_upload: '.confファイルを読み込む', settings_vpn_connected: '接続中', settings_vpn_disconnected: '切断',
+    settings_vpn_connect: '接続', settings_vpn_disconnect: '切断',
+    settings_vpn_no_conf: '設定ファイルなし', settings_vpn_error: 'VPNエラー',
+    settings_vpn_conf_loaded: '設定読み込み済み', settings_vpn_starting: '接続中...', settings_vpn_stopping: '切断中...',
   },
   ko: {
     nav_home: '홈', nav_trending: '인기', nav_history: '시청 기록',
@@ -585,6 +633,12 @@ export const translations: Record<Lang, Translations> = {
     podcast_follow: '팔로우', podcast_unfollow: '팔로우 취소',
     podcast_my_subscriptions: '내 팟캐스트', podcast_no_subscriptions: '구독 없음', podcast_no_subscriptions_desc: '팟캐스트를 팔로우하여 여기서 쉽게 찾으세요.', podcast_discover: '팟캐스트 탐색',
     theme_light: '라이트', theme_dark: '다크', theme_auto: '자동',
+    settings_title: '설정', settings_appearance: '외관', settings_language: '언어 & 지역',
+    settings_vpn: 'VPN WireGuard', settings_vpn_desc: 'MyTube 트래픽을 WireGuard VPN으로 라우팅합니다. 다른 앱에는 영향 없음.',
+    settings_vpn_upload: '.conf 파일 가져오기', settings_vpn_connected: '연결됨', settings_vpn_disconnected: '연결 끊김',
+    settings_vpn_connect: '연결', settings_vpn_disconnect: '연결 해제',
+    settings_vpn_no_conf: '구성 파일 없음', settings_vpn_error: 'VPN 오류',
+    settings_vpn_conf_loaded: '구성 로드됨', settings_vpn_starting: '연결 중...', settings_vpn_stopping: '해제 중...',
   },
   ru: {
     nav_home: 'Главная', nav_trending: 'В тренде', nav_history: 'История',
@@ -651,5 +705,11 @@ export const translations: Record<Lang, Translations> = {
     podcast_follow: 'Подписаться', podcast_unfollow: 'Отписаться',
     podcast_my_subscriptions: 'Мои подкасты', podcast_no_subscriptions: 'Нет подписок', podcast_no_subscriptions_desc: 'Подпишитесь на подкасты, чтобы легко их находить здесь.', podcast_discover: 'Найти подкасты',
     theme_light: 'Светлая', theme_dark: 'Тёмная', theme_auto: 'Авто',
+    settings_title: 'Настройки', settings_appearance: 'Внешний вид', settings_language: 'Язык & Регион',
+    settings_vpn: 'VPN WireGuard', settings_vpn_desc: 'Маршрутизация трафика MyTube через WireGuard VPN. Не влияет на другие приложения.',
+    settings_vpn_upload: 'Импортировать файл .conf', settings_vpn_connected: 'Подключено', settings_vpn_disconnected: 'Отключено',
+    settings_vpn_connect: 'Подключиться', settings_vpn_disconnect: 'Отключиться',
+    settings_vpn_no_conf: 'Нет файла конфигурации', settings_vpn_error: 'Ошибка VPN',
+    settings_vpn_conf_loaded: 'Конфигурация загружена', settings_vpn_starting: 'Подключение...', settings_vpn_stopping: 'Отключение...',
   },
 }

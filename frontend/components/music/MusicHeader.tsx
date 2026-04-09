@@ -1,32 +1,18 @@
 'use client'
 
-import { useState, useRef, useEffect, FormEvent } from 'react'
+import { useState, FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Music2, Search, X, Sun, Moon, Monitor, Check, Shield } from 'lucide-react'
-import { useTheme, type ThemeMode } from '@/lib/themeContext'
+import { Music2, Search, X, Shield, Settings } from 'lucide-react'
 import { saveMusicSearchQuery } from '@/lib/musicSearchHistory'
-import RegionSelector from '@/components/layout/RegionSelector'
-import InvidiousSelector from '@/components/layout/InvidiousSelector'
+import SettingsPanel from '@/components/layout/SettingsPanel'
 import { useRegion } from '@/lib/regionContext'
 
 export default function MusicHeader() {
   const router = useRouter()
-  const { mode, theme, setMode } = useTheme()
   const { t } = useRegion()
   const [query, setQuery] = useState('')
-  const [showThemeMenu, setShowThemeMenu] = useState(false)
-  const themeMenuRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function onMouseDown(e: MouseEvent) {
-      if (themeMenuRef.current && !themeMenuRef.current.contains(e.target as Node)) {
-        setShowThemeMenu(false)
-      }
-    }
-    document.addEventListener('mousedown', onMouseDown)
-    return () => document.removeEventListener('mousedown', onMouseDown)
-  }, [])
+  const [showSettings, setShowSettings] = useState(false)
 
   function handleSearch(e: FormEvent) {
     e.preventDefault()
@@ -73,39 +59,6 @@ export default function MusicHeader() {
 
       {/* Right */}
       <div className="flex items-center gap-2 flex-shrink-0">
-        <RegionSelector />
-        <InvidiousSelector />
-
-        {/* Theme */}
-        <div ref={themeMenuRef} className="relative">
-          <button
-            onClick={() => setShowThemeMenu((v) => !v)}
-            className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-yt-hover text-yt-text-secondary hover:text-yt-text transition-colors"
-          >
-            {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-          </button>
-          {showThemeMenu && (
-            <div className="absolute right-0 top-full mt-1 bg-yt-secondary border border-yt-border rounded-xl shadow-2xl py-1 z-50 min-w-[150px]">
-              {([
-                { value: 'light' as ThemeMode, labelKey: 'theme_light', icon: Sun },
-                { value: 'dark' as ThemeMode, labelKey: 'theme_dark', icon: Moon },
-                { value: 'auto' as ThemeMode, labelKey: 'theme_auto', icon: Monitor },
-              ] as const).map(({ value, labelKey, icon: Icon }) => (
-                <button
-                  key={value}
-                  onClick={() => { setMode(value); setShowThemeMenu(false) }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-yt-hover transition-colors text-yt-text"
-                >
-                  <Icon className="w-4 h-4 text-yt-text-muted flex-shrink-0" />
-                  <span className="flex-1 text-left">{t(labelKey)}</span>
-                  {mode === value && <Check className="w-3.5 h-3.5 text-yt-red" />}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Privacy badge */}
         <div
           className="flex items-center gap-1.5 px-3 h-8 rounded-full bg-yt-secondary border border-yt-border text-xs text-yt-text-secondary cursor-default"
           title="Privacy-focused: no tracking, no ads, no Google fonts"
@@ -114,7 +67,15 @@ export default function MusicHeader() {
           <span className="hidden md:block">{t('privacy_badge')}</span>
         </div>
 
-        {/* Back to MyTube */}
+        <button
+          onClick={() => setShowSettings(true)}
+          aria-label={t('settings_title')}
+          title={t('settings_title')}
+          className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-yt-hover text-yt-text-secondary hover:text-yt-text transition-colors"
+        >
+          <Settings className="w-4 h-4" />
+        </button>
+
         <Link
           href="/"
           className="hidden sm:flex items-center gap-1.5 px-3 h-9 rounded-full bg-yt-secondary hover:bg-yt-hover border border-yt-border text-xs text-yt-text-secondary hover:text-yt-text transition-colors"
@@ -122,6 +83,8 @@ export default function MusicHeader() {
           ← {t('music_back')}
         </Link>
       </div>
+
+      <SettingsPanel open={showSettings} onClose={() => setShowSettings(false)} />
     </header>
   )
 }

@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import os
 import re
 from time import time as _time
 from typing import Optional, List, Dict, Any
@@ -1669,9 +1670,14 @@ _ytm_cache: dict = {}
 
 def get_ytm(language: str = "en") -> _YTMusic:
     global _ytm_cache
-    if language not in _ytm_cache:
-        _ytm_cache[language] = _YTMusic(language=language)
-    return _ytm_cache[language]
+    proxy = _get_proxy_url() if '_wireproxy_process' in globals() else None
+    cache_key = f"{language}:{proxy or ''}"
+    if cache_key not in _ytm_cache:
+        kwargs: dict = {"language": language}
+        if proxy:
+            kwargs["proxies"] = {"http": proxy, "https": proxy}
+        _ytm_cache[cache_key] = _YTMusic(**kwargs)
+    return _ytm_cache[cache_key]
 
 
 def _thumb_url(thumbnails: list) -> Optional[str]:
@@ -2052,6 +2058,141 @@ async def music_home():
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Music home error: {str(e)}")
+
+
+# ─── VPN WireGuard (wireproxy) ───────────────────────────────────────────────
+
+import subprocess
+import shutil
+import tempfile
+from fastapi import UploadFile, File
+
+_wireproxy_process: Optional[subprocess.Popen] = None
+_wireproxy_conf_path: Optional[str] = None
+_wireproxy_conf_name: Optional[str] = None
+_wireproxy_socks_port: int = 25344
+
+WIREPROXY_BIN = shutil.which("wireproxy") or "/usr/local/bin/wireproxy"
+
+SOCKS5_SECTION = f"\n[Socks5]\nBindAddress = 127.0.0.1:{_wireproxy_socks_port}\n"
+
+
+def _get_proxy_url() -> Optional[str]:
+    if _wireproxy_process and _wireproxy_process.poll() is None:
+        return f"socks5://127.0.0.1:{_wireproxy_socks_port}"
+    return None
+
+
+def _prepare_conf(raw: str) -> str:
+    """Ensure the conf has a [Socks5] section for wireproxy."""
+    if "[Socks5]" in raw:
+        return raw
+    return raw.rstrip() + SOCKS5_SECTION
+
+
+@app.get("/api/vpn/status")
+async def vpn_status():
+    running = _wireproxy_process is not None and _wireproxy_process.poll() is None
+    return {
+        "running": running,
+        "conf_loaded": _wireproxy_conf_path is not None,
+        "conf_name": _wireproxy_conf_name,
+        "error": None,
+        "proxy": _get_proxy_url(),
+    }
+
+
+@app.post("/api/vpn/upload")
+async def vpn_upload_conf(file: UploadFile = File(...)):
+    global _wireproxy_conf_path, _wireproxy_conf_name
+
+    content = await file.read()
+    try:
+        raw = content.decode("utf-8")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid file encoding — expected UTF-8 .conf")
+
+    if "[Interface]" not in raw:
+        raise HTTPException(status_code=400, detail="Invalid WireGuard config: missing [Interface] section")
+
+    conf = _prepare_conf(raw)
+
+    # Write to a stable temp file (persist across requests)
+    if _wireproxy_conf_path and os.path.exists(_wireproxy_conf_path):
+        os.remove(_wireproxy_conf_path)
+
+    fd, path = tempfile.mkstemp(suffix=".conf", prefix="mytube_vpn_")
+    with os.fdopen(fd, "w") as f:
+        f.write(conf)
+
+    _wireproxy_conf_path = path
+    _wireproxy_conf_name = file.filename or "vpn.conf"
+
+    # Also update ytmusicapi cache to use proxy on next call
+    _ytm_cache.clear()
+
+    return {"ok": True, "conf_name": _wireproxy_conf_name}
+
+
+@app.post("/api/vpn/start")
+async def vpn_start():
+    global _wireproxy_process
+
+    if not _wireproxy_conf_path or not os.path.exists(_wireproxy_conf_path):
+        raise HTTPException(status_code=400, detail="No VPN config loaded. Upload a .conf file first.")
+
+    if _wireproxy_process and _wireproxy_process.poll() is None:
+        return {"running": True, "message": "Already running"}
+
+    if not os.path.exists(WIREPROXY_BIN):
+        raise HTTPException(
+            status_code=500,
+            detail=f"wireproxy not found at {WIREPROXY_BIN}. Install it: https://github.com/pufferffish/wireproxy"
+        )
+
+    try:
+        _wireproxy_process = subprocess.Popen(
+            [WIREPROXY_BIN, "-c", _wireproxy_conf_path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        # Give it a moment to start
+        import time
+        time.sleep(1.5)
+
+        if _wireproxy_process.poll() is not None:
+            stderr = _wireproxy_process.stderr.read().decode("utf-8", errors="replace") if _wireproxy_process.stderr else ""
+            raise HTTPException(status_code=500, detail=f"wireproxy exited immediately: {stderr[:300]}")
+
+        # Clear ytmusicapi cache so new instances use the proxy
+        _ytm_cache.clear()
+
+        return {"running": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start wireproxy: {str(e)}")
+
+
+@app.post("/api/vpn/stop")
+async def vpn_stop():
+    global _wireproxy_process
+
+    if _wireproxy_process:
+        try:
+            _wireproxy_process.terminate()
+            _wireproxy_process.wait(timeout=5)
+        except Exception:
+            try:
+                _wireproxy_process.kill()
+            except Exception:
+                pass
+        _wireproxy_process = None
+
+    # Clear ytmusicapi cache so new instances don't use the proxy
+    _ytm_cache.clear()
+
+    return {"running": False}
 
 
 if __name__ == "__main__":

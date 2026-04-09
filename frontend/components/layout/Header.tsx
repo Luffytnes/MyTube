@@ -3,11 +3,9 @@
 import { useState, useRef, useEffect, FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Search, Mic, Shield, Play, X, Sun, Moon, Monitor, Clock, Trash2, Check } from 'lucide-react'
+import { Search, Mic, Shield, Play, X, Clock, Trash2, Settings } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
-import { useTheme, type ThemeMode } from '@/lib/themeContext'
-import RegionSelector from './RegionSelector'
-import InvidiousSelector from './InvidiousSelector'
+import SettingsPanel from './SettingsPanel'
 import {
   saveSearchQuery,
   getSearchHistory,
@@ -19,21 +17,19 @@ import {
 export default function Header() {
   const router = useRouter()
   const { t } = useRegion()
-  const { mode, theme, setMode } = useTheme()
   const [query, setQuery] = useState('')
   const [focused, setFocused] = useState(false)
   const [history, setHistory] = useState<SearchHistoryEntry[]>([])
-  const [showThemeMenu, setShowThemeMenu] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
-  const themeMenuRef = useRef<HTMLDivElement>(null)
 
   // Load history when dropdown opens
   useEffect(() => {
     if (focused) setHistory(getSearchHistory())
   }, [focused])
 
-  // Close dropdowns on outside click
+  // Close search dropdown on outside click
   useEffect(() => {
     function onMouseDown(e: MouseEvent) {
       if (
@@ -43,9 +39,6 @@ export default function Header() {
         !inputRef.current.contains(e.target as Node)
       ) {
         setFocused(false)
-      }
-      if (themeMenuRef.current && !themeMenuRef.current.contains(e.target as Node)) {
-        setShowThemeMenu(false)
       }
     }
     document.addEventListener('mousedown', onMouseDown)
@@ -166,48 +159,25 @@ export default function Header() {
 
       {/* Right actions */}
       <div className="flex items-center gap-2 ml-4 flex-shrink-0">
-        <RegionSelector />
-        <InvidiousSelector />
-
-        {/* Theme dropdown */}
-        <div ref={themeMenuRef} className="relative">
-          <button
-            onClick={() => setShowThemeMenu((v) => !v)}
-            aria-label="Theme"
-            className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-yt-hover text-yt-text-secondary hover:text-yt-text transition-colors"
-          >
-            {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-          </button>
-
-          {showThemeMenu && (
-            <div className="absolute right-0 top-full mt-1 bg-yt-secondary border border-yt-border rounded-xl shadow-2xl py-1 z-50 min-w-[150px]">
-              {([
-                { value: 'light' as ThemeMode, label: 'Clair', icon: Sun },
-                { value: 'dark' as ThemeMode, label: 'Sombre', icon: Moon },
-                { value: 'auto' as ThemeMode, label: 'Automatique', icon: Monitor },
-              ]).map(({ value, label, icon: Icon }) => (
-                <button
-                  key={value}
-                  onClick={() => { setMode(value); setShowThemeMenu(false) }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-yt-hover transition-colors text-yt-text"
-                >
-                  <Icon className="w-4 h-4 text-yt-text-muted flex-shrink-0" />
-                  <span className="flex-1 text-left">{label}</span>
-                  {mode === value && <Check className="w-3.5 h-3.5 text-yt-red" />}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
         <div
-          className="flex items-center gap-1.5 px-3 h-8 rounded-full bg-yt-secondary border border-yt-border text-xs text-yt-text-secondary hover:text-yt-text hover:bg-yt-hover cursor-default transition-colors"
+          className="flex items-center gap-1.5 px-3 h-8 rounded-full bg-yt-secondary border border-yt-border text-xs text-yt-text-secondary cursor-default"
           title="Privacy-focused: no tracking, no ads, no Google fonts"
         >
           <Shield className="w-3.5 h-3.5 text-green-400" />
           <span className="hidden md:block">{t('privacy_badge')}</span>
         </div>
+
+        <button
+          onClick={() => setShowSettings(true)}
+          aria-label={t('settings_title')}
+          title={t('settings_title')}
+          className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-yt-hover text-yt-text-secondary hover:text-yt-text transition-colors"
+        >
+          <Settings className="w-4 h-4" />
+        </button>
       </div>
+
+      <SettingsPanel open={showSettings} onClose={() => setShowSettings(false)} />
     </header>
   )
 }
