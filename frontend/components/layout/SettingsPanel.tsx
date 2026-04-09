@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { X, Sun, Moon, Monitor, Upload, Wifi, WifiOff, AlertCircle, Loader2, Shield } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { X, Sun, Moon, Monitor, Upload, Wifi, WifiOff, AlertCircle, Loader2, Shield, RefreshCw, MapPin } from 'lucide-react'
 import { useTheme, type ThemeMode } from '@/lib/themeContext'
 import { useRegion, REGIONS } from '@/lib/regionContext'
 
@@ -16,6 +16,13 @@ interface VpnState {
   error: string | null
 }
 
+interface IpInfo {
+  ip: string
+  city?: string
+  country?: string
+  org?: string
+}
+
 interface SettingsPanelProps {
   open: boolean
   onClose: () => void
@@ -25,14 +32,27 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const { mode, theme, setMode } = useTheme()
   const { region, setRegion, t } = useRegion()
   const [vpn, setVpn] = useState<VpnState>({ status: 'disconnected', conf_loaded: false, conf_name: null, error: null })
+  const [ipInfo, setIpInfo] = useState<IpInfo | null>(null)
+  const [ipLoading, setIpLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+
+  const fetchIpInfo = useCallback(async () => {
+    setIpLoading(true)
+    setIpInfo(null)
+    try {
+      const res = await fetch(`${API_BASE}/api/vpn/myip`)
+      if (res.ok) setIpInfo(await res.json())
+    } catch {}
+    setIpLoading(false)
+  }, [])
 
   // Fetch VPN status when panel opens
   useEffect(() => {
     if (!open) return
     fetchVpnStatus()
-  }, [open])
+    fetchIpInfo()
+  }, [open, fetchIpInfo])
 
   // Close on outside click
   useEffect(() => {
@@ -257,6 +277,42 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             {vpn.error && (
               <p className="text-xs text-red-400 mt-2 px-1">{vpn.error}</p>
             )}
+
+            {/* IP visible */}
+            <div className="mt-4 pt-4 border-t border-yt-border/40">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest">{t('settings_vpn_myip')}</p>
+                <button
+                  onClick={fetchIpInfo}
+                  disabled={ipLoading}
+                  className="p-1 rounded-full hover:bg-yt-hover text-yt-text-muted hover:text-yt-text transition-colors disabled:opacity-40"
+                  title={t('settings_vpn_myip_refresh')}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${ipLoading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+              {ipLoading ? (
+                <div className="flex items-center gap-2 text-xs text-yt-text-muted">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>...</span>
+                </div>
+              ) : ipInfo ? (
+                <div className={`flex items-start gap-2 text-xs rounded-xl px-3 py-2.5 ${vpnConnected ? 'bg-green-400/10 text-green-400' : 'bg-yt-secondary text-yt-text-secondary'}`}>
+                  <MapPin className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-mono font-semibold">{ipInfo.ip}</span>
+                    {(ipInfo.city || ipInfo.country) && (
+                      <span className="ml-1 opacity-80">— {[ipInfo.city, ipInfo.country].filter(Boolean).join(', ')}</span>
+                    )}
+                    {ipInfo.org && (
+                      <div className="opacity-60 mt-0.5 truncate">{ipInfo.org}</div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-yt-text-muted">{t('settings_vpn_myip_error')}</p>
+              )}
+            </div>
           </section>
         </div>
       </div>

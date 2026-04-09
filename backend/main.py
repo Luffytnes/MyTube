@@ -2199,6 +2199,26 @@ async def vpn_stop():
     return {"running": False}
 
 
+@app.get("/api/vpn/myip")
+async def vpn_myip():
+    """Return the public IP as seen by external servers (routes through VPN if active)."""
+    try:
+        async with httpx_client(timeout=6.0) as client:
+            r = await client.get("https://ipinfo.io/json")
+            if r.status_code == 200:
+                data = r.json()
+                return {
+                    "ip": data.get("ip"),
+                    "city": data.get("city"),
+                    "region": data.get("region"),
+                    "country": data.get("country"),
+                    "org": data.get("org"),
+                }
+    except Exception:
+        pass
+    raise HTTPException(status_code=503, detail="Could not fetch IP info")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

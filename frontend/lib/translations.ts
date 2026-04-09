@@ -61,6 +61,7 @@ export interface Translations {
   settings_vpn_connect: string; settings_vpn_disconnect: string
   settings_vpn_no_conf: string; settings_vpn_error: string; settings_vpn_conf_loaded: string
   settings_vpn_starting: string; settings_vpn_stopping: string
+  settings_vpn_myip: string; settings_vpn_myip_refresh: string; settings_vpn_myip_error: string
 }
 
 export const translations: Record<Lang, Translations> = {
@@ -135,6 +136,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_connect: 'Connect', settings_vpn_disconnect: 'Disconnect',
     settings_vpn_no_conf: 'No configuration file loaded', settings_vpn_error: 'VPN error',
     settings_vpn_conf_loaded: 'Configuration loaded', settings_vpn_starting: 'Connecting...', settings_vpn_stopping: 'Disconnecting...',
+    settings_vpn_myip: 'IP seen by servers', settings_vpn_myip_refresh: 'Refresh', settings_vpn_myip_error: 'Unable to retrieve IP',
   },
   fr: {
     nav_home: 'Accueil', nav_trending: 'Tendances', nav_history: 'Historique',
@@ -207,6 +209,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_connect: 'Connecter', settings_vpn_disconnect: 'Déconnecter',
     settings_vpn_no_conf: 'Aucun fichier de configuration', settings_vpn_error: 'Erreur VPN',
     settings_vpn_conf_loaded: 'Configuration chargée', settings_vpn_starting: 'Connexion...', settings_vpn_stopping: 'Déconnexion...',
+    settings_vpn_myip: 'IP vue par les serveurs', settings_vpn_myip_refresh: 'Actualiser', settings_vpn_myip_error: 'Impossible de récupérer l\'IP',
   },
   es: {
     nav_home: 'Inicio', nav_trending: 'Tendencias', nav_history: 'Historial',
@@ -279,6 +282,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_connect: 'Conectar', settings_vpn_disconnect: 'Desconectar',
     settings_vpn_no_conf: 'Ningún archivo de configuración', settings_vpn_error: 'Error de VPN',
     settings_vpn_conf_loaded: 'Configuración cargada', settings_vpn_starting: 'Conectando...', settings_vpn_stopping: 'Desconectando...',
+    settings_vpn_myip: 'IP vista por los servidores', settings_vpn_myip_refresh: 'Actualizar', settings_vpn_myip_error: 'No se puede obtener la IP',
   },
   de: {
     nav_home: 'Startseite', nav_trending: 'Trends', nav_history: 'Verlauf',
@@ -351,6 +355,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_connect: 'Verbinden', settings_vpn_disconnect: 'Trennen',
     settings_vpn_no_conf: 'Keine Konfigurationsdatei', settings_vpn_error: 'VPN-Fehler',
     settings_vpn_conf_loaded: 'Konfiguration geladen', settings_vpn_starting: 'Verbinde...', settings_vpn_stopping: 'Trenne...',
+    settings_vpn_myip: 'IP von Servern gesehen', settings_vpn_myip_refresh: 'Aktualisieren', settings_vpn_myip_error: 'IP nicht abrufbar',
   },
   pt: {
     nav_home: 'Início', nav_trending: 'Em Alta', nav_history: 'Histórico',
@@ -423,6 +428,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_connect: 'Conectar', settings_vpn_disconnect: 'Desconectar',
     settings_vpn_no_conf: 'Nenhum arquivo de configuração', settings_vpn_error: 'Erro de VPN',
     settings_vpn_conf_loaded: 'Configuração carregada', settings_vpn_starting: 'Conectando...', settings_vpn_stopping: 'Desconectando...',
+    settings_vpn_myip: 'IP vista pelos servidores', settings_vpn_myip_refresh: 'Atualizar', settings_vpn_myip_error: 'Não foi possível obter o IP',
   },
   it: {
     nav_home: 'Home', nav_trending: 'Di tendenza', nav_history: 'Cronologia',
@@ -495,6 +501,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_connect: 'Connetti', settings_vpn_disconnect: 'Disconnetti',
     settings_vpn_no_conf: 'Nessun file di configurazione', settings_vpn_error: 'Errore VPN',
     settings_vpn_conf_loaded: 'Configurazione caricata', settings_vpn_starting: 'Connessione...', settings_vpn_stopping: 'Disconnessione...',
+    settings_vpn_myip: 'IP vista dai server', settings_vpn_myip_refresh: 'Aggiorna', settings_vpn_myip_error: 'Impossibile ottenere l\'IP',
   },
   ja: {
     nav_home: 'ホーム', nav_trending: 'トレンド', nav_history: '履歴',
@@ -567,6 +574,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_connect: '接続', settings_vpn_disconnect: '切断',
     settings_vpn_no_conf: '設定ファイルなし', settings_vpn_error: 'VPNエラー',
     settings_vpn_conf_loaded: '設定読み込み済み', settings_vpn_starting: '接続中...', settings_vpn_stopping: '切断中...',
+    settings_vpn_myip: 'サーバーが見るIP', settings_vpn_myip_refresh: '更新', settings_vpn_myip_error: 'IPを取得できません',
   },
   ko: {
     nav_home: '홈', nav_trending: '인기', nav_history: '시청 기록',
@@ -639,6 +647,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_connect: '연결', settings_vpn_disconnect: '연결 해제',
     settings_vpn_no_conf: '구성 파일 없음', settings_vpn_error: 'VPN 오류',
     settings_vpn_conf_loaded: '구성 로드됨', settings_vpn_starting: '연결 중...', settings_vpn_stopping: '해제 중...',
+    settings_vpn_myip: '서버에 표시되는 IP', settings_vpn_myip_refresh: '새로고침', settings_vpn_myip_error: 'IP를 가져올 수 없음',
   },
   ru: {
     nav_home: 'Главная', nav_trending: 'В тренде', nav_history: 'История',
@@ -711,5 +720,6 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_connect: 'Подключиться', settings_vpn_disconnect: 'Отключиться',
     settings_vpn_no_conf: 'Нет файла конфигурации', settings_vpn_error: 'Ошибка VPN',
     settings_vpn_conf_loaded: 'Конфигурация загружена', settings_vpn_starting: 'Подключение...', settings_vpn_stopping: 'Отключение...',
+    settings_vpn_myip: 'IP видимый серверами', settings_vpn_myip_refresh: 'Обновить', settings_vpn_myip_error: 'Не удалось получить IP',
   },
 }
