@@ -82,7 +82,7 @@ def httpx_client(**kwargs) -> httpx.AsyncClient:
     proxy = _get_proxy_url() if '_wireproxy_process' in globals() else None
     if proxy:
         kwargs.setdefault("proxy", proxy)
-    return httpx_client(**kwargs)
+    return httpx.AsyncClient(**kwargs)
 
 # Simple TTL cache (trending/search results)
 _cache: Dict[str, tuple] = {}
