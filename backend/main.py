@@ -44,7 +44,7 @@ def _get_instances() -> list:
 async def list_invidious_instances():
     async def ping(url: str) -> dict:
         try:
-            async with httpx.AsyncClient(timeout=4.0) as client:
+            async with httpx_client(timeout=4.0) as client:
                 r = await client.get(f"{url}/api/v1/stats")
                 ok = r.status_code == 200
         except Exception:
@@ -68,6 +68,21 @@ YDL_OPTS_BASE: Dict[str, Any] = {
     "no_warnings": True,
     "nocheckcertificate": True,
 }
+
+def get_ydl_opts(**extra) -> Dict[str, Any]:
+    """Return yt-dlp options with proxy injected when VPN is active."""
+    opts = {**YDL_OPTS_BASE, **extra}
+    proxy = _get_proxy_url() if '_wireproxy_process' in globals() else None
+    if proxy:
+        opts["proxy"] = proxy
+    return opts
+
+def httpx_client(**kwargs) -> httpx.AsyncClient:
+    """Return an httpx.AsyncClient with proxy injected when VPN is active."""
+    proxy = _get_proxy_url() if '_wireproxy_process' in globals() else None
+    if proxy:
+        kwargs.setdefault("proxy", proxy)
+    return httpx_client(**kwargs)
 
 # Simple TTL cache (trending/search results)
 _cache: Dict[str, tuple] = {}
@@ -117,7 +132,7 @@ async def _get_channel_thumbnails(channel_id: str) -> list:
     cached = _channel_thumbs_cache_get(channel_id)
     if cached is not None:
         return cached
-    opts = {**YDL_OPTS_BASE, "extract_flat": True, "playlistend": 1}
+    opts = get_ydl_opts(**{"extract_flat": True, "playlistend": 1})
     loop = asyncio.get_event_loop()
     def _fetch():
         with yt_dlp.YoutubeDL(opts) as ydl:
@@ -368,7 +383,7 @@ def _enrich_channel_info(videos: List[Dict[str, Any]], channel_id: str, channel_
 async def youtubei_channel_videos(channel_id: str, page: int = 1) -> Optional[List[Dict[str, Any]]]:
     """Fetch channel videos via YouTube's internal API with pagination."""
     try:
-        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+        async with httpx_client(timeout=10.0, follow_redirects=True) as client:
             if page == 1:
                 resp = await client.post(
                     "https://www.youtube.com/youtubei/v1/browse",
@@ -433,7 +448,7 @@ def _extract_trending_videos(data: Dict[str, Any]) -> List[Dict[str, Any]]:
 async def youtubei_search(query: str, page: int = 1) -> Optional[List[Dict[str, Any]]]:
     """Search via YouTube's internal API with continuation token support for pagination."""
     try:
-        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+        async with httpx_client(timeout=8.0, follow_redirects=True) as client:
             if page == 1:
                 resp = await client.post(
                     "https://www.youtube.com/youtubei/v1/search",
@@ -467,7 +482,7 @@ async def youtubei_search(query: str, page: int = 1) -> Optional[List[Dict[str, 
 async def youtubei_trending(region: str = "US", lang: str = "en") -> Optional[List[Dict[str, Any]]]:
     """Fetch trending directly via YouTube's internal API."""
     try:
-        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+        async with httpx_client(timeout=8.0, follow_redirects=True) as client:
             resp = await client.post(
                 "https://www.youtube.com/youtubei/v1/browse",
                 json={"context": _yt_context(hl=lang, gl=region), "browseId": "FEtrending"},
@@ -497,7 +512,7 @@ async def invidious_search(query: str, page: int = 1) -> Optional[List[Dict[str,
             pass
         return None
 
-    async with httpx.AsyncClient(timeout=8.0) as client:
+    async with httpx_client(timeout=8.0) as client:
         tasks = {asyncio.ensure_future(_try(client, i)): i for i in _get_instances()}
         pending = set(tasks)
         while pending:
@@ -704,7 +719,7 @@ async def get_trending(region: str = "US", category: str = "all", lang: str = "e
         # Last resort: yt-dlp
         try:
             loop = asyncio.get_event_loop()
-            opts = {**YDL_OPTS_BASE, "extract_flat": True}
+            opts = get_ydl_opts(**{"extract_flat": True})
             ydl_videos: List[Dict[str, Any]] = []
 
             def _fetch(q: str):
@@ -775,7 +790,7 @@ async def get_trending(region: str = "US", category: str = "all", lang: str = "e
             pass
         return []
 
-    async with httpx.AsyncClient(timeout=8.0) as client:
+    async with httpx_client(timeout=8.0) as client:
         instances = _get_instances()
         # Race all instances, return as soon as one succeeds
         tasks = {asyncio.ensure_future(_fetch_trending(client, i)): i for i in instances}
@@ -834,7 +849,7 @@ async def search_videos(q: str = Query(..., min_length=1), page: int = Query(1, 
     try:
         offset = (page - 1) * 20
         search_query = f"ytsearch{20 + offset}:{q}"
-        opts = {**YDL_OPTS_BASE, "extract_flat": True}
+        opts = get_ydl_opts(**{"extract_flat": True})
         loop = asyncio.get_event_loop()
 
         def _search():
@@ -853,10 +868,7 @@ async def search_videos(q: str = Query(..., min_length=1), page: int = Query(1, 
 @app.get("/api/video/{video_id}")
 async def get_video(video_id: str):
     try:
-        opts = {
-            **YDL_OPTS_BASE,
-            "format": "bestvideo+bestaudio/best",
-        }
+        opts = get_ydl_opts(**{"format": "bestvideo+bestaudio/best"})
 
         loop = asyncio.get_event_loop()
 
@@ -927,7 +939,7 @@ async def get_video(video_id: str):
             search_q = channel_name_for_search or info.get("title", "")[:40]
             if search_q:
                 try:
-                    opts_rel = {**YDL_OPTS_BASE, "extract_flat": True}
+                    opts_rel = get_ydl_opts(**{"extract_flat": True})
 
                     def _search_related():
                         with yt_dlp.YoutubeDL(opts_rel) as ydl:
@@ -1003,7 +1015,7 @@ async def live_hls_master(video_id: str, request: Request):
         hls_url = live_url_cache_get(video_id)
         if not hls_url:
             def _get_hls():
-                with yt_dlp.YoutubeDL({**YDL_OPTS_BASE}) as ydl:
+                with yt_dlp.YoutubeDL(get_ydl_opts()) as ydl:
                     info = ydl.extract_info(
                         f"https://www.youtube.com/watch?v={video_id}", download=False
                     )
@@ -1027,7 +1039,7 @@ async def live_hls_master(video_id: str, request: Request):
         base = str(request.base_url).rstrip("/")
         proxy_base = f"{base}/api/hls-proxy"
 
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        async with httpx_client(timeout=15.0, follow_redirects=True) as client:
             resp = await client.get(hls_url, headers=YOUTUBE_HEADERS)
             if resp.status_code != 200:
                 raise HTTPException(status_code=502, detail=f"YouTube returned {resp.status_code}")
@@ -1058,7 +1070,7 @@ async def hls_proxy(url: str, request: Request):
         base = str(request.base_url).rstrip("/")
         proxy_base = f"{base}/api/hls-proxy"
 
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        async with httpx_client(timeout=15.0, follow_redirects=True) as client:
             resp = await client.get(decoded_url, headers=YOUTUBE_HEADERS)
 
         ct = resp.headers.get("content-type", "")
@@ -1088,7 +1100,7 @@ async def hls_proxy(url: str, request: Request):
 async def stream_audio(video_id: str, request: Request):
     """Stream the best audio-only track (for dual video+audio playback in the browser)."""
     try:
-        opts = {**YDL_OPTS_BASE, "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio"}
+        opts = get_ydl_opts(**{"format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio"})
         loop = asyncio.get_event_loop()
 
         def _get_url():
@@ -1115,12 +1127,12 @@ async def stream_audio(video_id: str, request: Request):
         content_type = "audio/mp4" if ext in ("m4a", "mp4") else f"audio/{ext}"
 
         async def stream_generator():
-            async with httpx.AsyncClient(timeout=None, follow_redirects=True) as client:
+            async with httpx_client(timeout=None, follow_redirects=True) as client:
                 async with client.stream("GET", direct_url, headers=headers) as response:
                     async for chunk in response.aiter_bytes(chunk_size=65536):
                         yield chunk
 
-        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+        async with httpx_client(timeout=10.0, follow_redirects=True) as client:
             head_resp = await client.head(direct_url, headers=headers)
         response_headers = {
             "Content-Type": content_type,
@@ -1147,10 +1159,7 @@ async def stream_audio(video_id: str, request: Request):
 @app.get("/api/stream/{video_id}")
 async def stream_video(video_id: str, request: Request, itag: Optional[str] = None):
     try:
-        opts = {
-            **YDL_OPTS_BASE,
-            "format": itag if itag else "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-        }
+        opts = get_ydl_opts(**{"format": itag if itag else "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"})
 
         loop = asyncio.get_event_loop()
 
@@ -1185,13 +1194,13 @@ async def stream_video(video_id: str, request: Request, itag: Optional[str] = No
         content_type = "video/mp4" if ext in ("mp4", "m4v") else f"video/{ext}"
 
         async def stream_generator():
-            async with httpx.AsyncClient(timeout=None, follow_redirects=True) as client:
+            async with httpx_client(timeout=None, follow_redirects=True) as client:
                 async with client.stream("GET", direct_url, headers=headers) as response:
                     async for chunk in response.aiter_bytes(chunk_size=65536):
                         yield chunk
 
         # Make a head request to get content length and determine status
-        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+        async with httpx_client(timeout=10.0, follow_redirects=True) as client:
             head_resp = await client.head(direct_url, headers=headers)
             response_headers = {
                 "Content-Type": content_type,
@@ -1227,7 +1236,7 @@ async def get_thumbnail(video_id: str):
         data, ct = cached
         return Response(content=data, media_type=ct, headers={"Cache-Control": "public, max-age=3600"})
 
-    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+    async with httpx_client(timeout=10.0, follow_redirects=True) as client:
         for quality in ["hqdefault", "mqdefault", "default"]:
             try:
                 url = f"https://i.ytimg.com/vi/{video_id}/{quality}.jpg"
@@ -1246,7 +1255,7 @@ async def get_thumbnail(video_id: str):
 
 @app.get("/api/debug/channel_thumbnails/{channel_id}")
 async def debug_channel_thumbnails(channel_id: str):
-    opts = {**YDL_OPTS_BASE, "extract_flat": True, "playlistend": 1}
+    opts = get_ydl_opts(**{"extract_flat": True, "playlistend": 1})
     loop = asyncio.get_event_loop()
     def _fetch():
         with yt_dlp.YoutubeDL(opts) as ydl:
@@ -1279,7 +1288,7 @@ async def _get_avatar_url_via_youtubei(channel_id: str) -> Optional[str]:
         "Referer": "https://www.youtube.com/",
     }
     try:
-        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+        async with httpx_client(timeout=8.0, follow_redirects=True) as client:
             resp = await client.post(
                 "https://www.youtube.com/youtubei/v1/browse",
                 json=payload,
@@ -1309,7 +1318,7 @@ async def get_channel_thumbnail(channel_id: str):
         data, ct = cached
         return Response(content=data, media_type=ct, headers={"Cache-Control": "public, max-age=3600"})
 
-    async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+    async with httpx_client(timeout=8.0, follow_redirects=True) as client:
         # Attempt 1: /youtubei/v1/browse (fast, no yt-dlp)
         avatar_yt_url = await _get_avatar_url_via_youtubei(channel_id)
 
@@ -1379,7 +1388,7 @@ async def download_video(
             h = height_map.get(quality, 720)
             fmt_selector = f"bestvideo[height<={h}][ext=mp4]+bestaudio[ext=m4a]/best[height<={h}][ext=mp4]/best"
 
-        opts = {**YDL_OPTS_BASE, "format": fmt_selector}
+        opts = get_ydl_opts(**{"format": fmt_selector})
         loop = asyncio.get_event_loop()
 
         def _get_info():
@@ -1406,7 +1415,7 @@ async def download_video(
         filename = f"{safe_title}.{ext}"
 
         async def download_generator():
-            async with httpx.AsyncClient(timeout=None, follow_redirects=True) as client:
+            async with httpx_client(timeout=None, follow_redirects=True) as client:
                 async with client.stream(
                     "GET",
                     direct_url,
@@ -1454,7 +1463,7 @@ async def _get_banner_url_via_youtubei(channel_id: str) -> Optional[str]:
         "Referer": "https://www.youtube.com/",
     }
     try:
-        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+        async with httpx_client(timeout=8.0, follow_redirects=True) as client:
             resp = await client.post(
                 "https://www.youtube.com/youtubei/v1/browse",
                 json=payload,
@@ -1497,7 +1506,7 @@ async def get_channel_banner(channel_id: str):
         data, ct = cached
         return Response(content=data, media_type=ct, headers={"Cache-Control": "public, max-age=3600"})
 
-    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+    async with httpx_client(timeout=10.0, follow_redirects=True) as client:
         # Attempt 1: /youtubei/v1/browse (fast, no yt-dlp)
         banner_yt_url = await _get_banner_url_via_youtubei(channel_id)
 
@@ -1565,7 +1574,7 @@ async def get_channel_banner(channel_id: str):
 @app.get("/api/channel/{channel_id}")
 async def get_channel(channel_id: str):
     try:
-        opts = {**YDL_OPTS_BASE, "extract_flat": True, "playlistend": 1}
+        opts = get_ydl_opts(**{"extract_flat": True, "playlistend": 1})
         loop = asyncio.get_event_loop()
 
         def _fetch():
@@ -1607,7 +1616,7 @@ async def get_channel_videos(channel_id: str, page: int = Query(1, ge=1)):
         return {"videos": videos, "channelId": channel_id, "page": page}
 
     # Attempt 2: Invidious
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx_client(timeout=10.0) as client:
         for instance in _get_instances():
             try:
                 resp = await client.get(
@@ -1627,12 +1636,7 @@ async def get_channel_videos(channel_id: str, page: int = Query(1, ge=1)):
     try:
         start = (page - 1) * 20 + 1
         end = page * 20
-        opts = {
-            **YDL_OPTS_BASE,
-            "extract_flat": True,
-            "playliststart": start,
-            "playlistend": end,
-        }
+        opts = get_ydl_opts(**{"extract_flat": True, "playliststart": start, "playlistend": end})
         loop = asyncio.get_event_loop()
 
         def _fetch():
