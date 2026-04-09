@@ -1,6 +1,6 @@
 fastapi
 uvicorn[standard]
 yt-dlp
-httpx
+httpx[socks]
 python-dotenv
 python-multipart
