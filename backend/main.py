@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import json
 import os
 import re
 from time import time as _time
@@ -2072,13 +2073,45 @@ import tempfile
 from fastapi import UploadFile, File
 
 _wireproxy_process: Optional[subprocess.Popen] = None
-_wireproxy_conf_path: Optional[str] = None
-_wireproxy_conf_name: Optional[str] = None
+_wireproxy_conf_path: Optional[str] = None  # path to the currently active .conf
+_wireproxy_conf_name: Optional[str] = None  # display name of active .conf
 _wireproxy_socks_port: int = 25344
 
 WIREPROXY_BIN = shutil.which("wireproxy") or "/usr/local/bin/wireproxy"
 
 SOCKS5_SECTION = f"\n[Socks5]\nBindAddress = 127.0.0.1:{_wireproxy_socks_port}\n"
+
+# Persistent storage for saved configs
+VPN_CONFIGS_DIR = os.path.join(os.path.expanduser("~"), ".mytube", "vpn_configs")
+VPN_STATE_FILE  = os.path.join(os.path.expanduser("~"), ".mytube", "vpn_state.json")
+os.makedirs(VPN_CONFIGS_DIR, exist_ok=True)
+
+def _vpn_state_load() -> dict:
+    try:
+        with open(VPN_STATE_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _vpn_state_save(state: dict):
+    try:
+        with open(VPN_STATE_FILE, "w") as f:
+            json.dump(state, f)
+    except Exception:
+        pass
+
+def _restore_active_conf():
+    """On startup: restore last active config if it still exists."""
+    global _wireproxy_conf_path, _wireproxy_conf_name
+    state = _vpn_state_load()
+    active = state.get("active")
+    if active:
+        path = os.path.join(VPN_CONFIGS_DIR, active)
+        if os.path.exists(path):
+            _wireproxy_conf_path = path
+            _wireproxy_conf_name = active
+
+_restore_active_conf()
 
 
 def _get_proxy_url() -> Optional[str]:
@@ -2106,6 +2139,18 @@ async def vpn_status():
     }
 
 
+@app.get("/api/vpn/configs")
+async def vpn_list_configs():
+    """List all saved .conf files."""
+    try:
+        names = sorted(
+            f for f in os.listdir(VPN_CONFIGS_DIR) if f.endswith(".conf")
+        )
+    except Exception:
+        names = []
+    return {"configs": names, "active": _wireproxy_conf_name}
+
+
 @app.post("/api/vpn/upload")
 async def vpn_upload_conf(file: UploadFile = File(...)):
     global _wireproxy_conf_path, _wireproxy_conf_name
@@ -2121,21 +2166,68 @@ async def vpn_upload_conf(file: UploadFile = File(...)):
 
     conf = _prepare_conf(raw)
 
-    # Write to a stable temp file (persist across requests)
-    if _wireproxy_conf_path and os.path.exists(_wireproxy_conf_path):
-        os.remove(_wireproxy_conf_path)
-
-    fd, path = tempfile.mkstemp(suffix=".conf", prefix="mytube_vpn_")
-    with os.fdopen(fd, "w") as f:
+    name = file.filename or "vpn.conf"
+    path = os.path.join(VPN_CONFIGS_DIR, name)
+    with open(path, "w") as f:
         f.write(conf)
 
     _wireproxy_conf_path = path
-    _wireproxy_conf_name = file.filename or "vpn.conf"
-
-    # Also update ytmusicapi cache to use proxy on next call
+    _wireproxy_conf_name = name
+    _vpn_state_save({"active": name})
     _ytm_cache.clear()
 
-    return {"ok": True, "conf_name": _wireproxy_conf_name}
+    configs = sorted(f for f in os.listdir(VPN_CONFIGS_DIR) if f.endswith(".conf"))
+    return {"ok": True, "conf_name": name, "configs": configs}
+
+
+@app.post("/api/vpn/select")
+async def vpn_select_conf(body: dict):
+    """Select a previously saved config as active."""
+    global _wireproxy_conf_path, _wireproxy_conf_name
+
+    name = body.get("name")
+    if not name:
+        raise HTTPException(status_code=400, detail="Missing 'name'")
+
+    path = os.path.join(VPN_CONFIGS_DIR, name)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail=f"Config '{name}' not found")
+
+    if _wireproxy_process and _wireproxy_process.poll() is None:
+        raise HTTPException(status_code=409, detail="Stop the VPN before switching config")
+
+    _wireproxy_conf_path = path
+    _wireproxy_conf_name = name
+    _vpn_state_save({"active": name})
+
+    return {"ok": True, "conf_name": name}
+
+
+@app.delete("/api/vpn/configs/{name}")
+async def vpn_delete_conf(name: str):
+    """Delete a saved config. Cannot delete the active one while VPN is running."""
+    global _wireproxy_conf_path, _wireproxy_conf_name
+
+    path = os.path.join(VPN_CONFIGS_DIR, name)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail=f"Config '{name}' not found")
+
+    running = _wireproxy_process is not None and _wireproxy_process.poll() is None
+    if running and _wireproxy_conf_name == name:
+        raise HTTPException(status_code=409, detail="Cannot delete the active config while VPN is running")
+
+    os.remove(path)
+
+    # If it was the active config, deselect it
+    if _wireproxy_conf_name == name:
+        _wireproxy_conf_path = None
+        _wireproxy_conf_name = None
+        state = _vpn_state_load()
+        state.pop("active", None)
+        _vpn_state_save(state)
+
+    configs = sorted(f for f in os.listdir(VPN_CONFIGS_DIR) if f.endswith(".conf"))
+    return {"ok": True, "configs": configs}
 
 
 @app.post("/api/vpn/start")

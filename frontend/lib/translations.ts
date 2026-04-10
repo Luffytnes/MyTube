@@ -62,6 +62,8 @@ export interface Translations {
   settings_vpn_no_conf: string; settings_vpn_error: string; settings_vpn_conf_loaded: string
   settings_vpn_starting: string; settings_vpn_stopping: string
   settings_vpn_myip: string; settings_vpn_myip_refresh: string; settings_vpn_myip_error: string
+  settings_vpn_saved_configs: string; settings_vpn_no_saved: string; settings_vpn_delete: string
+  settings_vpn_switch_stop: string; settings_vpn_select: string
   nav_likes: string; likes_title: string; likes_empty: string; likes_open_youtube: string
   share_modal_title: string; share_copy: string; share_copied: string
 }
@@ -139,6 +141,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_no_conf: 'No configuration file loaded', settings_vpn_error: 'VPN error',
     settings_vpn_conf_loaded: 'Configuration loaded', settings_vpn_starting: 'Connecting...', settings_vpn_stopping: 'Disconnecting...',
     settings_vpn_myip: 'IP seen by servers', settings_vpn_myip_refresh: 'Refresh', settings_vpn_myip_error: 'Unable to retrieve IP',
+    settings_vpn_saved_configs: 'Saved configurations', settings_vpn_no_saved: 'No saved configuration', settings_vpn_delete: 'Delete', settings_vpn_switch_stop: 'Stop VPN before switching config', settings_vpn_select: 'Use',
     nav_likes: 'My Likes', likes_title: 'My Likes', likes_empty: 'No liked videos yet.', likes_open_youtube: 'Watch on YouTube',
     share_modal_title: 'Share video', share_copy: 'Copy link', share_copied: 'Copied!',
   },
@@ -214,6 +217,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_no_conf: 'Aucun fichier de configuration', settings_vpn_error: 'Erreur VPN',
     settings_vpn_conf_loaded: 'Configuration chargée', settings_vpn_starting: 'Connexion...', settings_vpn_stopping: 'Déconnexion...',
     settings_vpn_myip: 'IP vue par les serveurs', settings_vpn_myip_refresh: 'Actualiser', settings_vpn_myip_error: 'Impossible de récupérer l\'IP',
+    settings_vpn_saved_configs: 'Configurations sauvegardées', settings_vpn_no_saved: 'Aucune configuration sauvegardée', settings_vpn_delete: 'Supprimer', settings_vpn_switch_stop: 'Arrêtez le VPN avant de changer de config', settings_vpn_select: 'Utiliser',
     nav_likes: 'Mes likes', likes_title: 'Mes likes', likes_empty: 'Aucune vidéo aimée pour l\'instant.', likes_open_youtube: 'Voir sur YouTube',
     share_modal_title: 'Partager la vidéo', share_copy: 'Copier le lien', share_copied: 'Copié !',
   },
@@ -289,6 +293,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_no_conf: 'Ningún archivo de configuración', settings_vpn_error: 'Error de VPN',
     settings_vpn_conf_loaded: 'Configuración cargada', settings_vpn_starting: 'Conectando...', settings_vpn_stopping: 'Desconectando...',
     settings_vpn_myip: 'IP vista por los servidores', settings_vpn_myip_refresh: 'Actualizar', settings_vpn_myip_error: 'No se puede obtener la IP',
+    settings_vpn_saved_configs: 'Configuraciones guardadas', settings_vpn_no_saved: 'Sin configuración guardada', settings_vpn_delete: 'Eliminar', settings_vpn_switch_stop: 'Detén el VPN antes de cambiar', settings_vpn_select: 'Usar',
     nav_likes: 'Mis likes', likes_title: 'Mis likes', likes_empty: 'Aún no hay vídeos que te gusten.', likes_open_youtube: 'Ver en YouTube',
     share_modal_title: 'Compartir vídeo', share_copy: 'Copiar enlace', share_copied: '¡Copiado!',
   },
@@ -364,6 +369,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_no_conf: 'Keine Konfigurationsdatei', settings_vpn_error: 'VPN-Fehler',
     settings_vpn_conf_loaded: 'Konfiguration geladen', settings_vpn_starting: 'Verbinde...', settings_vpn_stopping: 'Trenne...',
     settings_vpn_myip: 'IP von Servern gesehen', settings_vpn_myip_refresh: 'Aktualisieren', settings_vpn_myip_error: 'IP nicht abrufbar',
+    settings_vpn_saved_configs: 'Gespeicherte Konfigurationen', settings_vpn_no_saved: 'Keine gespeicherte Konfiguration', settings_vpn_delete: 'Löschen', settings_vpn_switch_stop: 'VPN stoppen vor dem Wechsel', settings_vpn_select: 'Verwenden',
     nav_likes: 'Meine Likes', likes_title: 'Meine Likes', likes_empty: 'Noch keine gelikten Videos.', likes_open_youtube: 'Auf YouTube ansehen',
     share_modal_title: 'Video teilen', share_copy: 'Link kopieren', share_copied: 'Kopiert!',
   },
@@ -439,6 +445,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_no_conf: 'Nenhum arquivo de configuração', settings_vpn_error: 'Erro de VPN',
     settings_vpn_conf_loaded: 'Configuração carregada', settings_vpn_starting: 'Conectando...', settings_vpn_stopping: 'Desconectando...',
     settings_vpn_myip: 'IP vista pelos servidores', settings_vpn_myip_refresh: 'Atualizar', settings_vpn_myip_error: 'Não foi possível obter o IP',
+    settings_vpn_saved_configs: 'Configurações salvas', settings_vpn_no_saved: 'Nenhuma configuração salva', settings_vpn_delete: 'Excluir', settings_vpn_switch_stop: 'Pare o VPN antes de trocar', settings_vpn_select: 'Usar',
     nav_likes: 'Meus likes', likes_title: 'Meus likes', likes_empty: 'Nenhum vídeo curtido ainda.', likes_open_youtube: 'Ver no YouTube',
     share_modal_title: 'Compartilhar vídeo', share_copy: 'Copiar link', share_copied: 'Copiado!',
   },
@@ -514,6 +521,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_no_conf: 'Nessun file di configurazione', settings_vpn_error: 'Errore VPN',
     settings_vpn_conf_loaded: 'Configurazione caricata', settings_vpn_starting: 'Connessione...', settings_vpn_stopping: 'Disconnessione...',
     settings_vpn_myip: 'IP vista dai server', settings_vpn_myip_refresh: 'Aggiorna', settings_vpn_myip_error: 'Impossibile ottenere l\'IP',
+    settings_vpn_saved_configs: 'Configurazioni salvate', settings_vpn_no_saved: 'Nessuna configurazione salvata', settings_vpn_delete: 'Elimina', settings_vpn_switch_stop: 'Ferma il VPN prima di cambiare', settings_vpn_select: 'Usa',
     nav_likes: 'I miei like', likes_title: 'I miei like', likes_empty: 'Nessun video apprezzato ancora.', likes_open_youtube: 'Guarda su YouTube',
     share_modal_title: 'Condividi video', share_copy: 'Copia link', share_copied: 'Copiato!',
   },
@@ -589,6 +597,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_no_conf: '設定ファイルなし', settings_vpn_error: 'VPNエラー',
     settings_vpn_conf_loaded: '設定読み込み済み', settings_vpn_starting: '接続中...', settings_vpn_stopping: '切断中...',
     settings_vpn_myip: 'サーバーが見るIP', settings_vpn_myip_refresh: '更新', settings_vpn_myip_error: 'IPを取得できません',
+    settings_vpn_saved_configs: '保存済み設定', settings_vpn_no_saved: '保存済み設定なし', settings_vpn_delete: '削除', settings_vpn_switch_stop: '切替前にVPNを停止してください', settings_vpn_select: '使用',
     nav_likes: 'マイいいね', likes_title: 'マイいいね', likes_empty: 'いいねした動画はありません。', likes_open_youtube: 'YouTubeで見る',
     share_modal_title: '動画をシェア', share_copy: 'リンクをコピー', share_copied: 'コピーしました！',
   },
@@ -664,6 +673,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_no_conf: '구성 파일 없음', settings_vpn_error: 'VPN 오류',
     settings_vpn_conf_loaded: '구성 로드됨', settings_vpn_starting: '연결 중...', settings_vpn_stopping: '해제 중...',
     settings_vpn_myip: '서버에 표시되는 IP', settings_vpn_myip_refresh: '새로고침', settings_vpn_myip_error: 'IP를 가져올 수 없음',
+    settings_vpn_saved_configs: '저장된 구성', settings_vpn_no_saved: '저장된 구성 없음', settings_vpn_delete: '삭제', settings_vpn_switch_stop: '전환 전에 VPN을 중지하세요', settings_vpn_select: '사용',
     nav_likes: '좋아요', likes_title: '좋아요', likes_empty: '좋아요한 동영상이 없습니다.', likes_open_youtube: 'YouTube에서 보기',
     share_modal_title: '동영상 공유', share_copy: '링크 복사', share_copied: '복사됨!',
   },
@@ -739,6 +749,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_no_conf: 'Нет файла конфигурации', settings_vpn_error: 'Ошибка VPN',
     settings_vpn_conf_loaded: 'Конфигурация загружена', settings_vpn_starting: 'Подключение...', settings_vpn_stopping: 'Отключение...',
     settings_vpn_myip: 'IP видимый серверами', settings_vpn_myip_refresh: 'Обновить', settings_vpn_myip_error: 'Не удалось получить IP',
+    settings_vpn_saved_configs: 'Сохранённые конфигурации', settings_vpn_no_saved: 'Нет сохранённых конфигураций', settings_vpn_delete: 'Удалить', settings_vpn_switch_stop: 'Остановите VPN перед сменой конфигурации', settings_vpn_select: 'Выбрать',
     nav_likes: 'Мне нравится', likes_title: 'Мне нравится', likes_empty: 'Нет понравившихся видео.', likes_open_youtube: 'Смотреть на YouTube',
     share_modal_title: 'Поделиться видео', share_copy: 'Копировать ссылку', share_copied: 'Скопировано!',
   },

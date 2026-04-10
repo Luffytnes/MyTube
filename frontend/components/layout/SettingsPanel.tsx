@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Sun, Moon, Monitor, Upload, Wifi, WifiOff, AlertCircle, Loader2, Shield, RefreshCw, MapPin } from 'lucide-react'
+import { X, Sun, Moon, Monitor, Upload, Wifi, WifiOff, AlertCircle, Loader2, Shield, RefreshCw, MapPin, Trash2, Check } from 'lucide-react'
 import { useTheme, type ThemeMode } from '@/lib/themeContext'
 import { useRegion, REGIONS } from '@/lib/regionContext'
 
@@ -32,6 +32,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const { mode, theme, setMode } = useTheme()
   const { region, setRegion, t } = useRegion()
   const [vpn, setVpn] = useState<VpnState>({ status: 'disconnected', conf_loaded: false, conf_name: null, error: null })
+  const [savedConfigs, setSavedConfigs] = useState<string[]>([])
   const [ipInfo, setIpInfo] = useState<IpInfo | null>(null)
   const [ipLoading, setIpLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -47,12 +48,23 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     setIpLoading(false)
   }, [])
 
+  const fetchConfigs = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/vpn/configs`)
+      if (res.ok) {
+        const data = await res.json()
+        setSavedConfigs(data.configs ?? [])
+      }
+    } catch {}
+  }, [])
+
   // Fetch VPN status when panel opens
   useEffect(() => {
     if (!open) return
     fetchVpnStatus()
     fetchIpInfo()
-  }, [open, fetchIpInfo])
+    fetchConfigs()
+  }, [open, fetchIpInfo, fetchConfigs])
 
   // Close on outside click
   useEffect(() => {
@@ -98,17 +110,53 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     formData.append('file', file)
     try {
       const res = await fetch(`${API_BASE}/api/vpn/upload`, { method: 'POST', body: formData })
+      const data = await res.json().catch(() => ({}))
       if (res.ok) {
-        setVpn((prev) => ({ ...prev, conf_loaded: true, conf_name: file.name, error: null }))
+        setVpn((prev) => ({ ...prev, conf_loaded: true, conf_name: data.conf_name ?? file.name, error: null }))
+        if (data.configs) setSavedConfigs(data.configs)
       } else {
-        const data = await res.json().catch(() => ({}))
         setVpn((prev) => ({ ...prev, error: data.detail ?? t('settings_vpn_error') }))
       }
     } catch {
       setVpn((prev) => ({ ...prev, error: t('settings_vpn_error') }))
     }
-    // Reset so same file can be re-uploaded
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  async function handleSelectConf(name: string) {
+    if (vpn.conf_name === name) return
+    try {
+      const res = await fetch(`${API_BASE}/api/vpn/select`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        setVpn((prev) => ({ ...prev, conf_loaded: true, conf_name: name, error: null }))
+      } else {
+        setVpn((prev) => ({ ...prev, error: data.detail ?? t('settings_vpn_error') }))
+      }
+    } catch {
+      setVpn((prev) => ({ ...prev, error: t('settings_vpn_error') }))
+    }
+  }
+
+  async function handleDeleteConf(name: string) {
+    try {
+      const res = await fetch(`${API_BASE}/api/vpn/configs/${encodeURIComponent(name)}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        setSavedConfigs(data.configs ?? [])
+        if (vpn.conf_name === name) {
+          setVpn((prev) => ({ ...prev, conf_loaded: false, conf_name: null, error: null }))
+        }
+      } else {
+        setVpn((prev) => ({ ...prev, error: data.detail ?? t('settings_vpn_error') }))
+      }
+    } catch {
+      setVpn((prev) => ({ ...prev, error: t('settings_vpn_error') }))
+    }
   }
 
   async function handleVpnToggle() {
@@ -217,8 +265,49 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             </div>
             <p className="text-xs text-yt-text-muted mb-4 leading-relaxed">{t('settings_vpn_desc')}</p>
 
-            {/* Config file */}
-            <div className="mb-3">
+            {/* Saved configs list */}
+            <div className="mb-3 space-y-1.5">
+              {savedConfigs.length === 0 ? (
+                <p className="text-xs text-yt-text-muted px-1 mb-2">{t('settings_vpn_no_saved')}</p>
+              ) : (
+                savedConfigs.map((name) => {
+                  const isActive = vpn.conf_name === name
+                  const isRunning = vpnConnected && isActive
+                  return (
+                    <div
+                      key={name}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition-colors ${
+                        isActive
+                          ? 'border-yt-red bg-yt-red/10 text-yt-text'
+                          : 'border-yt-border/60 text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
+                      }`}
+                    >
+                      {isActive && <Check className="w-3.5 h-3.5 text-yt-red flex-shrink-0" />}
+                      <span className="flex-1 truncate font-mono text-xs">{name}</span>
+                      {!isActive && (
+                        <button
+                          onClick={() => handleSelectConf(name)}
+                          disabled={vpnConnected}
+                          className="text-xs px-2 py-0.5 rounded-lg bg-yt-secondary hover:bg-yt-hover border border-yt-border disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          title={vpnConnected ? t('settings_vpn_switch_stop') : t('settings_vpn_select')}
+                        >
+                          {t('settings_vpn_select')}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDeleteConf(name)}
+                        disabled={isRunning}
+                        className="p-1 rounded-lg text-yt-text-muted hover:text-red-400 hover:bg-red-400/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        title={t('settings_vpn_delete')}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )
+                })
+              )}
+
+              {/* Upload button */}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -228,16 +317,11 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               />
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-yt-border/60 text-sm text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-yt-border/60 text-sm text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text hover:border-yt-border transition-colors"
               >
                 <Upload className="w-4 h-4 flex-shrink-0" />
-                <span className="flex-1 text-left truncate">
-                  {vpn.conf_name ?? t('settings_vpn_upload')}
-                </span>
+                <span>{t('settings_vpn_upload')}</span>
               </button>
-              {vpn.conf_loaded && !vpn.conf_name && (
-                <p className="text-xs text-green-400 mt-1 px-1">{t('settings_vpn_conf_loaded')}</p>
-              )}
             </div>
 
             {/* Status + toggle */}
