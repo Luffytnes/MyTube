@@ -34,7 +34,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const { region, setRegion, t } = useRegion()
   const [tab, setTab] = useState<Tab>('general')
   const [vpn, setVpn] = useState<VpnState>({ status: 'disconnected', conf_loaded: false, conf_name: null, error: null })
-  const [vpnLoading, setVpnLoading] = useState(true)
+  const [vpnLoading, setVpnLoading] = useState(false)
   const [savedConfigs, setSavedConfigs] = useState<string[]>([])
   const [ipInfo, setIpInfo] = useState<IpInfo | null>(null)
   const [ipLoading, setIpLoading] = useState(false)
@@ -61,7 +61,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     } catch {}
   }, [])
 
-  async function fetchVpnStatus() {
+  const fetchVpnStatus = useCallback(async () => {
     setVpnLoading(true)
     try {
       const res = await fetch(`${API_BASE}/api/vpn/status`)
@@ -76,14 +76,22 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       }
     } catch {}
     setVpnLoading(false)
-  }
+  }, [])
 
+  // Refresh everything when panel opens
   useEffect(() => {
     if (!open) return
     fetchVpnStatus()
     fetchIpInfo()
     fetchConfigs()
-  }, [open, fetchIpInfo, fetchConfigs])
+  }, [open, fetchVpnStatus, fetchIpInfo, fetchConfigs])
+
+  // Refresh VPN status every time the Wireproxy tab becomes active
+  useEffect(() => {
+    if (!open || tab !== 'wireproxy') return
+    fetchVpnStatus()
+    fetchConfigs()
+  }, [tab, open, fetchVpnStatus, fetchConfigs])
 
   // Close on outside click
   useEffect(() => {
