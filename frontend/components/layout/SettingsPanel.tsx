@@ -34,6 +34,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const { region, setRegion, t } = useRegion()
   const [tab, setTab] = useState<Tab>('general')
   const [vpn, setVpn] = useState<VpnState>({ status: 'disconnected', conf_loaded: false, conf_name: null, error: null })
+  const [vpnLoading, setVpnLoading] = useState(true)
   const [savedConfigs, setSavedConfigs] = useState<string[]>([])
   const [ipInfo, setIpInfo] = useState<IpInfo | null>(null)
   const [ipLoading, setIpLoading] = useState(false)
@@ -61,6 +62,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   }, [])
 
   async function fetchVpnStatus() {
+    setVpnLoading(true)
     try {
       const res = await fetch(`${API_BASE}/api/vpn/status`)
       if (res.ok) {
@@ -73,6 +75,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         })
       }
     } catch {}
+    setVpnLoading(false)
   }
 
   useEffect(() => {
@@ -135,6 +138,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         setVpn((prev) => ({ ...prev, conf_loaded: true, conf_name: name, error: null }))
       } else {
         setVpn((prev) => ({ ...prev, error: data.detail ?? t('settings_vpn_error') }))
+        fetchVpnStatus() // resync in case of state mismatch
       }
     } catch {
       setVpn((prev) => ({ ...prev, error: t('settings_vpn_error') }))
@@ -217,7 +221,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       {/* Modal */}
       <div
         ref={modalRef}
-        className="relative z-10 flex w-full max-w-2xl max-h-[80vh] bg-yt-bg border border-yt-border rounded-2xl shadow-2xl overflow-hidden"
+        className="relative z-10 flex w-full max-w-2xl h-[560px] bg-yt-bg border border-yt-border rounded-2xl shadow-2xl overflow-hidden"
       >
         {/* Left tab bar */}
         <div className="w-44 flex-shrink-0 bg-yt-secondary border-r border-yt-border flex flex-col pt-4 pb-4">
@@ -339,7 +343,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                           {!isActive && (
                             <button
                               onClick={() => handleSelectConf(name)}
-                              disabled={vpnConnected}
+                              disabled={vpnConnected || vpnLoading}
                               className="text-xs px-2 py-0.5 rounded-lg bg-yt-secondary hover:bg-yt-hover border border-yt-border disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                               title={vpnConnected ? t('settings_vpn_switch_stop') : t('settings_vpn_select')}
                             >
@@ -389,7 +393,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     </div>
                     <button
                       onClick={handleVpnToggle}
-                      disabled={vpnBusy || (!vpn.conf_loaded && !vpnConnected)}
+                      disabled={vpnLoading || vpnBusy || (!vpn.conf_loaded && !vpnConnected)}
                       className={`px-4 py-1.5 rounded-full text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                         vpnConnected
                           ? 'bg-yt-hover border border-yt-border text-yt-text hover:border-red-400 hover:text-red-400'
