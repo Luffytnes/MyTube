@@ -23,8 +23,9 @@ import {
 } from 'lucide-react'
 import { formatSubscribers } from '@/lib/utils'
 import { isInWatchLater, toggleWatchLater } from '@/lib/watchLater'
+import { isLiked, toggleLike, removeLike } from '@/lib/likes'
 import { useSubscriptions } from '@/lib/subscriptionsContext'
-import { BellOff } from 'lucide-react'
+import { BellOff, Copy, Check, ExternalLink } from 'lucide-react'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -93,10 +94,14 @@ export default function WatchPage({ params }: WatchPageProps) {
   const [descExpanded, setDescExpanded] = useState(false)
   const [showDownload, setShowDownload] = useState(false)
   const [liked, setLiked] = useState(false)
+  const [disliked, setDisliked] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [showShare, setShowShare] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     setSaved(isInWatchLater(id))
+    setLiked(isLiked(id))
   }, [id])
 
   const loadVideo = useCallback(async () => {
@@ -187,7 +192,12 @@ export default function WatchPage({ params }: WatchPageProps) {
             <div className="flex items-center gap-2 ml-auto">
               {/* Like */}
               <button
-                onClick={() => setLiked((v) => !v)}
+                onClick={() => {
+                  if (!video) return
+                  const nowLiked = toggleLike({ id: video.id, title: video.title, channel: video.channel.name, channelId: video.channel.id })
+                  setLiked(nowLiked)
+                  if (nowLiked) setDisliked(false)
+                }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                   liked
                     ? 'bg-blue-600 text-white'
@@ -199,22 +209,30 @@ export default function WatchPage({ params }: WatchPageProps) {
               </button>
 
               {/* Dislike */}
-              <button className="flex items-center gap-2 px-4 py-2 rounded-full bg-yt-secondary hover:bg-yt-hover text-yt-text border border-yt-border text-sm font-medium transition-colors">
-                <ThumbsDown className="w-4 h-4" />
+              <button
+                onClick={() => {
+                  if (!video) return
+                  setDisliked((v) => {
+                    const next = !v
+                    if (next && liked) {
+                      removeLike(video.id)
+                      setLiked(false)
+                    }
+                    return next
+                  })
+                }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                  disliked
+                    ? 'bg-red-600 text-white'
+                    : 'bg-yt-secondary hover:bg-yt-hover text-yt-text border border-yt-border'
+                }`}
+              >
+                <ThumbsDown className={`w-4 h-4 ${disliked ? 'fill-white' : ''}`} />
               </button>
 
               {/* Share */}
               <button
-                onClick={() => {
-                  if (navigator.share) {
-                    navigator.share({
-                      title: video.title,
-                      url: window.location.href,
-                    })
-                  } else {
-                    navigator.clipboard.writeText(window.location.href)
-                  }
-                }}
+                onClick={() => setShowShare(true)}
                 className="flex items-center gap-2 px-4 py-2 rounded-full bg-yt-secondary hover:bg-yt-hover text-yt-text border border-yt-border text-sm font-medium transition-colors"
               >
                 <Share2 className="w-4 h-4" />
@@ -388,6 +406,46 @@ export default function WatchPage({ params }: WatchPageProps) {
           )}
         </aside>
       </div>
+
+      {/* Share Modal */}
+      {showShare && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center px-4"
+          onClick={() => setShowShare(false)}
+        >
+          <div
+            className="bg-yt-bg border border-yt-border rounded-2xl p-6 w-full max-w-md shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-yt-text font-semibold text-base mb-4">{t('share_modal_title')}</h3>
+            <div className="flex items-center gap-2 bg-yt-secondary rounded-xl px-3 py-2.5 mb-4">
+              <span className="flex-1 text-sm text-yt-text-secondary truncate font-mono">
+                {`https://www.youtube.com/watch?v=${video.id}`}
+              </span>
+              <a
+                href={`https://www.youtube.com/watch?v=${video.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1 hover:text-yt-text text-yt-text-muted transition-colors flex-shrink-0"
+                title={t('likes_open_youtube')}
+              >
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            </div>
+            <button
+              onClick={async () => {
+                await navigator.clipboard.writeText(`https://www.youtube.com/watch?v=${video.id}`)
+                setCopied(true)
+                setTimeout(() => setCopied(false), 2000)
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-yt-red hover:bg-yt-red-hover text-white text-sm font-medium transition-colors"
+            >
+              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copied ? t('share_copied') : t('share_copy')}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Download Modal */}
       {showDownload && (

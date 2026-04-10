@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, TrendingUp, History, Clock, Music2 } from 'lucide-react'
+import { Home, TrendingUp, History, Clock, Music2, ThumbsUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useRegion } from '@/lib/regionContext'
 import { useSubscriptions } from '@/lib/subscriptionsContext'
@@ -15,6 +15,7 @@ const NAV_ITEMS: { icon: typeof Home; labelKey: keyof Translations; href: string
   { icon: TrendingUp, labelKey: 'nav_trending', href: '/trending' },
   { icon: History, labelKey: 'nav_history', href: '/history' },
   { icon: Clock, labelKey: 'nav_watchLater', href: '/watch-later' },
+  { icon: ThumbsUp, labelKey: 'nav_likes', href: '/likes' },
 ]
 
 export default function Sidebar() {

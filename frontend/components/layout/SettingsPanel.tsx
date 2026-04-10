@@ -118,6 +118,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         const res = await fetch(`${API_BASE}/api/vpn/stop`, { method: 'POST' })
         const data = await res.json().catch(() => ({}))
         setVpn((prev) => ({ ...prev, status: 'disconnected', error: data.error ?? null }))
+        fetchIpInfo()
       } catch {
         setVpn((prev) => ({ ...prev, status: 'error', error: t('settings_vpn_error') }))
       }
@@ -128,6 +129,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         const data = await res.json().catch(() => ({}))
         if (res.ok && data.running) {
           setVpn((prev) => ({ ...prev, status: 'connected', error: null }))
+          fetchIpInfo()
         } else {
           setVpn((prev) => ({ ...prev, status: 'error', error: data.detail ?? data.error ?? t('settings_vpn_error') }))
         }
