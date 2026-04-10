@@ -24,6 +24,8 @@ export default function Header() {
   const [history, setHistory] = useState<SearchHistoryEntry[]>([])
   const [showSettings, setShowSettings] = useState(false)
   const [vpnConnected, setVpnConnected] = useState(false)
+  const [vpnConfName, setVpnConfName] = useState<string | null>(null)
+  const [shieldTooltip, setShieldTooltip] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -33,14 +35,32 @@ export default function Header() {
       if (res.ok) {
         const data = await res.json()
         setVpnConnected(!!data.running)
+        setVpnConfName(data.conf_name ?? null)
       }
     } catch {}
+  }, [])
+
+  const fetchShieldTooltip = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/vpn/myip`)
+      if (res.ok) {
+        const d = await res.json()
+        const parts = [d.ip, d.city, d.country].filter(Boolean).join(' — ')
+        const org = d.org ? `\n${d.org}` : ''
+        setShieldTooltip(parts + org)
+      } else {
+        setShieldTooltip('')
+      }
+    } catch {
+      setShieldTooltip('')
+    }
   }, [])
 
   // Fetch VPN status on mount
   useEffect(() => {
     fetchVpnStatus()
-  }, [fetchVpnStatus])
+    fetchShieldTooltip()
+  }, [fetchVpnStatus, fetchShieldTooltip])
 
   // Load history when dropdown opens
   useEffect(() => {
@@ -179,7 +199,7 @@ export default function Header() {
       <div className="flex items-center gap-2 ml-4 flex-shrink-0">
         <div
           className="flex items-center gap-1.5 px-3 h-8 rounded-full bg-yt-secondary border border-yt-border text-xs text-yt-text-secondary cursor-default"
-          title={vpnConnected ? 'VPN actif — tout le trafic passe par le tunnel' : 'Sans VPN — votre IP réelle est utilisée'}
+          title={shieldTooltip || (vpnConnected ? 'VPN actif' : 'Sans VPN — votre IP réelle est utilisée')}
         >
           <Shield className={`w-3.5 h-3.5 ${vpnConnected ? 'text-green-400' : 'text-red-400'}`} />
           <span className="hidden md:block">{t('privacy_badge')}</span>
@@ -195,7 +215,7 @@ export default function Header() {
         </button>
       </div>
 
-      <SettingsPanel open={showSettings} onClose={() => { setShowSettings(false); fetchVpnStatus() }} />
+      <SettingsPanel open={showSettings} onClose={() => { setShowSettings(false); fetchVpnStatus(); fetchShieldTooltip() }} />
     </header>
   )
 }
