@@ -277,12 +277,14 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     <div
                       key={name}
                       className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition-colors ${
-                        isActive
-                          ? 'border-yt-red bg-yt-red/10 text-yt-text'
+                        isActive && isRunning
+                          ? 'border-green-500 bg-green-500/10 text-yt-text'
+                          : isActive
+                          ? 'border-yt-border bg-yt-hover text-yt-text'
                           : 'border-yt-border/60 text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
                       }`}
                     >
-                      {isActive && <Check className="w-3.5 h-3.5 text-yt-red flex-shrink-0" />}
+                      {isActive && <Check className={`w-3.5 h-3.5 flex-shrink-0 ${isRunning ? 'text-green-400' : 'text-yt-text-muted'}`} />}
                       <span className="flex-1 truncate font-mono text-xs">{name}</span>
                       {!isActive && (
                         <button
