@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Sun, Moon, Monitor, Upload, Wifi, WifiOff, AlertCircle, Loader2, Shield, RefreshCw, MapPin, Trash2, Check } from 'lucide-react'
+import { X, Sun, Moon, Monitor, Upload, Wifi, WifiOff, AlertCircle, Loader2, Shield, RefreshCw, MapPin, Trash2, Check, Globe, Network } from 'lucide-react'
 import { useTheme, type ThemeMode } from '@/lib/themeContext'
 import { useRegion, REGIONS } from '@/lib/regionContext'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 type VpnStatus = 'disconnected' | 'connecting' | 'connected' | 'disconnecting' | 'error'
+type Tab = 'general' | 'wireproxy'
 
 interface VpnState {
   status: VpnStatus
@@ -29,14 +30,15 @@ interface SettingsPanelProps {
 }
 
 export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
-  const { mode, theme, setMode } = useTheme()
+  const { mode, setMode } = useTheme()
   const { region, setRegion, t } = useRegion()
+  const [tab, setTab] = useState<Tab>('general')
   const [vpn, setVpn] = useState<VpnState>({ status: 'disconnected', conf_loaded: false, conf_name: null, error: null })
   const [savedConfigs, setSavedConfigs] = useState<string[]>([])
   const [ipInfo, setIpInfo] = useState<IpInfo | null>(null)
   const [ipLoading, setIpLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
 
   const fetchIpInfo = useCallback(async () => {
     setIpLoading(true)
@@ -58,36 +60,6 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     } catch {}
   }, [])
 
-  // Fetch VPN status when panel opens
-  useEffect(() => {
-    if (!open) return
-    fetchVpnStatus()
-    fetchIpInfo()
-    fetchConfigs()
-  }, [open, fetchIpInfo, fetchConfigs])
-
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return
-    function onMouseDown(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        onClose()
-      }
-    }
-    document.addEventListener('mousedown', onMouseDown)
-    return () => document.removeEventListener('mousedown', onMouseDown)
-  }, [open, onClose])
-
-  // Close on Escape
-  useEffect(() => {
-    if (!open) return
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [open, onClose])
-
   async function fetchVpnStatus() {
     try {
       const res = await fetch(`${API_BASE}/api/vpn/status`)
@@ -102,6 +74,33 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       }
     } catch {}
   }
+
+  useEffect(() => {
+    if (!open) return
+    fetchVpnStatus()
+    fetchIpInfo()
+    fetchConfigs()
+  }, [open, fetchIpInfo, fetchConfigs])
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return
+    function onMouseDown(e: MouseEvent) {
+      if (modalRef.current && !modalRef.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [open, onClose])
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open, onClose])
 
   async function handleUploadConf(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -190,220 +189,259 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const vpnConnected = vpn.status === 'connected'
   const vpnBusy = vpn.status === 'connecting' || vpn.status === 'disconnecting'
 
+  const TABS: { id: Tab; label: string; icon: React.ReactNode; badge?: React.ReactNode }[] = [
+    {
+      id: 'general',
+      label: 'Général',
+      icon: <Globe className="w-4 h-4" />,
+    },
+    {
+      id: 'wireproxy',
+      label: 'Wireproxy',
+      icon: <Network className="w-4 h-4" />,
+      badge: vpnConnected ? (
+        <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
+      ) : (
+        <span className="w-2 h-2 rounded-full bg-yt-text-muted/40 flex-shrink-0" />
+      ),
+    },
+  ]
+
+  if (!open) return null
+
   return (
-    <>
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       {/* Backdrop */}
-      <div
-        className={`fixed inset-0 z-50 bg-black/40 transition-opacity duration-200 ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-        aria-hidden="true"
-      />
+      <div className="absolute inset-0 bg-black/60" aria-hidden="true" />
 
-      {/* Sliding panel */}
+      {/* Modal */}
       <div
-        ref={panelRef}
-        className={`fixed top-0 right-0 bottom-0 z-50 w-80 bg-yt-bg border-l border-yt-border shadow-2xl flex flex-col transition-transform duration-250 ease-in-out ${open ? 'translate-x-0' : 'translate-x-full'}`}
+        ref={modalRef}
+        className="relative z-10 flex w-full max-w-2xl max-h-[80vh] bg-yt-bg border border-yt-border rounded-2xl shadow-2xl overflow-hidden"
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-yt-border/50">
-          <h2 className="text-yt-text font-semibold text-base">{t('settings_title')}</h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-yt-hover text-yt-text-secondary hover:text-yt-text transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto py-4 space-y-6 px-5">
-          {/* ── Apparence ── */}
-          <section>
-            <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-3">{t('settings_appearance')}</p>
-            <div className="flex items-center gap-3">
-              {mode === 'light' ? <Sun className="w-4 h-4 text-yt-text-muted flex-shrink-0" />
-                : mode === 'dark' ? <Moon className="w-4 h-4 text-yt-text-muted flex-shrink-0" />
-                : <Monitor className="w-4 h-4 text-yt-text-muted flex-shrink-0" />}
-              <select
-                value={mode}
-                onChange={(e) => setMode(e.target.value as ThemeMode)}
-                className="flex-1 bg-yt-secondary border border-yt-border text-yt-text text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-yt-red cursor-pointer"
-              >
-                <option value="light">{t('theme_light')}</option>
-                <option value="dark">{t('theme_dark')}</option>
-                <option value="auto">{t('theme_auto')}</option>
-              </select>
-            </div>
-          </section>
-
-          <div className="border-t border-yt-border/40" />
-
-          {/* ── Langue & Région ── */}
-          <section>
-            <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-3">{t('settings_language')}</p>
-            <select
-              value={region.code}
-              onChange={(e) => {
-                const r = REGIONS.find((r) => r.code === e.target.value)
-                if (r) setRegion(r)
-              }}
-              className="w-full bg-yt-secondary border border-yt-border text-yt-text text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-yt-red cursor-pointer"
-            >
-              {REGIONS.map((r) => (
-                <option key={r.code} value={r.code}>
-                  {r.flag} {r.name} ({r.code})
-                </option>
-              ))}
-            </select>
-          </section>
-
-          <div className="border-t border-yt-border/40" />
-
-          {/* ── VPN WireGuard ── */}
-          <section>
-            <div className="flex items-center gap-2 mb-1">
-              <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest">{t('settings_vpn')}</p>
-              {vpnConnected && <Shield className="w-3.5 h-3.5 text-green-400" />}
-            </div>
-            <p className="text-xs text-yt-text-muted mb-4 leading-relaxed">{t('settings_vpn_desc')}</p>
-
-            {/* Saved configs list */}
-            <div className="mb-3 space-y-1.5">
-              {savedConfigs.length === 0 ? (
-                <p className="text-xs text-yt-text-muted px-1 mb-2">{t('settings_vpn_no_saved')}</p>
-              ) : (
-                savedConfigs.map((name) => {
-                  const isActive = vpn.conf_name === name
-                  const isRunning = vpnConnected && isActive
-                  return (
-                    <div
-                      key={name}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition-colors ${
-                        isActive && isRunning
-                          ? 'border-green-500 bg-green-500/10 text-yt-text'
-                          : isActive
-                          ? 'border-yt-border bg-yt-hover text-yt-text'
-                          : 'border-yt-border/60 text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
-                      }`}
-                    >
-                      {isActive && <Check className={`w-3.5 h-3.5 flex-shrink-0 ${isRunning ? 'text-green-400' : 'text-yt-text-muted'}`} />}
-                      <span className="flex-1 truncate font-mono text-xs">{name}</span>
-                      {!isActive && (
-                        <button
-                          onClick={() => handleSelectConf(name)}
-                          disabled={vpnConnected}
-                          className="text-xs px-2 py-0.5 rounded-lg bg-yt-secondary hover:bg-yt-hover border border-yt-border disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                          title={vpnConnected ? t('settings_vpn_switch_stop') : t('settings_vpn_select')}
-                        >
-                          {t('settings_vpn_select')}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleDeleteConf(name)}
-                        disabled={isRunning}
-                        className="p-1 rounded-lg text-yt-text-muted hover:text-red-400 hover:bg-red-400/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        title={t('settings_vpn_delete')}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )
-                })
-              )}
-
-              {/* Upload button */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".conf"
-                className="hidden"
-                onChange={handleUploadConf}
-              />
+        {/* Left tab bar */}
+        <div className="w-44 flex-shrink-0 bg-yt-secondary border-r border-yt-border flex flex-col pt-4 pb-4">
+          <p className="px-4 pb-3 text-xs font-semibold text-yt-text-muted uppercase tracking-widest">
+            {t('settings_title')}
+          </p>
+          <nav className="flex flex-col gap-0.5 px-2">
+            {TABS.map(({ id, label, icon, badge }) => (
               <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-yt-border/60 text-sm text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text hover:border-yt-border transition-colors"
-              >
-                <Upload className="w-4 h-4 flex-shrink-0" />
-                <span>{t('settings_vpn_upload')}</span>
-              </button>
-            </div>
-
-            {/* Status + toggle */}
-            <div className="flex items-center gap-3">
-              <div className={`flex items-center gap-1.5 text-xs font-medium flex-1 ${
-                vpnConnected ? 'text-green-400' : vpn.status === 'error' ? 'text-red-400' : 'text-yt-text-muted'
-              }`}>
-                {vpnBusy ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : vpnConnected ? (
-                  <Wifi className="w-3.5 h-3.5" />
-                ) : vpn.status === 'error' ? (
-                  <AlertCircle className="w-3.5 h-3.5" />
-                ) : (
-                  <WifiOff className="w-3.5 h-3.5" />
-                )}
-                <span>
-                  {vpn.status === 'connecting' ? t('settings_vpn_starting')
-                    : vpn.status === 'disconnecting' ? t('settings_vpn_stopping')
-                    : vpnConnected ? t('settings_vpn_connected')
-                    : vpn.status === 'error' ? t('settings_vpn_error')
-                    : t('settings_vpn_disconnected')}
-                </span>
-              </div>
-
-              <button
-                onClick={handleVpnToggle}
-                disabled={vpnBusy || (!vpn.conf_loaded && !vpnConnected)}
-                className={`px-4 py-1.5 rounded-full text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                  vpnConnected
-                    ? 'bg-yt-hover border border-yt-border text-yt-text hover:border-red-400 hover:text-red-400'
-                    : 'bg-yt-red hover:bg-yt-red-hover text-white'
+                key={id}
+                onClick={() => setTab(id)}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-left transition-colors ${
+                  tab === id
+                    ? 'bg-yt-hover text-yt-text'
+                    : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
                 }`}
               >
-                {vpnConnected ? t('settings_vpn_disconnect') : t('settings_vpn_connect')}
+                <span className={tab === id ? 'text-yt-red' : 'text-yt-text-muted'}>{icon}</span>
+                <span className="flex-1">{label}</span>
+                {badge}
               </button>
-            </div>
+            ))}
+          </nav>
+        </div>
 
-            {vpn.error && (
-              <p className="text-xs text-red-400 mt-2 px-1">{vpn.error}</p>
+        {/* Right content */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-yt-border/50">
+            <h2 className="text-yt-text font-semibold text-base">
+              {tab === 'general' ? 'Général' : 'Wireproxy'}
+            </h2>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-yt-hover text-yt-text-secondary hover:text-yt-text transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+
+            {/* ── GÉNÉRAL ── */}
+            {tab === 'general' && (
+              <>
+                <section>
+                  <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-3">{t('settings_appearance')}</p>
+                  <div className="flex items-center gap-3">
+                    {mode === 'light' ? <Sun className="w-4 h-4 text-yt-text-muted flex-shrink-0" />
+                      : mode === 'dark' ? <Moon className="w-4 h-4 text-yt-text-muted flex-shrink-0" />
+                      : <Monitor className="w-4 h-4 text-yt-text-muted flex-shrink-0" />}
+                    <select
+                      value={mode}
+                      onChange={(e) => setMode(e.target.value as ThemeMode)}
+                      className="flex-1 bg-yt-secondary border border-yt-border text-yt-text text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-yt-red cursor-pointer"
+                    >
+                      <option value="light">{t('theme_light')}</option>
+                      <option value="dark">{t('theme_dark')}</option>
+                      <option value="auto">{t('theme_auto')}</option>
+                    </select>
+                  </div>
+                </section>
+
+                <div className="border-t border-yt-border/40" />
+
+                <section>
+                  <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-3">{t('settings_language')}</p>
+                  <select
+                    value={region.code}
+                    onChange={(e) => {
+                      const r = REGIONS.find((r) => r.code === e.target.value)
+                      if (r) setRegion(r)
+                    }}
+                    className="w-full bg-yt-secondary border border-yt-border text-yt-text text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-yt-red cursor-pointer"
+                  >
+                    {REGIONS.map((r) => (
+                      <option key={r.code} value={r.code}>
+                        {r.flag} {r.name} ({r.code})
+                      </option>
+                    ))}
+                  </select>
+                </section>
+              </>
             )}
 
-            {/* IP visible */}
-            <div className="mt-4 pt-4 border-t border-yt-border/40">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest">{t('settings_vpn_myip')}</p>
-                <button
-                  onClick={fetchIpInfo}
-                  disabled={ipLoading}
-                  className="p-1 rounded-full hover:bg-yt-hover text-yt-text-muted hover:text-yt-text transition-colors disabled:opacity-40"
-                  title={t('settings_vpn_myip_refresh')}
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${ipLoading ? 'animate-spin' : ''}`} />
-                </button>
-              </div>
-              {ipLoading ? (
-                <div className="flex items-center gap-2 text-xs text-yt-text-muted">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>...</span>
-                </div>
-              ) : ipInfo ? (
-                <div className={`flex items-start gap-2 text-xs rounded-xl px-3 py-2.5 ${vpnConnected ? 'bg-green-400/10 text-green-400' : 'bg-yt-secondary text-yt-text-secondary'}`}>
-                  <MapPin className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-mono font-semibold">{ipInfo.ip}</span>
-                    {(ipInfo.city || ipInfo.country) && (
-                      <span className="ml-1 opacity-80">— {[ipInfo.city, ipInfo.country].filter(Boolean).join(', ')}</span>
+            {/* ── WIREPROXY ── */}
+            {tab === 'wireproxy' && (
+              <>
+                <section>
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest">{t('settings_vpn')}</p>
+                    {vpnConnected && <Shield className="w-3.5 h-3.5 text-green-400" />}
+                  </div>
+                  <p className="text-xs text-yt-text-muted mb-4 leading-relaxed">{t('settings_vpn_desc')}</p>
+
+                  {/* Saved configs list */}
+                  <div className="mb-4 space-y-1.5">
+                    <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-2">{t('settings_vpn_saved_configs')}</p>
+                    {savedConfigs.length === 0 && (
+                      <p className="text-xs text-yt-text-muted px-1 mb-2">{t('settings_vpn_no_saved')}</p>
                     )}
-                    {ipInfo.org && (
-                      <div className="opacity-60 mt-0.5 truncate">{ipInfo.org}</div>
+                    {savedConfigs.map((name) => {
+                      const isActive = vpn.conf_name === name
+                      const isRunning = vpnConnected && isActive
+                      return (
+                        <div
+                          key={name}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition-colors ${
+                            isActive && isRunning
+                              ? 'border-green-500 bg-green-500/10 text-yt-text'
+                              : isActive
+                              ? 'border-yt-border bg-yt-hover text-yt-text'
+                              : 'border-yt-border/60 text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
+                          }`}
+                        >
+                          {isActive && <Check className={`w-3.5 h-3.5 flex-shrink-0 ${isRunning ? 'text-green-400' : 'text-yt-text-muted'}`} />}
+                          <span className="flex-1 truncate font-mono text-xs">{name}</span>
+                          {!isActive && (
+                            <button
+                              onClick={() => handleSelectConf(name)}
+                              disabled={vpnConnected}
+                              className="text-xs px-2 py-0.5 rounded-lg bg-yt-secondary hover:bg-yt-hover border border-yt-border disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                              title={vpnConnected ? t('settings_vpn_switch_stop') : t('settings_vpn_select')}
+                            >
+                              {t('settings_vpn_select')}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteConf(name)}
+                            disabled={isRunning}
+                            className="p-1 rounded-lg text-yt-text-muted hover:text-red-400 hover:bg-red-400/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            title={t('settings_vpn_delete')}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )
+                    })}
+
+                    <input ref={fileInputRef} type="file" accept=".conf" className="hidden" onChange={handleUploadConf} />
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-yt-border/60 text-sm text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text hover:border-yt-border transition-colors"
+                    >
+                      <Upload className="w-4 h-4 flex-shrink-0" />
+                      <span>{t('settings_vpn_upload')}</span>
+                    </button>
+                  </div>
+
+                  <div className="border-t border-yt-border/40 mb-4" />
+
+                  {/* Status + toggle */}
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className={`flex items-center gap-1.5 text-xs font-medium flex-1 ${
+                      vpnConnected ? 'text-green-400' : vpn.status === 'error' ? 'text-red-400' : 'text-yt-text-muted'
+                    }`}>
+                      {vpnBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : vpnConnected ? <Wifi className="w-3.5 h-3.5" />
+                        : vpn.status === 'error' ? <AlertCircle className="w-3.5 h-3.5" />
+                        : <WifiOff className="w-3.5 h-3.5" />}
+                      <span>
+                        {vpn.status === 'connecting' ? t('settings_vpn_starting')
+                          : vpn.status === 'disconnecting' ? t('settings_vpn_stopping')
+                          : vpnConnected ? t('settings_vpn_connected')
+                          : vpn.status === 'error' ? t('settings_vpn_error')
+                          : t('settings_vpn_disconnected')}
+                      </span>
+                    </div>
+                    <button
+                      onClick={handleVpnToggle}
+                      disabled={vpnBusy || (!vpn.conf_loaded && !vpnConnected)}
+                      className={`px-4 py-1.5 rounded-full text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                        vpnConnected
+                          ? 'bg-yt-hover border border-yt-border text-yt-text hover:border-red-400 hover:text-red-400'
+                          : 'bg-yt-red hover:bg-yt-red-hover text-white'
+                      }`}
+                    >
+                      {vpnConnected ? t('settings_vpn_disconnect') : t('settings_vpn_connect')}
+                    </button>
+                  </div>
+
+                  {vpn.error && <p className="text-xs text-red-400 mb-3 px-1">{vpn.error}</p>}
+
+                  {/* IP visible */}
+                  <div className="pt-3 border-t border-yt-border/40">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest">{t('settings_vpn_myip')}</p>
+                      <button
+                        onClick={fetchIpInfo}
+                        disabled={ipLoading}
+                        className="p-1 rounded-full hover:bg-yt-hover text-yt-text-muted hover:text-yt-text transition-colors disabled:opacity-40"
+                        title={t('settings_vpn_myip_refresh')}
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${ipLoading ? 'animate-spin' : ''}`} />
+                      </button>
+                    </div>
+                    {ipLoading ? (
+                      <div className="flex items-center gap-2 text-xs text-yt-text-muted">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>...</span>
+                      </div>
+                    ) : ipInfo ? (
+                      <div className={`flex items-start gap-2 text-xs rounded-xl px-3 py-2.5 ${vpnConnected ? 'bg-green-400/10 text-green-400' : 'bg-yt-secondary text-yt-text-secondary'}`}>
+                        <MapPin className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-mono font-semibold">{ipInfo.ip}</span>
+                          {(ipInfo.city || ipInfo.country) && (
+                            <span className="ml-1 opacity-80">— {[ipInfo.city, ipInfo.country].filter(Boolean).join(', ')}</span>
+                          )}
+                          {ipInfo.org && <div className="opacity-60 mt-0.5">{ipInfo.org}</div>}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-yt-text-muted">{t('settings_vpn_myip_error')}</p>
                     )}
                   </div>
-                </div>
-              ) : (
-                <p className="text-xs text-yt-text-muted">{t('settings_vpn_myip_error')}</p>
-              )}
-            </div>
-          </section>
+                </section>
+              </>
+            )}
+
+          </div>
         </div>
       </div>
-    </>
+    </div>
   )
 }
