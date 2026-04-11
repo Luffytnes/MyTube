@@ -145,7 +145,7 @@ function SearchContent() {
             </div>
           </div>
 
-          <div className="px-4 py-4 max-w-4xl">
+          <div className="px-4 py-4">
             {!loading && !error && totalResults > 0 && (
               <p className="text-sm text-yt-text-muted mb-5">
                 {t('searchResultsFor')} <span className="text-yt-text font-medium">"{query}"</span>
