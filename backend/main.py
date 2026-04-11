@@ -315,8 +315,81 @@ def _parse_channel_renderer(cr: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _parse_lockup_view_model(lvm: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Parse a lockupViewModel (new YouTube format) as a playlist entry."""
+    import re as _re
+    try:
+        # Extract playlistId + firstVideoId from the watch URL embedded in onTap
+        full_json = json.dumps(lvm)
+        m = _re.search(r'/watch\?v=([A-Za-z0-9_-]+)&list=(PL[A-Za-z0-9_-]+)', full_json)
+        if not m:
+            return None
+        first_video_id = m.group(1)
+        playlist_id = m.group(2)
+
+        # Title
+        title = (
+            lvm.get("metadata", {})
+               .get("lockupMetadataViewModel", {})
+               .get("title", {})
+               .get("content", "")
+        )
+
+        # Channel name + video count from metadataRows
+        channel_name = ""
+        video_count = ""
+        rows = (
+            lvm.get("metadata", {})
+               .get("lockupMetadataViewModel", {})
+               .get("metadata", {})
+               .get("contentMetadataViewModel", {})
+               .get("metadataRows", [])
+        )
+        meta_texts = []
+        for row in rows:
+            for part in row.get("metadataParts", []):
+                txt = part.get("text", {}).get("content", "")
+                if txt:
+                    meta_texts.append(txt)
+        # First meta text = channel name, ignore "Playlist" literal and video titles
+        for txt in meta_texts:
+            if txt and txt.lower() != "playlist" and "·" not in txt and "view full" not in txt.lower():
+                if not channel_name:
+                    channel_name = txt
+                break
+
+        # Video count from thumbnail overlay badge: "text": "133 videos"
+        badge_match = _re.search(r'"text"\s*:\s*"(\d+)\s*videos?"', full_json)
+        if badge_match:
+            video_count = badge_match.group(1)
+
+        # Thumbnail from collectionThumbnailViewModel
+        sources = (
+            lvm.get("contentImage", {})
+               .get("collectionThumbnailViewModel", {})
+               .get("primaryThumbnail", {})
+               .get("thumbnailViewModel", {})
+               .get("image", {})
+               .get("sources", [])
+        )
+        thumbnail = sources[-1].get("url") if sources else None
+
+        return {
+            "type": "playlist",
+            "id": playlist_id,
+            "title": title or "Untitled playlist",
+            "thumbnail": thumbnail,
+            "videoCount": video_count,
+            "channelName": channel_name,
+            "channelId": "",
+            "firstVideoId": first_video_id,
+        }
+    except Exception:
+        return None
+
+
 def _parse_playlist_renderer(pr: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Parse a playlistRenderer from a YouTube search response."""
+    """Parse a legacy playlistRenderer from a YouTube search response."""
     try:
         playlist_id = pr.get("playlistId")
         if not playlist_id:
@@ -325,7 +398,6 @@ def _parse_playlist_renderer(pr: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             pr.get("title", {}).get("simpleText")
             or "".join(r.get("text", "") for r in pr.get("title", {}).get("runs", []))
         )
-        # First video thumbnail as playlist cover
         thumb_list = pr.get("thumbnails", [])
         thumbnail = None
         for t in thumb_list:
@@ -337,7 +409,6 @@ def _parse_playlist_renderer(pr: Dict[str, Any]) -> Optional[Dict[str, Any]]:
                     break
 
         video_count = pr.get("videoCount", "")
-        # Channel that owns the playlist
         channel_runs = (
             pr.get("shortBylineText", {}).get("runs", [])
             or pr.get("longBylineText", {}).get("runs", [])
@@ -350,7 +421,6 @@ def _parse_playlist_renderer(pr: Dict[str, Any]) -> Optional[Dict[str, Any]]:
                 channel_id = cid
                 break
 
-        # First video id (to build a watch URL)
         first_video_id = (
             pr.get("navigationEndpoint", {}).get("watchEndpoint", {}).get("videoId", "")
         )
@@ -399,6 +469,13 @@ def _extract_search_results(data: Dict[str, Any]) -> tuple[
                 plr = item.get("playlistRenderer")
                 if plr:
                     p = _parse_playlist_renderer(plr)
+                    if p:
+                        playlists.append(p)
+                    continue
+                # New YouTube format (2024+): playlists come as lockupViewModel
+                lvm = item.get("lockupViewModel")
+                if lvm:
+                    p = _parse_lockup_view_model(lvm)
                     if p:
                         playlists.append(p)
             token = (
