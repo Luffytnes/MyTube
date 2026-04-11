@@ -5,5 +5,7 @@ const nextConfig = {
       { protocol: 'http', hostname: 'localhost' },
     ],
   },
+  // Prevent shaka-player from being bundled server-side (it uses browser globals)
+  serverExternalPackages: ['shaka-player'],
 }
 module.exports = nextConfig

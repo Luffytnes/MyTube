@@ -160,6 +160,28 @@ def live_url_cache_set(video_id: str, url: str) -> None:
     _live_url_cache[video_id] = (_time(), url)
 
 
+# Cache for direct stream URLs (YouTube CDN URLs last ~6h — we cache for 3h)
+_stream_url_cache: Dict[str, tuple] = {}
+STREAM_URL_TTL = 10800  # 3 hours
+
+def stream_url_cache_get(key: str) -> Optional[tuple]:
+    if key in _stream_url_cache:
+        ts, url, ext = _stream_url_cache[key]
+        if _time() - ts < STREAM_URL_TTL:
+            return url, ext
+        del _stream_url_cache[key]
+    return None
+
+def stream_url_cache_set(key: str, url: str, ext: str) -> None:
+    _stream_url_cache[key] = (_time(), url, ext)
+
+def stream_url_cache_invalidate(video_id: str) -> None:
+    """Remove all cached URLs for a given video (e.g. after a 403 error)."""
+    keys = [k for k in _stream_url_cache if k.startswith(f"stream:{video_id}:")]
+    for k in keys:
+        del _stream_url_cache[k]
+
+
 YOUTUBE_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Referer": "https://www.youtube.com/",
@@ -1098,22 +1120,36 @@ async def hls_proxy(url: str, request: Request):
 
 
 @app.get("/api/stream/{video_id}/audio")
-async def stream_audio(video_id: str, request: Request):
+async def stream_audio(video_id: str, request: Request, itag: Optional[str] = None):
     """Stream the best audio-only track (for dual video+audio playback in the browser)."""
     try:
-        opts = get_ydl_opts(**{"format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio"})
-        loop = asyncio.get_event_loop()
+        cache_key = f"stream:{video_id}:{itag or 'bestaudio'}"
+        cached = stream_url_cache_get(cache_key)
 
-        def _get_url():
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(
-                    f"https://www.youtube.com/watch?v={video_id}", download=False
-                )
-                if not info:
-                    return None, "m4a"
-                return info.get("url"), info.get("ext", "m4a")
+        if cached:
+            direct_url, ext = cached
+        else:
+            format_spec = itag if itag else "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio"
+            opts = get_ydl_opts(**{"format": format_spec})
+            loop = asyncio.get_event_loop()
 
-        direct_url, ext = await loop.run_in_executor(None, _get_url)
+            def _get_audio_url():
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(
+                        f"https://www.youtube.com/watch?v={video_id}", download=False
+                    )
+                    if not info:
+                        return None, "m4a"
+                    if itag:
+                        for fmt in info.get("formats", []):
+                            if str(fmt.get("format_id")) == str(itag):
+                                return fmt.get("url"), fmt.get("ext", "m4a")
+                    return info.get("url"), info.get("ext", "m4a")
+
+            direct_url, ext = await loop.run_in_executor(None, _get_audio_url)
+            if direct_url:
+                stream_url_cache_set(cache_key, direct_url, ext or "m4a")
+
         if not direct_url:
             raise HTTPException(status_code=404, detail="Audio stream not found")
 
@@ -1160,26 +1196,32 @@ async def stream_audio(video_id: str, request: Request):
 @app.get("/api/stream/{video_id}")
 async def stream_video(video_id: str, request: Request, itag: Optional[str] = None):
     try:
-        opts = get_ydl_opts(**{"format": itag if itag else "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"})
+        cache_key = f"stream:{video_id}:{itag or 'best'}"
+        cached = stream_url_cache_get(cache_key)
 
-        loop = asyncio.get_event_loop()
+        if cached:
+            direct_url, ext = cached
+        else:
+            format_spec = itag if itag else "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+            opts = get_ydl_opts(**{"format": format_spec})
+            loop = asyncio.get_event_loop()
 
-        def _get_url():
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(
-                    f"https://www.youtube.com/watch?v={video_id}", download=False
-                )
-                if not info:
-                    return None, None
-                # If specific itag requested, find matching format
-                if itag:
-                    for fmt in info.get("formats", []):
-                        if str(fmt.get("format_id")) == str(itag):
-                            return fmt.get("url"), fmt.get("ext", "mp4")
-                # Otherwise return best format URL
-                return info.get("url"), info.get("ext", "mp4")
+            def _get_video_url():
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(
+                        f"https://www.youtube.com/watch?v={video_id}", download=False
+                    )
+                    if not info:
+                        return None, None
+                    if itag:
+                        for fmt in info.get("formats", []):
+                            if str(fmt.get("format_id")) == str(itag):
+                                return fmt.get("url"), fmt.get("ext", "mp4")
+                    return info.get("url"), info.get("ext", "mp4")
 
-        direct_url, ext = await loop.run_in_executor(None, _get_url)
+            direct_url, ext = await loop.run_in_executor(None, _get_video_url)
+            if direct_url:
+                stream_url_cache_set(cache_key, direct_url, ext or "mp4")
 
         if not direct_url:
             raise HTTPException(status_code=404, detail="Stream URL not found")
@@ -1228,6 +1270,151 @@ async def stream_video(video_id: str, request: Request, itag: Optional[str] = No
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Streaming failed: {str(e)}")
+
+
+@app.get("/api/dash/{video_id}.mpd")
+async def get_dash_mpd(video_id: str, request: Request):
+    """Generate a DASH MPD manifest for the given video.
+
+    All video/audio representations point back to our proxy endpoints,
+    which use the stream URL cache to avoid repeated yt-dlp calls.
+    """
+    try:
+        loop = asyncio.get_event_loop()
+        opts = get_ydl_opts(**{
+            "quiet": True,
+            "no_warnings": True,
+            "nocheckcertificate": True,
+        })
+
+        def _fetch_all():
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                return ydl.extract_info(
+                    f"https://www.youtube.com/watch?v={video_id}", download=False
+                )
+
+        info = await loop.run_in_executor(None, _fetch_all)
+        if not info:
+            raise HTTPException(status_code=404, detail="Video not found")
+
+        duration = float(info.get("duration") or 0)
+
+        # Pre-populate the stream URL cache for all formats
+        video_reprs: List[Dict[str, Any]] = []
+        audio_reprs: List[Dict[str, Any]] = []
+
+        for fmt in info.get("formats", []):
+            itag = fmt.get("format_id")
+            url = fmt.get("url")
+            if not itag or not url:
+                continue
+
+            ext = fmt.get("ext", "mp4")
+            has_video = fmt.get("vcodec", "none") != "none"
+            has_audio = fmt.get("acodec", "none") != "none"
+
+            # Cache the URL so subsequent proxy requests are instant
+            cache_key = f"stream:{video_id}:{itag}"
+            if not stream_url_cache_get(cache_key):
+                stream_url_cache_set(cache_key, url, ext)
+
+            tbr = fmt.get("tbr") or 0
+            bandwidth = int(tbr * 1000) if tbr else 500000
+
+            if has_video and not has_audio and ext in ("mp4", "webm"):
+                height = fmt.get("height") or 0
+                width = fmt.get("width") or 0
+                vcodec = fmt.get("vcodec", "avc1")
+                # Shorten codec string (e.g. "avc1.640028" → keep as-is, "vp09.00.50.08" → keep)
+                video_reprs.append({
+                    "itag": itag,
+                    "mime": f"video/{ext}",
+                    "codecs": vcodec,
+                    "bandwidth": bandwidth,
+                    "width": width,
+                    "height": height,
+                })
+
+            elif has_audio and not has_video and ext in ("m4a", "webm", "mp4"):
+                acodec = fmt.get("acodec", "mp4a.40.2")
+                abr = fmt.get("abr") or 0
+                audio_bandwidth = int(abr * 1000) if abr else 128000
+                audio_reprs.append({
+                    "itag": itag,
+                    "mime": f"audio/{ext}",
+                    "codecs": acodec,
+                    "bandwidth": audio_bandwidth,
+                })
+
+        # Sort: video by height descending, audio by bandwidth descending
+        video_reprs.sort(key=lambda r: -r["height"])
+        audio_reprs.sort(key=lambda r: -r["bandwidth"])
+
+        # Build base URL prefix (scheme + host, for absolute BaseURLs)
+        base_req = str(request.base_url).rstrip("/")
+
+        def _video_repr(r: dict) -> str:
+            return (
+                f'      <Representation id="{r["itag"]}" mimeType="{r["mime"]}" '
+                f'codecs="{r["codecs"]}" bandwidth="{r["bandwidth"]}" '
+                f'width="{r["width"]}" height="{r["height"]}">\n'
+                f'        <BaseURL>{base_req}/api/stream/{video_id}?itag={r["itag"]}</BaseURL>\n'
+                f'        <SegmentBase>\n'
+                f'          <Initialization range="0-4095"/>\n'
+                f'        </SegmentBase>\n'
+                f'      </Representation>'
+            )
+
+        def _audio_repr(r: dict) -> str:
+            return (
+                f'      <Representation id="{r["itag"]}" mimeType="{r["mime"]}" '
+                f'codecs="{r["codecs"]}" bandwidth="{r["bandwidth"]}">\n'
+                f'        <BaseURL>{base_req}/api/stream/{video_id}/audio?itag={r["itag"]}</BaseURL>\n'
+                f'        <SegmentBase>\n'
+                f'          <Initialization range="0-4095"/>\n'
+                f'        </SegmentBase>\n'
+                f'      </Representation>'
+            )
+
+        video_block = "\n".join(_video_repr(r) for r in video_reprs) if video_reprs else ""
+        audio_block = "\n".join(_audio_repr(r) for r in audio_reprs) if audio_reprs else ""
+
+        # Duration in ISO 8601 / DASH format
+        h = int(duration // 3600)
+        m = int((duration % 3600) // 60)
+        s = duration % 60
+        dur_str = f"PT{h}H{m}M{s:.3f}S" if h else (f"PT{m}M{s:.3f}S" if m else f"PT{s:.3f}S")
+
+        mpd = f"""<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd"
+     type="static"
+     mediaPresentationDuration="{dur_str}"
+     minBufferTime="PT3S"
+     profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">
+  <Period id="1" start="PT0S">
+    <AdaptationSet id="1" contentType="video" segmentAlignment="true" bitstreamSwitching="true">
+{video_block}
+    </AdaptationSet>
+    <AdaptationSet id="2" contentType="audio" segmentAlignment="true">
+{audio_block}
+    </AdaptationSet>
+  </Period>
+</MPD>"""
+
+        return Response(
+            content=mpd,
+            media_type="application/dash+xml",
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Cache-Control": "public, max-age=3600",
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"MPD generation failed: {str(e)}")
 
 
 @app.get("/api/thumbnail/{video_id}")
