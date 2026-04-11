@@ -48,8 +48,31 @@ export interface ChannelInfo {
   banner: string | null
 }
 
+export interface ChannelSearchResult {
+  type: 'channel'
+  id: string
+  name: string
+  thumbnail: string | null
+  description: string
+  subscriberText: string
+  videoCountText: string
+}
+
+export interface PlaylistSearchResult {
+  type: 'playlist'
+  id: string
+  title: string
+  thumbnail: string | null
+  videoCount: string
+  channelName: string
+  channelId: string
+  firstVideoId: string
+}
+
 export interface SearchResult {
   videos: VideoCard[]
+  channels: ChannelSearchResult[]
+  playlists: PlaylistSearchResult[]
   query: string
   page: number
 }
@@ -100,6 +123,8 @@ export async function searchVideos(q: string, page = 1): Promise<SearchResult> {
   return {
     ...data,
     videos: data.videos.map(normalizeThumbnail),
+    channels: data.channels || [],
+    playlists: data.playlists || [],
   }
 }
 

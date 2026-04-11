@@ -72,6 +72,8 @@ export interface Translations {
   settings_on: string; settings_off: string
   nav_likes: string; likes_title: string; likes_empty: string; likes_open_youtube: string
   share_modal_title: string; share_copy: string; share_copied: string
+  subscribe_active: string
+  playlist_save: string; playlist_saved: string; playlist_videos: string
 }
 
 export const translations: Record<Lang, Translations> = {
@@ -156,6 +158,8 @@ export const translations: Record<Lang, Translations> = {
     settings_on: 'On', settings_off: 'Off',
     nav_likes: 'My Likes', likes_title: 'My Likes', likes_empty: 'No liked videos yet.', likes_open_youtube: 'Watch on YouTube',
     share_modal_title: 'Share video', share_copy: 'Copy link', share_copied: 'Copied!',
+    subscribe_active: 'Subscribed',
+    playlist_save: 'Save playlist', playlist_saved: 'Saved', playlist_videos: 'videos',
   },
   fr: {
     nav_home: 'Accueil', nav_trending: 'Tendances', nav_history: 'Historique',
@@ -238,6 +242,8 @@ export const translations: Record<Lang, Translations> = {
     settings_on: 'Activé', settings_off: 'Désactivé',
     nav_likes: 'Mes likes', likes_title: 'Mes likes', likes_empty: 'Aucune vidéo aimée pour l\'instant.', likes_open_youtube: 'Voir sur YouTube',
     share_modal_title: 'Partager la vidéo', share_copy: 'Copier le lien', share_copied: 'Copié !',
+    subscribe_active: 'Abonné',
+    playlist_save: 'Sauvegarder la playlist', playlist_saved: 'Sauvegardée', playlist_videos: 'vidéos',
   },
   es: {
     nav_home: 'Inicio', nav_trending: 'Tendencias', nav_history: 'Historial',
@@ -320,6 +326,8 @@ export const translations: Record<Lang, Translations> = {
     settings_on: 'Activado', settings_off: 'Desactivado',
     nav_likes: 'Mis likes', likes_title: 'Mis likes', likes_empty: 'Aún no hay vídeos que te gusten.', likes_open_youtube: 'Ver en YouTube',
     share_modal_title: 'Compartir vídeo', share_copy: 'Copiar enlace', share_copied: '¡Copiado!',
+    subscribe_active: 'Suscrito',
+    playlist_save: 'Guardar playlist', playlist_saved: 'Guardada', playlist_videos: 'vídeos',
   },
   de: {
     nav_home: 'Startseite', nav_trending: 'Trends', nav_history: 'Verlauf',
@@ -402,6 +410,8 @@ export const translations: Record<Lang, Translations> = {
     settings_on: 'An', settings_off: 'Aus',
     nav_likes: 'Meine Likes', likes_title: 'Meine Likes', likes_empty: 'Noch keine gelikten Videos.', likes_open_youtube: 'Auf YouTube ansehen',
     share_modal_title: 'Video teilen', share_copy: 'Link kopieren', share_copied: 'Kopiert!',
+    subscribe_active: 'Abonniert',
+    playlist_save: 'Playlist speichern', playlist_saved: 'Gespeichert', playlist_videos: 'Videos',
   },
   pt: {
     nav_home: 'Início', nav_trending: 'Em Alta', nav_history: 'Histórico',
@@ -484,6 +494,8 @@ export const translations: Record<Lang, Translations> = {
     settings_on: 'Ativado', settings_off: 'Desativado',
     nav_likes: 'Meus likes', likes_title: 'Meus likes', likes_empty: 'Nenhum vídeo curtido ainda.', likes_open_youtube: 'Ver no YouTube',
     share_modal_title: 'Compartilhar vídeo', share_copy: 'Copiar link', share_copied: 'Copiado!',
+    subscribe_active: 'Inscrito',
+    playlist_save: 'Salvar playlist', playlist_saved: 'Salva', playlist_videos: 'vídeos',
   },
   it: {
     nav_home: 'Home', nav_trending: 'Di tendenza', nav_history: 'Cronologia',
@@ -566,6 +578,8 @@ export const translations: Record<Lang, Translations> = {
     settings_on: 'Attivato', settings_off: 'Disattivato',
     nav_likes: 'I miei like', likes_title: 'I miei like', likes_empty: 'Nessun video apprezzato ancora.', likes_open_youtube: 'Guarda su YouTube',
     share_modal_title: 'Condividi video', share_copy: 'Copia link', share_copied: 'Copiato!',
+    subscribe_active: 'Iscritto',
+    playlist_save: 'Salva playlist', playlist_saved: 'Salvata', playlist_videos: 'video',
   },
   ja: {
     nav_home: 'ホーム', nav_trending: 'トレンド', nav_history: '履歴',
@@ -648,6 +662,8 @@ export const translations: Record<Lang, Translations> = {
     settings_on: 'オン', settings_off: 'オフ',
     nav_likes: 'マイいいね', likes_title: 'マイいいね', likes_empty: 'いいねした動画はありません。', likes_open_youtube: 'YouTubeで見る',
     share_modal_title: '動画をシェア', share_copy: 'リンクをコピー', share_copied: 'コピーしました！',
+    subscribe_active: '登録済み',
+    playlist_save: 'プレイリストを保存', playlist_saved: '保存済み', playlist_videos: '動画',
   },
   ko: {
     nav_home: '홈', nav_trending: '인기', nav_history: '시청 기록',
@@ -730,6 +746,8 @@ export const translations: Record<Lang, Translations> = {
     settings_on: '켜짐', settings_off: '꺼짐',
     nav_likes: '좋아요', likes_title: '좋아요', likes_empty: '좋아요한 동영상이 없습니다.', likes_open_youtube: 'YouTube에서 보기',
     share_modal_title: '동영상 공유', share_copy: '링크 복사', share_copied: '복사됨!',
+    subscribe_active: '구독 중',
+    playlist_save: '재생목록 저장', playlist_saved: '저장됨', playlist_videos: '개 동영상',
   },
   ru: {
     nav_home: 'Главная', nav_trending: 'В тренде', nav_history: 'История',
@@ -812,5 +830,7 @@ export const translations: Record<Lang, Translations> = {
     settings_on: 'Вкл', settings_off: 'Выкл',
     nav_likes: 'Мне нравится', likes_title: 'Мне нравится', likes_empty: 'Нет понравившихся видео.', likes_open_youtube: 'Смотреть на YouTube',
     share_modal_title: 'Поделиться видео', share_copy: 'Копировать ссылку', share_copied: 'Скопировано!',
+    subscribe_active: 'Подписан',
+    playlist_save: 'Сохранить плейлист', playlist_saved: 'Сохранено', playlist_videos: 'видео',
   },
 }

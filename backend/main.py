@@ -275,9 +275,107 @@ def _parse_youtubei_video_renderer(vr: Dict[str, Any]) -> Optional[Dict[str, Any
     }
 
 
-def _extract_search_videos(data: Dict[str, Any]) -> tuple[List[Dict[str, Any]], Optional[str]]:
-    """Returns (videos, continuation_token)."""
-    videos = []
+def _parse_channel_renderer(cr: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Parse a channelRenderer from a YouTube search response."""
+    try:
+        channel_id = cr.get("channelId") or (
+            cr.get("navigationEndpoint", {}).get("browseEndpoint", {}).get("browseId")
+        )
+        if not channel_id:
+            return None
+        name = (
+            cr.get("title", {}).get("simpleText")
+            or "".join(r.get("text", "") for r in cr.get("title", {}).get("runs", []))
+        )
+        thumbs = cr.get("thumbnail", {}).get("thumbnails", [])
+        thumbnail = thumbs[-1]["url"] if thumbs else None
+        if thumbnail and thumbnail.startswith("//"):
+            thumbnail = "https:" + thumbnail
+
+        desc_runs = cr.get("descriptionSnippet", {}).get("runs", [])
+        description = "".join(r.get("text", "") for r in desc_runs)
+
+        sub_text = (
+            cr.get("subscriberCountText", {}).get("simpleText")
+            or cr.get("subscriberCountText", {}).get("accessibility", {}).get("accessibilityData", {}).get("label", "")
+        )
+        video_count_runs = cr.get("videoCountText", {}).get("runs", [])
+        video_count_text = "".join(r.get("text", "") for r in video_count_runs)
+
+        return {
+            "type": "channel",
+            "id": channel_id,
+            "name": name or "Unknown Channel",
+            "thumbnail": thumbnail,
+            "description": description,
+            "subscriberText": sub_text or "",
+            "videoCountText": video_count_text or "",
+        }
+    except Exception:
+        return None
+
+
+def _parse_playlist_renderer(pr: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Parse a playlistRenderer from a YouTube search response."""
+    try:
+        playlist_id = pr.get("playlistId")
+        if not playlist_id:
+            return None
+        title = (
+            pr.get("title", {}).get("simpleText")
+            or "".join(r.get("text", "") for r in pr.get("title", {}).get("runs", []))
+        )
+        # First video thumbnail as playlist cover
+        thumb_list = pr.get("thumbnails", [])
+        thumbnail = None
+        for t in thumb_list:
+            thumbs = t.get("thumbnails", [])
+            if thumbs:
+                url = thumbs[-1].get("url", "")
+                if url:
+                    thumbnail = "https:" + url if url.startswith("//") else url
+                    break
+
+        video_count = pr.get("videoCount", "")
+        # Channel that owns the playlist
+        channel_runs = (
+            pr.get("shortBylineText", {}).get("runs", [])
+            or pr.get("longBylineText", {}).get("runs", [])
+        )
+        channel_name = "".join(r.get("text", "") for r in channel_runs)
+        channel_id = ""
+        for run in channel_runs:
+            cid = run.get("navigationEndpoint", {}).get("browseEndpoint", {}).get("browseId", "")
+            if cid:
+                channel_id = cid
+                break
+
+        # First video id (to build a watch URL)
+        first_video_id = (
+            pr.get("navigationEndpoint", {}).get("watchEndpoint", {}).get("videoId", "")
+        )
+
+        return {
+            "type": "playlist",
+            "id": playlist_id,
+            "title": title or "Untitled playlist",
+            "thumbnail": thumbnail,
+            "videoCount": video_count,
+            "channelName": channel_name,
+            "channelId": channel_id,
+            "firstVideoId": first_video_id,
+        }
+    except Exception:
+        return None
+
+
+def _extract_search_results(data: Dict[str, Any]) -> tuple[
+    List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], Optional[str]
+]:
+    """Returns (videos, channels, playlists, continuation_token)."""
+    videos: List[Dict[str, Any]] = []
+    channels: List[Dict[str, Any]] = []
+    playlists: List[Dict[str, Any]] = []
     continuation_token = None
     try:
         sections = (
@@ -291,7 +389,18 @@ def _extract_search_videos(data: Dict[str, Any]) -> tuple[List[Dict[str, Any]], 
                     v = _parse_youtubei_video_renderer(vr)
                     if v:
                         videos.append(v)
-            # Extract continuation token from continuationItemRenderer
+                    continue
+                cr = item.get("channelRenderer")
+                if cr:
+                    c = _parse_channel_renderer(cr)
+                    if c:
+                        channels.append(c)
+                    continue
+                plr = item.get("playlistRenderer")
+                if plr:
+                    p = _parse_playlist_renderer(plr)
+                    if p:
+                        playlists.append(p)
             token = (
                 section.get("continuationItemRenderer", {})
                        .get("continuationEndpoint", {})
@@ -302,7 +411,13 @@ def _extract_search_videos(data: Dict[str, Any]) -> tuple[List[Dict[str, Any]], 
                 continuation_token = token
     except (KeyError, TypeError):
         pass
-    return videos, continuation_token
+    return videos, channels, playlists, continuation_token
+
+
+# Keep old name as alias for non-search (channel continuation) callers
+def _extract_search_videos(data: Dict[str, Any]) -> tuple[List[Dict[str, Any]], Optional[str]]:
+    videos, _, _, token = _extract_search_results(data)
+    return videos, token
 
 
 def _extract_continuation_videos(data: Dict[str, Any]) -> tuple[List[Dict[str, Any]], Optional[str]]:
@@ -468,8 +583,12 @@ def _extract_trending_videos(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     return videos
 
 
-async def youtubei_search(query: str, page: int = 1) -> Optional[List[Dict[str, Any]]]:
-    """Search via YouTube's internal API with continuation token support for pagination."""
+async def youtubei_search(
+    query: str, page: int = 1
+) -> Optional[tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]]:
+    """Search via YouTube's internal API.
+    Returns (videos, channels, playlists) or None on failure.
+    """
     try:
         async with httpx_client(timeout=8.0, follow_redirects=True) as client:
             if page == 1:
@@ -479,10 +598,12 @@ async def youtubei_search(query: str, page: int = 1) -> Optional[List[Dict[str, 
                     headers=_YT_HEADERS,
                 )
                 if resp.status_code == 200:
-                    videos, token = _extract_search_videos(resp.json())
+                    videos, channels, playlists, token = _extract_search_results(resp.json())
                     if token:
                         _search_continuations[f"{query}:{page + 1}"] = token
-                    return videos if videos else None
+                    if videos or channels or playlists:
+                        return videos, channels, playlists
+                    return None
             else:
                 token = _search_continuations.get(f"{query}:{page}")
                 if not token:
@@ -496,7 +617,7 @@ async def youtubei_search(query: str, page: int = 1) -> Optional[List[Dict[str, 
                     videos, next_token = _extract_continuation_videos(resp.json())
                     if next_token:
                         _search_continuations[f"{query}:{page + 1}"] = next_token
-                    return videos if videos else None
+                    return (videos, [], []) if videos else None
     except Exception:
         pass
     return None
@@ -859,16 +980,17 @@ async def get_trending(region: str = "US", category: str = "all", lang: str = "e
 @app.get("/api/search")
 async def search_videos(q: str = Query(..., min_length=1), page: int = Query(1, ge=1)):
     # Attempt 1: YouTube internal API (no Invidious dependency)
-    videos = await youtubei_search(q, page)
-    if videos:
-        return {"videos": videos, "query": q, "page": page}
+    result = await youtubei_search(q, page)
+    if result:
+        videos, channels, playlists = result
+        return {"videos": videos, "channels": channels, "playlists": playlists, "query": q, "page": page}
 
-    # Attempt 2: Invidious
+    # Attempt 2: Invidious (videos only)
     videos = await invidious_search(q, page)
     if videos:
-        return {"videos": videos, "query": q, "page": page}
+        return {"videos": videos, "channels": [], "playlists": [], "query": q, "page": page}
 
-    # Fallback: yt-dlp search
+    # Fallback: yt-dlp search (videos only)
     try:
         offset = (page - 1) * 20
         search_query = f"ytsearch{20 + offset}:{q}"
@@ -883,7 +1005,7 @@ async def search_videos(q: str = Query(..., min_length=1), page: int = Query(1, 
         entries = info.get("entries", []) if info else []
         page_entries = entries[offset:offset + 20] if offset < len(entries) else entries
         fallback_videos = [extract_video_card(e) for e in page_entries if e and e.get("id")]
-        return {"videos": fallback_videos, "query": q, "page": page}
+        return {"videos": fallback_videos, "channels": [], "playlists": [], "query": q, "page": page}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
