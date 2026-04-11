@@ -97,7 +97,7 @@ export default function Sidebar() {
                         {sub.thumbnail && (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
-                            src={`${API_BASE}${sub.thumbnail.startsWith('/') ? sub.thumbnail : '/' + sub.thumbnail}`}
+                            src={sub.thumbnail.startsWith('http') ? sub.thumbnail : `${API_BASE}${sub.thumbnail.startsWith('/') ? sub.thumbnail : '/' + sub.thumbnail}`}
                             alt={sub.name}
                             className="absolute inset-0 w-full h-full rounded-full object-cover"
                             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
