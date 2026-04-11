@@ -163,16 +163,14 @@ function SearchContent() {
                 </button>
               </div>
             ) : (
-              <div className="space-y-8">
+              <div className="space-y-10">
                 {/* Channels section */}
                 {showChannels && (
                   <section>
-                    {activeFilter === 'all' && (
-                      <h2 className="text-yt-text font-semibold text-sm mb-3 uppercase tracking-wide text-yt-text-muted">
-                        {t('filter_channels')}
-                      </h2>
-                    )}
-                    <div className="divide-y divide-yt-border/30">
+                    <h2 className="text-yt-text-muted font-semibold text-xs mb-4 uppercase tracking-widest border-b border-yt-border/40 pb-2">
+                      {t('filter_channels')}
+                    </h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-4">
                       {channels.map((ch) => (
                         <ChannelCard key={ch.id} channel={ch} />
                       ))}
@@ -183,12 +181,10 @@ function SearchContent() {
                 {/* Playlists section */}
                 {showPlaylists && (
                   <section>
-                    {activeFilter === 'all' && (
-                      <h2 className="text-yt-text font-semibold text-sm mb-3 uppercase tracking-wide text-yt-text-muted">
-                        {t('filter_playlists')}
-                      </h2>
-                    )}
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    <h2 className="text-yt-text-muted font-semibold text-xs mb-4 uppercase tracking-widest border-b border-yt-border/40 pb-2">
+                      {t('filter_playlists')}
+                    </h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8">
                       {playlists.map((pl) => (
                         <PlaylistCard key={pl.id} playlist={pl} />
                       ))}
@@ -199,8 +195,8 @@ function SearchContent() {
                 {/* Videos section */}
                 {showVideos && (
                   <section>
-                    {activeFilter === 'all' && (channels.length > 0 || playlists.length > 0) && (
-                      <h2 className="text-yt-text font-semibold text-sm mb-3 uppercase tracking-wide text-yt-text-muted">
+                    {(channels.length > 0 || playlists.length > 0) && (
+                      <h2 className="text-yt-text-muted font-semibold text-xs mb-4 uppercase tracking-widest border-b border-yt-border/40 pb-2">
                         {t('filter_videos')}
                       </h2>
                     )}
