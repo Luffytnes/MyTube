@@ -339,9 +339,9 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                         <span className="text-sm text-yt-text">{label}</span>
                         <button
                           onClick={() => updatePbSetting(key, !pbSettings[key])}
-                          className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${pbSettings[key] ? 'bg-yt-red' : 'bg-yt-border'}`}
+                          className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 overflow-hidden ${pbSettings[key] ? 'bg-yt-red' : 'bg-yt-border'}`}
                         >
-                          <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${pbSettings[key] ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                          <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${pbSettings[key] ? 'translate-x-4' : 'translate-x-0'}`} />
                         </button>
                       </div>
                     ))}
@@ -360,9 +360,9 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     <span className="text-sm text-yt-text">{pbSettings.autoplay ? t('settings_on') : t('settings_off')}</span>
                     <button
                       onClick={() => updatePbSetting('autoplay', !pbSettings.autoplay)}
-                      className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${pbSettings.autoplay ? 'bg-yt-red' : 'bg-yt-border'}`}
+                      className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 overflow-hidden ${pbSettings.autoplay ? 'bg-yt-red' : 'bg-yt-border'}`}
                     >
-                      <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${pbSettings.autoplay ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                      <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${pbSettings.autoplay ? 'translate-x-4' : 'translate-x-0'}`} />
                     </button>
                   </div>
                 </section>
@@ -376,9 +376,9 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     <span className="text-sm text-yt-text">{pbSettings.resumePlayback ? t('settings_on') : t('settings_off')}</span>
                     <button
                       onClick={() => updatePbSetting('resumePlayback', !pbSettings.resumePlayback)}
-                      className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${pbSettings.resumePlayback ? 'bg-yt-red' : 'bg-yt-border'}`}
+                      className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 overflow-hidden ${pbSettings.resumePlayback ? 'bg-yt-red' : 'bg-yt-border'}`}
                     >
-                      <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${pbSettings.resumePlayback ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                      <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${pbSettings.resumePlayback ? 'translate-x-4' : 'translate-x-0'}`} />
                     </button>
                   </div>
                 </section>
