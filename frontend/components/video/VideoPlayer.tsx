@@ -32,12 +32,6 @@ interface VideoPlayerProps {
   isLive?: boolean
 }
 
-// Quality label for a Shaka variant track
-function shakaTrackLabel(track: { height?: number; bandwidth: number }): string {
-  if (track.height) return `${track.height}p`
-  return `${Math.round(track.bandwidth / 1000)}k`
-}
-
 function getBestFormat(formats: VideoFormat[]): VideoFormat | null {
   if (!formats || formats.length === 0) return null
   const { defaultQuality } = getPlaybackSettings()
@@ -61,6 +55,7 @@ function getBestFormat(formats: VideoFormat[]): VideoFormat | null {
     }
   }
 
+  // Auto: highest resolution, prefer combined
   const combined = formats.filter((f) => f.hasVideo && f.hasAudio)
   if (combined.length > 0) return combined[0]
   const videoOnly = formats.filter((f) => f.hasVideo)
@@ -76,8 +71,6 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
   const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const hlsRef = useRef<any>(null)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const shakaRef = useRef<any>(null)
 
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -90,15 +83,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
   const [fullscreen, setFullscreen] = useState(false)
   const [showControls, setShowControls] = useState(true)
   const [showQualityMenu, setShowQualityMenu] = useState(false)
-  // DASH mode quality tracks from Shaka
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [dashTracks, setDashTracks] = useState<any[]>([])
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [selectedDashTrack, setSelectedDashTrack] = useState<any>(null)
-  const [dashReady, setDashReady] = useState(false)
-  // Fallback: use legacy dual-stream when DASH fails
   const [selectedFormat, setSelectedFormat] = useState<VideoFormat | null>(null)
-  const [useDash, setUseDash] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const savePositionTimer = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -123,7 +108,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
       .map(([, f]) => f)
   })()
 
-  // ── Reset on videoId change ──────────────────────────────────────────────
+  // Reset on videoId change — apply playback settings
   useEffect(() => {
     const settings = getPlaybackSettings()
     setSelectedFormat(getBestFormat(allVideoFormats))
@@ -131,10 +116,6 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
     setLoading(true)
     setPlaying(false)
     setCurrentTime(0)
-    setDashReady(false)
-    setDashTracks([])
-    setSelectedDashTrack(null)
-    setUseDash(false)
     setSpeed(settings.defaultSpeed)
     setVolume(settings.defaultVolume)
 
@@ -158,7 +139,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
     }
   }, [videoId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── HLS setup for live streams ───────────────────────────────────────────
+  // HLS setup for live streams
   useEffect(() => {
     if (!isLive) return
     const video = videoRef.current
@@ -209,137 +190,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
     }
   }, [videoId, isLive])
 
-  // ── DASH setup via Shaka Player (non-live only) ──────────────────────────
-  useEffect(() => {
-    if (isLive) return
-    const video = videoRef.current as HTMLVideoElement | null
-    if (!video) return
-
-    let cancelled = false
-
-    async function setupDash() {
-      try {
-        // Dynamically import Shaka (browser-only)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const shaka: any = await import('shaka-player')
-        if (cancelled) return
-
-        shaka.polyfill.installAll()
-
-        if (!shaka.Player.isBrowserSupported()) {
-          // Browser doesn't support DASH MSE — fall back to legacy player
-          setUseDash(false)
-          return
-        }
-
-        // Destroy previous Shaka instance
-        if (shakaRef.current) {
-          await shakaRef.current.destroy()
-          shakaRef.current = null
-        }
-
-        const player = new shaka.Player()
-        await player.attach(video)
-        shakaRef.current = player
-
-        const settings = getPlaybackSettings()
-
-        // Configure ABR based on defaultQuality
-        if (settings.defaultQuality !== 'auto') {
-          player.configure({ abr: { enabled: false } })
-        } else {
-          player.configure({ abr: { enabled: true } })
-        }
-
-        player.addEventListener('error', (event: { detail: { code: number } }) => {
-          console.error('Shaka error', event.detail)
-          if (!cancelled) {
-            // Fall back to legacy player on Shaka error
-            setUseDash(false)
-            setError(null)
-          }
-        })
-
-        const manifestUrl = `${API_BASE}/api/dash/${videoId}.mpd`
-        await player.load(manifestUrl)
-        if (cancelled) return
-
-        // Re-check video ref after async operations
-        const v = videoRef.current
-        if (!v) return
-
-        // Apply playback settings
-        v.volume = settings.defaultVolume
-        v.playbackRate = settings.defaultSpeed
-        setVolume(settings.defaultVolume)
-        setSpeed(settings.defaultSpeed)
-
-        // Resume position
-        if (settings.resumePlayback) {
-          const pos = getPosition(videoId)
-          if (pos && pos > 0 && v.duration > 0 && pos < v.duration * 0.95) {
-            v.currentTime = pos
-          }
-        }
-
-        // Build quality track list from Shaka variant tracks (video only)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const variants: any[] = player.getVariantTracks()
-        // Deduplicate by height, keep highest bandwidth at each height
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const byHeight = new Map<number, any>()
-        for (const t of variants) {
-          const h = t.height || 0
-          if (h < 240) continue
-          const existing = byHeight.get(h)
-          if (!existing || t.bandwidth > existing.bandwidth) {
-            byHeight.set(h, t)
-          }
-        }
-        const tracks = Array.from(byHeight.entries())
-          .sort((a, b) => b[0] - a[0])
-          .map(([, t]) => t)
-
-        setDashTracks(tracks)
-
-        // Apply preferred quality
-        if (settings.defaultQuality !== 'auto' && tracks.length > 0) {
-          const targetH = parseInt(settings.defaultQuality.replace('p', ''), 10)
-          const best = tracks.reduce((prev, curr) =>
-            Math.abs(curr.height - targetH) < Math.abs(prev.height - targetH) ? curr : prev
-          )
-          player.selectVariantTrack(best, /* clearBuffer */ true)
-          setSelectedDashTrack(best)
-        } else if (tracks.length > 0) {
-          setSelectedDashTrack(tracks[0])
-        }
-
-        setUseDash(true)
-        setDashReady(true)
-        setLoading(false)
-      } catch (err) {
-        if (!cancelled) {
-          console.warn('DASH setup failed, falling back to legacy player', err)
-          setUseDash(false)
-          setDashReady(false)
-          // Don't set error — let the legacy <video src> handle it
-        }
-      }
-    }
-
-    setupDash()
-
-    return () => {
-      cancelled = true
-      if (shakaRef.current) {
-        shakaRef.current.destroy()
-        shakaRef.current = null
-      }
-    }
-  }, [videoId, isLive]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Legacy dual-stream: src URL derived from selectedFormat
-  const isVideoOnly = !useDash && !!(selectedFormat && !selectedFormat.hasAudio)
+  const isVideoOnly = !!(selectedFormat && !selectedFormat.hasAudio)
   const streamUrl = selectedFormat
     ? getStreamUrl(videoId, String(selectedFormat.itag))
     : getStreamUrl(videoId)
@@ -392,10 +243,10 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
     if (!video) return
     if (video.paused) {
       safePlay(video)
-      if (!useDash) safePlay(audioRef.current)
+      safePlay(audioRef.current)
     } else {
       video.pause()
-      if (!useDash) audioRef.current?.pause()
+      audioRef.current?.pause()
     }
     resetHideTimer()
   }
@@ -404,7 +255,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
     const video = videoRef.current
     if (!video) return
     video.muted = !video.muted
-    if (!useDash && audioRef.current) audioRef.current.muted = video.muted
+    if (audioRef.current) audioRef.current.muted = video.muted
     setMuted(video.muted)
   }
 
@@ -423,11 +274,9 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
     if (!video) return
     setCurrentTime(video.currentTime)
     if (video.buffered.length > 0) setBuffered(video.buffered.end(video.buffered.length - 1))
-    if (!useDash) {
-      const audio = audioRef.current
-      if (audio && !audio.paused && Math.abs(audio.currentTime - video.currentTime) > 0.3) {
-        audio.currentTime = video.currentTime
-      }
+    const audio = audioRef.current
+    if (audio && !audio.paused && Math.abs(audio.currentTime - video.currentTime) > 0.3) {
+      audio.currentTime = video.currentTime
     }
   }
 
@@ -436,18 +285,16 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
     if (!video) return
     const settings = getPlaybackSettings()
     setDuration(video.duration)
-    if (!useDash) {
-      setLoading(false)
-      video.volume = settings.defaultVolume
-      video.playbackRate = settings.defaultSpeed
-      setVolume(settings.defaultVolume)
-      setSpeed(settings.defaultSpeed)
-      if (settings.resumePlayback) {
-        const pos = getPosition(videoId)
-        if (pos && pos > 0 && pos < video.duration * 0.95) {
-          video.currentTime = pos
-          if (audioRef.current) audioRef.current.currentTime = pos
-        }
+    setLoading(false)
+    video.volume = settings.defaultVolume
+    video.playbackRate = settings.defaultSpeed
+    setVolume(settings.defaultVolume)
+    setSpeed(settings.defaultSpeed)
+    if (settings.resumePlayback) {
+      const pos = getPosition(videoId)
+      if (pos && pos > 0 && pos < video.duration * 0.95) {
+        video.currentTime = pos
+        if (audioRef.current) audioRef.current.currentTime = pos
       }
     }
   }
@@ -465,20 +312,19 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
     if (!video) return
     const vol = parseFloat(e.target.value)
     video.volume = vol
-    if (!useDash && audioRef.current) audioRef.current.volume = vol
+    if (audioRef.current) audioRef.current.volume = vol
     setVolume(vol)
     if (vol === 0) {
       video.muted = true
-      if (!useDash && audioRef.current) audioRef.current.muted = true
+      if (audioRef.current) audioRef.current.muted = true
       setMuted(true)
     } else if (muted) {
       video.muted = false
-      if (!useDash && audioRef.current) audioRef.current.muted = false
+      if (audioRef.current) audioRef.current.muted = false
       setMuted(false)
     }
   }
 
-  // Legacy quality selector (used when DASH is not active)
   function selectQuality(fmt: VideoFormat) {
     const video = videoRef.current
     const wasPlaying = video && !video.paused
@@ -499,31 +345,15 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
     }, 300)
   }
 
-  // DASH quality selector via Shaka
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function selectDashQuality(track: any) {
-    if (!shakaRef.current) return
-    shakaRef.current.configure({ abr: { enabled: false } })
-    shakaRef.current.selectVariantTrack(track, /* clearBuffer */ true)
-    setSelectedDashTrack(track)
-    setShowQualityMenu(false)
-  }
-
   function handleVideoError() {
     const video = videoRef.current
     if (video?.error?.code === 1) return
-    if (useDash) return  // Shaka handles its own errors
     setError('Failed to load video. Try a different quality.')
     setLoading(false)
   }
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
   const bufferedProgress = duration > 0 ? (buffered / duration) * 100 : 0
-
-  // Quality label shown in the button
-  const qualityLabel = useDash
-    ? (selectedDashTrack ? shakaTrackLabel(selectedDashTrack) : 'Auto')
-    : (selectedFormat?.quality || 'Auto')
 
   return (
     <div
@@ -536,8 +366,8 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
       onMouseLeave={() => { if (playing) setShowControls(false) }}
       onClick={togglePlay}
     >
-      {/* Hidden audio element for legacy video-only formats */}
-      {audioSrc && !useDash && (
+      {/* Hidden audio element for video-only (high quality) formats */}
+      {audioSrc && (
         <audio
           ref={audioRef}
           src={audioSrc}
@@ -549,37 +379,33 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
 
       <video
         ref={videoRef}
-        src={isLive || useDash ? undefined : streamUrl}
+        src={isLive ? undefined : streamUrl}
         className="w-full h-full object-contain"
         title={title}
         autoPlay={getPlaybackSettings().autoplay}
         preload="auto"
         onPlay={() => {
           setPlaying(true)
-          if (!useDash) safePlay(audioRef.current)
+          safePlay(audioRef.current)
         }}
         onPause={() => {
           setPlaying(false)
-          if (!useDash) audioRef.current?.pause()
+          audioRef.current?.pause()
         }}
         onSeeked={() => {
-          if (!useDash && audioRef.current && videoRef.current) {
+          if (audioRef.current && videoRef.current) {
             audioRef.current.currentTime = videoRef.current.currentTime
           }
         }}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
-        onDurationChange={() => {
-          const video = videoRef.current
-          if (video && video.duration > 0) setDuration(video.duration)
-        }}
         onWaiting={() => {
           setLoading(true)
-          if (!useDash) audioRef.current?.pause()
+          audioRef.current?.pause()
         }}
         onCanPlay={() => {
           setLoading(false)
-          if (!useDash && videoRef.current && !videoRef.current.paused) safePlay(audioRef.current)
+          if (videoRef.current && !videoRef.current.paused) safePlay(audioRef.current)
         }}
         onError={handleVideoError}
         onVolumeChange={() => {
@@ -587,7 +413,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
           if (v) {
             setVolume(v.volume)
             setMuted(v.muted)
-            if (!useDash && audioRef.current) {
+            if (audioRef.current) {
               audioRef.current.volume = v.volume
               audioRef.current.muted = v.muted
             }
@@ -600,13 +426,6 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
         <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded pointer-events-none z-10">
           <Radio className="w-3 h-3" />
           LIVE
-        </div>
-      )}
-
-      {/* DASH badge */}
-      {useDash && dashReady && !isLive && (
-        <div className="absolute top-3 right-3 flex items-center gap-1 bg-black/60 text-white text-[10px] font-bold px-2 py-0.5 rounded pointer-events-none z-10">
-          DASH
         </div>
       )}
 
@@ -699,7 +518,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
                         onClick={() => {
                           const video = videoRef.current
                           if (video) video.playbackRate = s
-                          if (!useDash && audioRef.current) audioRef.current.playbackRate = s
+                          if (audioRef.current) audioRef.current.playbackRate = s
                           setSpeed(s)
                           setShowSpeedMenu(false)
                         }}
@@ -715,15 +534,15 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
               </div>
             )}
 
-            {/* Quality selector — DASH tracks or legacy formats */}
-            {!isLive && (useDash ? dashTracks.length > 0 : allVideoFormats.length > 0) && (
+            {/* Quality selector */}
+            {!isLive && allVideoFormats.length > 0 && (
               <div className="relative">
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowQualityMenu((v) => !v); setShowSpeedMenu(false) }}
                   className="flex items-center gap-1 text-white text-xs hover:text-yt-text-secondary transition-colors px-2 py-1 rounded hover:bg-white/10"
                 >
                   <Settings className="w-4 h-4" />
-                  <span className="hidden sm:block">{qualityLabel}</span>
+                  <span className="hidden sm:block">{selectedFormat?.quality || 'Auto'}</span>
                 </button>
 
                 {showQualityMenu && (
@@ -732,36 +551,20 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
                     onClick={(e) => e.stopPropagation()}
                   >
                     <p className="text-yt-text-muted text-xs px-4 py-2 border-b border-yt-border">{t('quality')}</p>
-                    {useDash
-                      ? dashTracks.map((track) => (
-                          <button
-                            key={track.id}
-                            onClick={() => selectDashQuality(track)}
-                            className={`w-full text-left px-4 py-2 text-sm transition-colors hover:bg-yt-hover flex items-center justify-between gap-2 ${
-                              selectedDashTrack?.id === track.id ? 'text-yt-red font-medium' : 'text-yt-text'
-                            }`}
-                          >
-                            <span>{shakaTrackLabel(track)}</span>
-                            <span className="text-yt-text-muted text-xs">
-                              {Math.round(track.bandwidth / 1000)}k
-                            </span>
-                          </button>
-                        ))
-                      : allVideoFormats.map((fmt) => (
-                          <button
-                            key={fmt.itag}
-                            onClick={() => selectQuality(fmt)}
-                            className={`w-full text-left px-4 py-2 text-sm transition-colors hover:bg-yt-hover flex items-center justify-between gap-2 ${
-                              selectedFormat?.itag === fmt.itag ? 'text-yt-red font-medium' : 'text-yt-text'
-                            }`}
-                          >
-                            <span>{fmt.quality}</span>
-                            {fmt.ext && (
-                              <span className="text-yt-text-muted text-xs uppercase">{fmt.ext}</span>
-                            )}
-                          </button>
-                        ))
-                    }
+                    {allVideoFormats.map((fmt) => (
+                      <button
+                        key={fmt.itag}
+                        onClick={() => selectQuality(fmt)}
+                        className={`w-full text-left px-4 py-2 text-sm transition-colors hover:bg-yt-hover flex items-center justify-between gap-2 ${
+                          selectedFormat?.itag === fmt.itag ? 'text-yt-red font-medium' : 'text-yt-text'
+                        }`}
+                      >
+                        <span>{fmt.quality}</span>
+                        {fmt.ext && (
+                          <span className="text-yt-text-muted text-xs uppercase">{fmt.ext}</span>
+                        )}
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
