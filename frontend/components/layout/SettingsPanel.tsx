@@ -1,14 +1,15 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Sun, Moon, Monitor, Upload, Wifi, WifiOff, AlertCircle, Loader2, Shield, RefreshCw, MapPin, Trash2, Check, Globe, Network } from 'lucide-react'
+import { X, Sun, Moon, Monitor, Upload, Wifi, WifiOff, AlertCircle, Loader2, Shield, RefreshCw, MapPin, Trash2, Check, Globe, Network, Play } from 'lucide-react'
 import { useTheme, type ThemeMode } from '@/lib/themeContext'
 import { useRegion, REGIONS } from '@/lib/regionContext'
+import { getPlaybackSettings, setPlaybackSettings, type PlaybackSettings } from '@/lib/playbackSettings'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 type VpnStatus = 'disconnected' | 'connecting' | 'connected' | 'disconnecting' | 'error'
-type Tab = 'general' | 'wireproxy'
+type Tab = 'general' | 'playback' | 'wireproxy'
 
 interface VpnState {
   status: VpnStatus
@@ -33,6 +34,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const { mode, setMode } = useTheme()
   const { region, setRegion, t } = useRegion()
   const [tab, setTab] = useState<Tab>('general')
+  const [pbSettings, setPbSettings] = useState<PlaybackSettings>(() => getPlaybackSettings())
   const [vpn, setVpn] = useState<VpnState>({ status: 'disconnected', conf_loaded: false, conf_name: null, error: null })
   const [vpnLoading, setVpnLoading] = useState(false)
   const [savedConfigs, setSavedConfigs] = useState<string[]>([])
@@ -60,6 +62,11 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       }
     } catch {}
   }, [])
+
+  function updatePbSetting<K extends keyof PlaybackSettings>(key: K, value: PlaybackSettings[K]) {
+    const updated = setPlaybackSettings({ [key]: value })
+    setPbSettings(updated)
+  }
 
   const fetchVpnStatus = useCallback(async () => {
     setVpnLoading(true)
@@ -208,6 +215,11 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       icon: <Globe className="w-4 h-4" />,
     },
     {
+      id: 'playback',
+      label: t('settings_tab_playback'),
+      icon: <Play className="w-4 h-4" />,
+    },
+    {
       id: 'wireproxy',
       label: 'Wireproxy',
       icon: <Network className="w-4 h-4" />,
@@ -260,7 +272,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-yt-border/50">
             <h2 className="text-yt-text font-semibold text-base">
-              {tab === 'general' ? 'Général' : 'Wireproxy'}
+              {tab === 'general' ? 'Général' : tab === 'playback' ? t('settings_tab_playback') : 'Wireproxy'}
             </h2>
             <button
               onClick={onClose}
@@ -312,6 +324,116 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                       </option>
                     ))}
                   </select>
+                </section>
+
+                <div className="border-t border-yt-border/40" />
+
+                <section>
+                  <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-3">Historique</p>
+                  <div className="space-y-2">
+                    {([
+                      { key: 'historyEnabled', label: t('settings_history_watch') },
+                      { key: 'searchHistoryEnabled', label: t('settings_history_search') },
+                    ] as { key: 'historyEnabled' | 'searchHistoryEnabled'; label: string }[]).map(({ key, label }) => (
+                      <div key={key} className="flex items-center justify-between gap-3 py-1">
+                        <span className="text-sm text-yt-text">{label}</span>
+                        <button
+                          onClick={() => updatePbSetting(key, !pbSettings[key])}
+                          className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${pbSettings[key] ? 'bg-yt-red' : 'bg-yt-border'}`}
+                        >
+                          <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${pbSettings[key] ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </>
+            )}
+
+            {/* ── LECTURE ── */}
+            {tab === 'playback' && (
+              <>
+                {/* Autoplay */}
+                <section>
+                  <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-3">{t('settings_playback_autoplay')}</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-yt-text">{pbSettings.autoplay ? t('settings_on') : t('settings_off')}</span>
+                    <button
+                      onClick={() => updatePbSetting('autoplay', !pbSettings.autoplay)}
+                      className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${pbSettings.autoplay ? 'bg-yt-red' : 'bg-yt-border'}`}
+                    >
+                      <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${pbSettings.autoplay ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+                </section>
+
+                <div className="border-t border-yt-border/40" />
+
+                {/* Resume */}
+                <section>
+                  <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-3">{t('settings_playback_resume')}</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-yt-text">{pbSettings.resumePlayback ? t('settings_on') : t('settings_off')}</span>
+                    <button
+                      onClick={() => updatePbSetting('resumePlayback', !pbSettings.resumePlayback)}
+                      className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${pbSettings.resumePlayback ? 'bg-yt-red' : 'bg-yt-border'}`}
+                    >
+                      <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${pbSettings.resumePlayback ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+                </section>
+
+                <div className="border-t border-yt-border/40" />
+
+                {/* Default quality */}
+                <section>
+                  <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-3">{t('settings_playback_quality')}</p>
+                  <select
+                    value={pbSettings.defaultQuality}
+                    onChange={(e) => updatePbSetting('defaultQuality', e.target.value as PlaybackSettings['defaultQuality'])}
+                    className="w-full bg-yt-secondary border border-yt-border text-yt-text text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-yt-red cursor-pointer"
+                  >
+                    <option value="auto">{t('settings_quality_auto')}</option>
+                    <option value="1080p">1080p</option>
+                    <option value="720p">720p</option>
+                    <option value="480p">480p</option>
+                    <option value="360p">360p</option>
+                    <option value="240p">240p</option>
+                  </select>
+                </section>
+
+                <div className="border-t border-yt-border/40" />
+
+                {/* Default speed */}
+                <section>
+                  <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-3">{t('settings_playback_speed')}</p>
+                  <select
+                    value={pbSettings.defaultSpeed}
+                    onChange={(e) => updatePbSetting('defaultSpeed', parseFloat(e.target.value))}
+                    className="w-full bg-yt-secondary border border-yt-border text-yt-text text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-yt-red cursor-pointer"
+                  >
+                    {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((s) => (
+                      <option key={s} value={s}>{s === 1 ? `1× (normal)` : `${s}×`}</option>
+                    ))}
+                  </select>
+                </section>
+
+                <div className="border-t border-yt-border/40" />
+
+                {/* Default volume */}
+                <section>
+                  <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-2">{t('settings_playback_volume')}</p>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range" min="0" max="1" step="0.05"
+                      value={pbSettings.defaultVolume}
+                      onChange={(e) => updatePbSetting('defaultVolume', parseFloat(e.target.value))}
+                      className="flex-1 h-1.5 cursor-pointer accent-yt-red"
+                    />
+                    <span className="text-sm text-yt-text w-10 text-right tabular-nums">
+                      {Math.round(pbSettings.defaultVolume * 100)}%
+                    </span>
+                  </div>
                 </section>
               </>
             )}

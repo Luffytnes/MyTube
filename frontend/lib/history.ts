@@ -11,6 +11,10 @@ const MAX_HISTORY = 200
 
 export function saveToHistory(entry: Omit<HistoryEntry, 'watchedAt'>): void {
   try {
+    const { getPlaybackSettings } = require('./playbackSettings')
+    if (!getPlaybackSettings().historyEnabled) return
+  } catch {}
+  try {
     const existing: HistoryEntry[] = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]')
     const filtered = existing.filter((h) => h.id !== entry.id)
     const updated = [{ ...entry, watchedAt: Date.now() }, ...filtered].slice(0, MAX_HISTORY)

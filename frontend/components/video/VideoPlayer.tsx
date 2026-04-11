@@ -20,6 +20,8 @@ import {
 import { formatDuration } from '@/lib/utils'
 import { getStreamUrl, getAudioUrl, type VideoFormat } from '@/lib/api'
 import { useRegion } from '@/lib/regionContext'
+import { getPlaybackSettings } from '@/lib/playbackSettings'
+import { savePosition, getPosition } from '@/lib/resumePosition'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -32,7 +34,30 @@ interface VideoPlayerProps {
 
 function getBestFormat(formats: VideoFormat[]): VideoFormat | null {
   if (!formats || formats.length === 0) return null
-  // Prefer combined (video+audio) at highest resolution
+  const { defaultQuality } = getPlaybackSettings()
+
+  if (defaultQuality !== 'auto') {
+    const targetHeight = parseInt(defaultQuality.replace('p', ''), 10)
+    const getHeight = (f: VideoFormat) =>
+      f.height ?? parseInt(f.quality?.replace('p', '') ?? '0', 10)
+
+    // Find closest available format to target height
+    const videoFormats = formats.filter((f) => f.hasVideo)
+    if (videoFormats.length > 0) {
+      const sorted = [...videoFormats].sort((a, b) => {
+        const da = Math.abs(getHeight(a) - targetHeight)
+        const db = Math.abs(getHeight(b) - targetHeight)
+        if (da !== db) return da - db
+        // Prefer combined at same distance
+        if (a.hasAudio && !b.hasAudio) return -1
+        if (!a.hasAudio && b.hasAudio) return 1
+        return 0
+      })
+      return sorted[0]
+    }
+  }
+
+  // Auto: highest resolution, prefer combined
   const combined = formats.filter((f) => f.hasVideo && f.hasAudio)
   if (combined.length > 0) return combined[0]
   const videoOnly = formats.filter((f) => f.hasVideo)
@@ -53,14 +78,17 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [buffered, setBuffered] = useState(0)
-  const [volume, setVolume] = useState(1)
+  const [volume, setVolume] = useState(() => getPlaybackSettings().defaultVolume)
   const [muted, setMuted] = useState(false)
+  const [speed, setSpeed] = useState(() => getPlaybackSettings().defaultSpeed)
+  const [showSpeedMenu, setShowSpeedMenu] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
   const [showControls, setShowControls] = useState(true)
   const [showQualityMenu, setShowQualityMenu] = useState(false)
   const [selectedFormat, setSelectedFormat] = useState<VideoFormat | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const savePositionTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // One entry per resolution ≥240p, prefer combined (audio+video) at each height.
   // Video-only formats are included — they'll use the mux endpoint server-side.
@@ -83,13 +111,37 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
       .map(([, f]) => f)
   })()
 
-  // Reset on videoId change — no localStorage persistence
+  // Reset on videoId change — apply playback settings
   useEffect(() => {
+    const settings = getPlaybackSettings()
     setSelectedFormat(getBestFormat(allVideoFormats))
     setError(null)
     setLoading(true)
     setPlaying(false)
     setCurrentTime(0)
+    setSpeed(settings.defaultSpeed)
+    setVolume(settings.defaultVolume)
+
+    // Apply volume + speed to video element once loaded
+    const video = videoRef.current
+    if (video) {
+      video.volume = settings.defaultVolume
+      video.playbackRate = settings.defaultSpeed
+    }
+
+    // Auto-save position every 5s if resume enabled
+    if (savePositionTimer.current) clearInterval(savePositionTimer.current)
+    if (settings.resumePlayback) {
+      savePositionTimer.current = setInterval(() => {
+        const v = videoRef.current
+        if (v && !v.paused && v.duration > 0) {
+          savePosition(videoId, v.currentTime, v.duration)
+        }
+      }, 5000)
+    }
+    return () => {
+      if (savePositionTimer.current) clearInterval(savePositionTimer.current)
+    }
   }, [videoId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // HLS setup for live streams
@@ -239,8 +291,22 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
   function handleLoadedMetadata() {
     const video = videoRef.current
     if (!video) return
+    const settings = getPlaybackSettings()
     setDuration(video.duration)
     setLoading(false)
+    // Apply settings
+    video.volume = settings.defaultVolume
+    video.playbackRate = settings.defaultSpeed
+    setVolume(settings.defaultVolume)
+    setSpeed(settings.defaultSpeed)
+    // Resume position
+    if (settings.resumePlayback) {
+      const pos = getPosition(videoId)
+      if (pos && pos > 0 && pos < video.duration * 0.95) {
+        video.currentTime = pos
+        if (audioRef.current) audioRef.current.currentTime = pos
+      }
+    }
   }
 
   function handleSeek(e: ChangeEvent<HTMLInputElement>) {
@@ -329,7 +395,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
         src={isLive ? undefined : streamUrl}
         className="w-full h-full object-contain"
         title={title}
-        autoPlay
+        autoPlay={getPlaybackSettings().autoplay}
         preload="auto"
         onPlay={() => {
           setPlaying(true)
@@ -445,11 +511,47 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
 
             <div className="flex-1" />
 
+            {/* Speed selector */}
+            {!isLive && (
+              <div className="relative">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowSpeedMenu((v) => !v); setShowQualityMenu(false) }}
+                  className="flex items-center gap-1 text-white text-xs hover:text-yt-text-secondary transition-colors px-2 py-1 rounded hover:bg-white/10"
+                >
+                  {speed === 1 ? '1×' : `${speed}×`}
+                </button>
+                {showSpeedMenu && (
+                  <div
+                    className="absolute bottom-full right-0 mb-2 bg-yt-secondary border border-yt-border rounded-xl shadow-2xl min-w-[100px] py-1 z-50"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => {
+                          const video = videoRef.current
+                          if (video) video.playbackRate = s
+                          if (audioRef.current) audioRef.current.playbackRate = s
+                          setSpeed(s)
+                          setShowSpeedMenu(false)
+                        }}
+                        className={`w-full text-left px-4 py-2 text-sm transition-colors hover:bg-yt-hover ${
+                          speed === s ? 'text-yt-red font-medium' : 'text-yt-text'
+                        }`}
+                      >
+                        {s === 1 ? '1× (normal)' : `${s}×`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Quality selector */}
             {!isLive && allVideoFormats.length > 0 && (
               <div className="relative">
                 <button
-                  onClick={(e) => { e.stopPropagation(); setShowQualityMenu((v) => !v) }}
+                  onClick={(e) => { e.stopPropagation(); setShowQualityMenu((v) => !v); setShowSpeedMenu(false) }}
                   className="flex items-center gap-1 text-white text-xs hover:text-yt-text-secondary transition-colors px-2 py-1 rounded hover:bg-white/10"
                 >
                   <Settings className="w-4 h-4" />

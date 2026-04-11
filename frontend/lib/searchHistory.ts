@@ -8,6 +8,10 @@ export interface SearchHistoryEntry {
 
 export function saveSearchQuery(query: string): void {
   try {
+    const { getPlaybackSettings } = require('./playbackSettings')
+    if (!getPlaybackSettings().searchHistoryEnabled) return
+  } catch {}
+  try {
     const entries: SearchHistoryEntry[] = JSON.parse(localStorage.getItem(KEY) || '[]')
     const filtered = entries.filter((e) => e.query.toLowerCase() !== query.toLowerCase())
     const updated = [{ query, searchedAt: Date.now() }, ...filtered].slice(0, MAX)
