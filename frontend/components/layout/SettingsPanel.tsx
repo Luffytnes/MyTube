@@ -352,78 +352,62 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
 
             {/* ── LECTURE ── */}
             {tab === 'playback' && (
-              <>
-                {/* Autoplay */}
-                <section>
-                  <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-3">{t('settings_playback_autoplay')}</p>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm text-yt-text">{pbSettings.autoplay ? t('settings_on') : t('settings_off')}</span>
+              <div className="space-y-0">
+                {/* Toggles */}
+                {([
+                  { key: 'autoplay' as const, label: t('settings_playback_autoplay') },
+                  { key: 'resumePlayback' as const, label: t('settings_playback_resume') },
+                ] ).map(({ key, label }) => (
+                  <div key={key} className="flex items-center justify-between gap-3 py-2.5 border-b border-yt-border/40">
+                    <span className="text-sm text-yt-text">{label}</span>
                     <button
-                      onClick={() => updatePbSetting('autoplay', !pbSettings.autoplay)}
-                      className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 overflow-hidden ${pbSettings.autoplay ? 'bg-yt-red' : 'bg-yt-border'}`}
+                      onClick={() => updatePbSetting(key, !pbSettings[key])}
+                      className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 overflow-hidden ${pbSettings[key] ? 'bg-yt-red' : 'bg-yt-border'}`}
                     >
-                      <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${pbSettings.autoplay ? 'translate-x-4' : 'translate-x-0'}`} />
+                      <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${pbSettings[key] ? 'translate-x-4' : 'translate-x-0'}`} />
                     </button>
                   </div>
-                </section>
+                ))}
 
-                <div className="border-t border-yt-border/40" />
-
-                {/* Resume */}
-                <section>
-                  <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-3">{t('settings_playback_resume')}</p>
+                {/* Quality */}
+                <div className="py-2.5 border-b border-yt-border/40">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm text-yt-text">{pbSettings.resumePlayback ? t('settings_on') : t('settings_off')}</span>
-                    <button
-                      onClick={() => updatePbSetting('resumePlayback', !pbSettings.resumePlayback)}
-                      className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 overflow-hidden ${pbSettings.resumePlayback ? 'bg-yt-red' : 'bg-yt-border'}`}
+                    <span className="text-sm text-yt-text flex-shrink-0">{t('settings_playback_quality')}</span>
+                    <select
+                      value={pbSettings.defaultQuality}
+                      onChange={(e) => updatePbSetting('defaultQuality', e.target.value as PlaybackSettings['defaultQuality'])}
+                      className="bg-yt-secondary border border-yt-border text-yt-text text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-yt-red cursor-pointer"
                     >
-                      <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${pbSettings.resumePlayback ? 'translate-x-4' : 'translate-x-0'}`} />
-                    </button>
+                      <option value="auto">{t('settings_quality_auto')}</option>
+                      <option value="1080p">1080p</option>
+                      <option value="720p">720p</option>
+                      <option value="480p">480p</option>
+                      <option value="360p">360p</option>
+                      <option value="240p">240p</option>
+                    </select>
                   </div>
-                </section>
+                </div>
 
-                <div className="border-t border-yt-border/40" />
+                {/* Speed */}
+                <div className="py-2.5 border-b border-yt-border/40">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-yt-text flex-shrink-0">{t('settings_playback_speed')}</span>
+                    <select
+                      value={pbSettings.defaultSpeed}
+                      onChange={(e) => updatePbSetting('defaultSpeed', parseFloat(e.target.value))}
+                      className="bg-yt-secondary border border-yt-border text-yt-text text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-yt-red cursor-pointer"
+                    >
+                      {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((s) => (
+                        <option key={s} value={s}>{s === 1 ? '1× (normal)' : `${s}×`}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
 
-                {/* Default quality */}
-                <section>
-                  <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-3">{t('settings_playback_quality')}</p>
-                  <select
-                    value={pbSettings.defaultQuality}
-                    onChange={(e) => updatePbSetting('defaultQuality', e.target.value as PlaybackSettings['defaultQuality'])}
-                    className="w-full bg-yt-secondary border border-yt-border text-yt-text text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-yt-red cursor-pointer"
-                  >
-                    <option value="auto">{t('settings_quality_auto')}</option>
-                    <option value="1080p">1080p</option>
-                    <option value="720p">720p</option>
-                    <option value="480p">480p</option>
-                    <option value="360p">360p</option>
-                    <option value="240p">240p</option>
-                  </select>
-                </section>
-
-                <div className="border-t border-yt-border/40" />
-
-                {/* Default speed */}
-                <section>
-                  <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-3">{t('settings_playback_speed')}</p>
-                  <select
-                    value={pbSettings.defaultSpeed}
-                    onChange={(e) => updatePbSetting('defaultSpeed', parseFloat(e.target.value))}
-                    className="w-full bg-yt-secondary border border-yt-border text-yt-text text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-yt-red cursor-pointer"
-                  >
-                    {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((s) => (
-                      <option key={s} value={s}>{s === 1 ? `1× (normal)` : `${s}×`}</option>
-                    ))}
-                  </select>
-                </section>
-
-                <div className="border-t border-yt-border/40" />
-
-                {/* Default volume */}
-                <section>
-                  <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-2">{t('settings_playback_volume')}</p>
+                {/* Volume */}
+                <div className="py-2.5">
                   <div className="flex items-center gap-3">
+                    <span className="text-sm text-yt-text flex-shrink-0">{t('settings_playback_volume')}</span>
                     <input
                       type="range" min="0" max="1" step="0.05"
                       value={pbSettings.defaultVolume}
@@ -434,8 +418,8 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                       {Math.round(pbSettings.defaultVolume * 100)}%
                     </span>
                   </div>
-                </section>
-              </>
+                </div>
+              </div>
             )}
 
             {/* ── WIREPROXY ── */}
