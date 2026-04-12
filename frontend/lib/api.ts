@@ -233,3 +233,24 @@ export async function getPlaylist(playlistId: string): Promise<PlaylistDetail> {
   if (!res.ok) throw new Error(`Failed to fetch playlist: ${res.statusText}`)
   return res.json()
 }
+
+export interface NewsArticle {
+  title: string
+  link: string
+  pubDate: string
+  source: string
+  description: string
+  image: string | null
+}
+
+export interface NewsResponse {
+  articles: NewsArticle[]
+  region: string
+  category: string
+}
+
+export async function getNews(region: string, category: string): Promise<NewsResponse> {
+  const res = await fetch(`${API_BASE}/api/news?region=${region}&category=${category}`, { cache: 'no-store' })
+  if (!res.ok) throw new Error(`Failed to fetch news`)
+  return res.json()
+}

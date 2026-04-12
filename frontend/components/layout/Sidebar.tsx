@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, TrendingUp, History, Clock, Music2, ThumbsUp, ListVideo, ListOrdered } from 'lucide-react'
+import { Home, TrendingUp, History, Clock, Music2, ThumbsUp, ListVideo, ListOrdered, Newspaper } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useRegion } from '@/lib/regionContext'
 import { useSubscriptions } from '@/lib/subscriptionsContext'
@@ -55,9 +55,9 @@ export default function Sidebar() {
           })}
         </nav>
 
-        {/* Music */}
+        {/* Music + News */}
         <div className="border-t border-yt-border/40 my-3 mx-3" />
-        <nav className="px-2">
+        <nav className="px-2 flex flex-col gap-0.5">
           <Link
             href="/music"
             className={cn(
@@ -68,6 +68,17 @@ export default function Sidebar() {
           >
             <Music2 className={cn('w-5 h-5 flex-shrink-0', pathname.startsWith('/music') ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red transition-colors')} />
             <span className="hidden xl:block truncate">{t('nav_music')}</span>
+          </Link>
+          <Link
+            href="/news"
+            className={cn(
+              'flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors group',
+              pathname.startsWith('/news') ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
+            )}
+            title={t('nav_news')}
+          >
+            <Newspaper className={cn('w-5 h-5 flex-shrink-0', pathname.startsWith('/news') ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red transition-colors')} />
+            <span className="hidden xl:block truncate">{t('nav_news')}</span>
           </Link>
         </nav>
 

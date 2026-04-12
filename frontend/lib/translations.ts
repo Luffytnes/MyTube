@@ -86,6 +86,13 @@ export interface Translations {
   nav_queue: string
   queue_title: string; queue_empty: string; queue_empty_desc: string; queue_clear: string; queue_play_all: string
   queue_add: string; queue_in_queue: string
+  nav_news: string
+  news_title: string; news_loading: string; news_error: string; news_empty: string
+  news_cat_general: string; news_cat_technology: string; news_cat_business: string
+  news_cat_entertainment: string; news_cat_sports: string; news_cat_science: string
+  news_cat_health: string; news_cat_world: string; news_cat_nation: string; news_cat_politics: string
+  news_ago_just_now: string; news_ago_minutes: string; news_ago_hours: string; news_ago_days: string
+  news_read_more: string
 }
 
 export const translations: Record<Lang, Translations> = {
@@ -182,6 +189,9 @@ export const translations: Record<Lang, Translations> = {
     nav_playlists: 'My Playlists', playlists_title: 'My Playlists', playlists_empty: 'No saved playlists yet.', playlists_open_youtube: 'Open on YouTube', playlists_remove: 'Remove',
     autoplay_next: 'Playing next in', autoplay_cancel: 'Cancel',
     nav_queue: 'Queue', queue_title: 'Queue', queue_empty: 'Your queue is empty', queue_empty_desc: 'Add videos to watch them in order.', queue_clear: 'Clear queue', queue_play_all: 'Play all', queue_add: 'Add to queue', queue_in_queue: 'In queue',
+    nav_news: 'News', news_title: 'News', news_loading: 'Loading news…', news_error: 'Failed to load news.', news_empty: 'No articles found.',
+    news_cat_general: 'General', news_cat_technology: 'Tech', news_cat_business: 'Business', news_cat_entertainment: 'Entertainment', news_cat_sports: 'Sports', news_cat_science: 'Science', news_cat_health: 'Health', news_cat_world: 'World', news_cat_nation: 'Nation', news_cat_politics: 'Politics',
+    news_ago_just_now: 'Just now', news_ago_minutes: 'min ago', news_ago_hours: 'h ago', news_ago_days: 'd ago', news_read_more: 'Read',
   },
   fr: {
     nav_home: 'Accueil', nav_trending: 'Tendances', nav_history: 'Historique',
@@ -276,6 +286,9 @@ export const translations: Record<Lang, Translations> = {
     nav_playlists: 'Mes playlists', playlists_title: 'Mes playlists', playlists_empty: 'Aucune playlist sauvegardée.', playlists_open_youtube: 'Ouvrir sur YouTube', playlists_remove: 'Retirer',
     autoplay_next: 'Lecture dans', autoplay_cancel: 'Annuler',
     nav_queue: 'File de lecture', queue_title: 'File de lecture', queue_empty: 'Votre file est vide', queue_empty_desc: 'Ajoutez des vidéos pour les regarder dans l\'ordre.', queue_clear: 'Vider la file', queue_play_all: 'Tout lire', queue_add: 'Ajouter à la file', queue_in_queue: 'Dans la file',
+    nav_news: 'Actualité', news_title: 'Actualité', news_loading: 'Chargement des actualités…', news_error: 'Impossible de charger les actualités.', news_empty: 'Aucun article trouvé.',
+    news_cat_general: 'Général', news_cat_technology: 'Tech', news_cat_business: 'Business', news_cat_entertainment: 'Divertissement', news_cat_sports: 'Sport', news_cat_science: 'Science', news_cat_health: 'Santé', news_cat_world: 'Monde', news_cat_nation: 'Nation', news_cat_politics: 'Politique',
+    news_ago_just_now: 'À l\'instant', news_ago_minutes: 'min', news_ago_hours: 'h', news_ago_days: 'j', news_read_more: 'Lire',
   },
   es: {
     nav_home: 'Inicio', nav_trending: 'Tendencias', nav_history: 'Historial',
@@ -370,6 +383,9 @@ export const translations: Record<Lang, Translations> = {
     nav_playlists: 'Mis playlists', playlists_title: 'Mis playlists', playlists_empty: 'No hay playlists guardadas.', playlists_open_youtube: 'Abrir en YouTube', playlists_remove: 'Quitar',
     autoplay_next: 'Reproduciendo en', autoplay_cancel: 'Cancelar',
     nav_queue: 'Cola', queue_title: 'Cola de reproducción', queue_empty: 'Tu cola está vacía', queue_empty_desc: 'Añade vídeos para verlos en orden.', queue_clear: 'Vaciar cola', queue_play_all: 'Reproducir todo', queue_add: 'Añadir a la cola', queue_in_queue: 'En cola',
+    nav_news: 'Noticias', news_title: 'Noticias', news_loading: 'Cargando noticias…', news_error: 'Error al cargar las noticias.', news_empty: 'No se encontraron artículos.',
+    news_cat_general: 'General', news_cat_technology: 'Tecnología', news_cat_business: 'Negocios', news_cat_entertainment: 'Entretenimiento', news_cat_sports: 'Deportes', news_cat_science: 'Ciencia', news_cat_health: 'Salud', news_cat_world: 'Mundo', news_cat_nation: 'Nacional', news_cat_politics: 'Política',
+    news_ago_just_now: 'Ahora', news_ago_minutes: 'min', news_ago_hours: 'h', news_ago_days: 'd', news_read_more: 'Leer',
   },
   de: {
     nav_home: 'Startseite', nav_trending: 'Trends', nav_history: 'Verlauf',
@@ -464,6 +480,9 @@ export const translations: Record<Lang, Translations> = {
     nav_playlists: 'Meine Playlists', playlists_title: 'Meine Playlists', playlists_empty: 'Keine gespeicherten Playlists.', playlists_open_youtube: 'Auf YouTube öffnen', playlists_remove: 'Entfernen',
     autoplay_next: 'Wiedergabe in', autoplay_cancel: 'Abbrechen',
     nav_queue: 'Warteschlange', queue_title: 'Warteschlange', queue_empty: 'Deine Warteschlange ist leer', queue_empty_desc: 'Füge Videos hinzu, um sie der Reihe nach zu sehen.', queue_clear: 'Warteschlange leeren', queue_play_all: 'Alle abspielen', queue_add: 'Zur Warteschlange hinzufügen', queue_in_queue: 'In der Warteschlange',
+    nav_news: 'Nachrichten', news_title: 'Nachrichten', news_loading: 'Nachrichten werden geladen…', news_error: 'Nachrichten konnten nicht geladen werden.', news_empty: 'Keine Artikel gefunden.',
+    news_cat_general: 'Allgemein', news_cat_technology: 'Technik', news_cat_business: 'Wirtschaft', news_cat_entertainment: 'Unterhaltung', news_cat_sports: 'Sport', news_cat_science: 'Wissenschaft', news_cat_health: 'Gesundheit', news_cat_world: 'Welt', news_cat_nation: 'National', news_cat_politics: 'Politik',
+    news_ago_just_now: 'Jetzt', news_ago_minutes: 'Min.', news_ago_hours: 'Std.', news_ago_days: 'T.', news_read_more: 'Lesen',
   },
   pt: {
     nav_home: 'Início', nav_trending: 'Em Alta', nav_history: 'Histórico',
@@ -558,6 +577,9 @@ export const translations: Record<Lang, Translations> = {
     nav_playlists: 'Minhas playlists', playlists_title: 'Minhas playlists', playlists_empty: 'Nenhuma playlist salva.', playlists_open_youtube: 'Abrir no YouTube', playlists_remove: 'Remover',
     autoplay_next: 'Reproduzindo em', autoplay_cancel: 'Cancelar',
     nav_queue: 'Fila', queue_title: 'Fila de reprodução', queue_empty: 'Sua fila está vazia', queue_empty_desc: 'Adicione vídeos para assistir em ordem.', queue_clear: 'Limpar fila', queue_play_all: 'Reproduzir tudo', queue_add: 'Adicionar à fila', queue_in_queue: 'Na fila',
+    nav_news: 'Notícias', news_title: 'Notícias', news_loading: 'Carregando notícias…', news_error: 'Erro ao carregar notícias.', news_empty: 'Nenhum artigo encontrado.',
+    news_cat_general: 'Geral', news_cat_technology: 'Tecnologia', news_cat_business: 'Negócios', news_cat_entertainment: 'Entretenimento', news_cat_sports: 'Esportes', news_cat_science: 'Ciência', news_cat_health: 'Saúde', news_cat_world: 'Mundo', news_cat_nation: 'Nacional', news_cat_politics: 'Política',
+    news_ago_just_now: 'Agora', news_ago_minutes: 'min', news_ago_hours: 'h', news_ago_days: 'd', news_read_more: 'Ler',
   },
   it: {
     nav_home: 'Home', nav_trending: 'Di tendenza', nav_history: 'Cronologia',
@@ -652,6 +674,9 @@ export const translations: Record<Lang, Translations> = {
     nav_playlists: 'Le mie playlist', playlists_title: 'Le mie playlist', playlists_empty: 'Nessuna playlist salvata.', playlists_open_youtube: 'Apri su YouTube', playlists_remove: 'Rimuovi',
     autoplay_next: 'Riproduzione tra', autoplay_cancel: 'Annulla',
     nav_queue: 'Coda', queue_title: 'Coda di riproduzione', queue_empty: 'La tua coda è vuota', queue_empty_desc: 'Aggiungi video per guardarli in ordine.', queue_clear: 'Svuota coda', queue_play_all: 'Riproduci tutto', queue_add: 'Aggiungi alla coda', queue_in_queue: 'In coda',
+    nav_news: 'Notizie', news_title: 'Notizie', news_loading: 'Caricamento notizie…', news_error: 'Impossibile caricare le notizie.', news_empty: 'Nessun articolo trovato.',
+    news_cat_general: 'Generale', news_cat_technology: 'Tecnologia', news_cat_business: 'Economia', news_cat_entertainment: 'Intrattenimento', news_cat_sports: 'Sport', news_cat_science: 'Scienza', news_cat_health: 'Salute', news_cat_world: 'Mondo', news_cat_nation: 'Nazionale', news_cat_politics: 'Politica',
+    news_ago_just_now: 'Ora', news_ago_minutes: 'min fa', news_ago_hours: 'ore fa', news_ago_days: 'gg fa', news_read_more: 'Leggi',
   },
   ja: {
     nav_home: 'ホーム', nav_trending: 'トレンド', nav_history: '履歴',
@@ -746,6 +771,9 @@ export const translations: Record<Lang, Translations> = {
     nav_playlists: 'マイプレイリスト', playlists_title: 'マイプレイリスト', playlists_empty: '保存済みプレイリストはありません。', playlists_open_youtube: 'YouTubeで開く', playlists_remove: '削除',
     autoplay_next: '次の動画まで', autoplay_cancel: 'キャンセル',
     nav_queue: 'キュー', queue_title: '再生キュー', queue_empty: 'キューが空です', queue_empty_desc: '動画を追加して順番に視聴できます。', queue_clear: 'キューを削除', queue_play_all: 'すべて再生', queue_add: 'キューに追加', queue_in_queue: 'キュー内',
+    nav_news: 'ニュース', news_title: 'ニュース', news_loading: 'ニュースを読み込み中…', news_error: 'ニュースを読み込めませんでした。', news_empty: '記事が見つかりません。',
+    news_cat_general: '総合', news_cat_technology: 'テクノロジー', news_cat_business: 'ビジネス', news_cat_entertainment: 'エンタメ', news_cat_sports: 'スポーツ', news_cat_science: 'サイエンス', news_cat_health: '健康', news_cat_world: '国際', news_cat_nation: '国内', news_cat_politics: '政治',
+    news_ago_just_now: 'たった今', news_ago_minutes: '分前', news_ago_hours: '時間前', news_ago_days: '日前', news_read_more: '読む',
   },
   ko: {
     nav_home: '홈', nav_trending: '인기', nav_history: '시청 기록',
@@ -840,6 +868,9 @@ export const translations: Record<Lang, Translations> = {
     nav_playlists: '내 재생목록', playlists_title: '내 재생목록', playlists_empty: '저장된 재생목록이 없습니다.', playlists_open_youtube: 'YouTube에서 열기', playlists_remove: '제거',
     autoplay_next: '다음 재생까지', autoplay_cancel: '취소',
     nav_queue: '재생 대기열', queue_title: '재생 대기열', queue_empty: '대기열이 비어 있습니다', queue_empty_desc: '순서대로 볼 동영상을 추가하세요.', queue_clear: '대기열 비우기', queue_play_all: '모두 재생', queue_add: '대기열에 추가', queue_in_queue: '대기열에 있음',
+    nav_news: '뉴스', news_title: '뉴스', news_loading: '뉴스 로딩 중…', news_error: '뉴스를 불러올 수 없습니다.', news_empty: '기사를 찾을 수 없습니다.',
+    news_cat_general: '전체', news_cat_technology: '기술', news_cat_business: '비즈니스', news_cat_entertainment: '엔터테인먼트', news_cat_sports: '스포츠', news_cat_science: '과학', news_cat_health: '건강', news_cat_world: '세계', news_cat_nation: '국내', news_cat_politics: '정치',
+    news_ago_just_now: '방금', news_ago_minutes: '분 전', news_ago_hours: '시간 전', news_ago_days: '일 전', news_read_more: '읽기',
   },
   ru: {
     nav_home: 'Главная', nav_trending: 'В тренде', nav_history: 'История',
@@ -934,5 +965,8 @@ export const translations: Record<Lang, Translations> = {
     nav_playlists: 'Мои плейлисты', playlists_title: 'Мои плейлисты', playlists_empty: 'Нет сохранённых плейлистов.', playlists_open_youtube: 'Открыть на YouTube', playlists_remove: 'Удалить',
     autoplay_next: 'Следующее через', autoplay_cancel: 'Отмена',
     nav_queue: 'Очередь', queue_title: 'Очередь воспроизведения', queue_empty: 'Очередь пуста', queue_empty_desc: 'Добавьте видео, чтобы смотреть их по порядку.', queue_clear: 'Очистить очередь', queue_play_all: 'Воспроизвести всё', queue_add: 'Добавить в очередь', queue_in_queue: 'В очереди',
+    nav_news: 'Новости', news_title: 'Новости', news_loading: 'Загрузка новостей…', news_error: 'Не удалось загрузить новости.', news_empty: 'Статьи не найдены.',
+    news_cat_general: 'Главное', news_cat_technology: 'Технологии', news_cat_business: 'Бизнес', news_cat_entertainment: 'Развлечения', news_cat_sports: 'Спорт', news_cat_science: 'Наука', news_cat_health: 'Здоровье', news_cat_world: 'Мир', news_cat_nation: 'Страна', news_cat_politics: 'Политика',
+    news_ago_just_now: 'Только что', news_ago_minutes: 'мин назад', news_ago_hours: 'ч назад', news_ago_days: 'д назад', news_read_more: 'Читать',
   },
 }

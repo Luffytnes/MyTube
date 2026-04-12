@@ -2843,6 +2843,119 @@ async def vpn_myip():
     raise HTTPException(status_code=503, detail="Could not fetch IP info")
 
 
+import xml.etree.ElementTree as ET
+
+NEWS_CACHE_TTL = 900  # 15 minutes
+_news_cache: Dict[str, tuple] = {}
+
+def news_cache_get(key: str):
+    if key in _news_cache:
+        ts, data = _news_cache[key]
+        if _time() - ts < NEWS_CACHE_TTL:
+            return data
+        del _news_cache[key]
+    return None
+
+def news_cache_set(key: str, data: Any):
+    _news_cache[key] = (_time(), data)
+
+GOOGLE_NEWS_CATEGORIES = {
+    "general": None,
+    "technology": "TECHNOLOGY",
+    "business": "BUSINESS",
+    "entertainment": "ENTERTAINMENT",
+    "sports": "SPORTS",
+    "science": "SCIENCE",
+    "health": "HEALTH",
+    "world": "WORLD",
+    "nation": "NATION",
+    "politics": "POLITICS",
+}
+
+REGION_LANG_MAP = {
+    "FR": "fr", "US": "en", "GB": "en", "DE": "de", "ES": "es",
+    "PT": "pt", "IT": "it", "JP": "ja", "KR": "ko", "RU": "ru",
+    "AR": "ar", "BR": "pt", "CA": "en", "AU": "en", "MX": "es",
+    "IN": "hi", "CN": "zh", "NL": "nl", "PL": "pl", "SE": "sv",
+    "NO": "no", "DK": "da", "FI": "fi", "CH": "de", "BE": "fr",
+}
+
+def _parse_rss(xml_text: str) -> list:
+    articles = []
+    try:
+        root = ET.fromstring(xml_text)
+        ns = {"media": "http://search.yahoo.com/mrss/"}
+        channel = root.find("channel")
+        if channel is None:
+            return []
+        for item in channel.findall("item"):
+            title = item.findtext("title") or ""
+            link = item.findtext("link") or ""
+            pub_date = item.findtext("pubDate") or ""
+            description = item.findtext("description") or ""
+            source_el = item.find("source")
+            source = source_el.text if source_el is not None else ""
+
+            # Image: try media:content, then enclosure
+            image = None
+            media_content = item.find("media:content", ns)
+            if media_content is not None:
+                image = media_content.get("url")
+            if not image:
+                enclosure = item.find("enclosure")
+                if enclosure is not None:
+                    image = enclosure.get("url")
+
+            # Clean HTML from description
+            import re as _re
+            clean_desc = _re.sub(r"<[^>]+>", "", description).strip()
+            if len(clean_desc) > 200:
+                clean_desc = clean_desc[:200] + "…"
+
+            articles.append({
+                "title": title,
+                "link": link,
+                "pubDate": pub_date,
+                "source": source,
+                "description": clean_desc,
+                "image": image,
+            })
+    except Exception:
+        pass
+    return articles
+
+
+@app.get("/api/news")
+async def get_news(region: str = "FR", category: str = "general"):
+    cache_key = f"news:{region}:{category}"
+    cached = news_cache_get(cache_key)
+    if cached:
+        return cached
+
+    lang = REGION_LANG_MAP.get(region.upper(), "en")
+    country = region.upper()
+    cat = GOOGLE_NEWS_CATEGORIES.get(category.lower())
+
+    if cat:
+        url = f"https://news.google.com/rss/headlines/section/topic/{cat}?hl={lang}&gl={country}&ceid={country}:{lang}"
+    else:
+        url = f"https://news.google.com/rss?hl={lang}&gl={country}&ceid={country}:{lang}"
+
+    try:
+        async with httpx_client(timeout=10.0) as client:
+            r = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            if r.status_code != 200:
+                raise HTTPException(status_code=502, detail="Failed to fetch news feed")
+            articles = _parse_rss(r.text)
+            result = {"articles": articles, "region": region, "category": category}
+            news_cache_set(cache_key, result)
+            return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
