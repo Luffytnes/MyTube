@@ -70,6 +70,15 @@ MyTube is a **self-hosted YouTube frontend** that lets you browse, search, and w
 - Personalised feed based on **search history** and **subscribed channels**
 - **"Continue watching"** strip for partially watched videos
 
+### 📰 News
+- Dedicated **News section** powered by Google News RSS — no tracking, proxied through your server
+- **Country selector** — switch between any country independently of your global settings
+- **10 categories** — General, Tech, Business, Entertainment, Sports, Science, Health, World, Nation, Politics
+- Articles show **source**, **relative time**, and a short **description**
+- Each article opens directly on the **original media site** (not Google)
+- 15-minute server-side cache — routes through **WireGuard VPN** if active
+- Fully translated in all **9 languages**
+
 ### 🎵 MyTube Music
 - Dedicated music section powered by YouTube Music
 - Browse trending **albums, artists, playlists**
@@ -264,6 +273,7 @@ Every request your browser makes goes through **your own backend**, never direct
 | `GET /api/music/search?q=...&lang=fr` | Music search |
 | `GET /api/music/podcasts/search?q=...&lang=fr` | Podcast search |
 | `GET /api/music/podcast/{id}?lang=fr` | Podcast detail + episodes |
+| `GET /api/news?region=FR&category=technology` | News articles (Google News RSS) |
 | `GET /api/vpn/status` | VPN status |
 | `POST /api/vpn/upload` | Upload WireGuard .conf |
 | `POST /api/vpn/start` | Start VPN tunnel |
