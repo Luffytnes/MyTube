@@ -342,16 +342,13 @@ export default function WatchPage({ params }: WatchPageProps) {
           </h1>
 
           {/* Action bar */}
-          <div className="flex flex-wrap items-center gap-2 mt-3 pb-4 border-b border-yt-border">
-            <span className="text-yt-text-muted text-sm">
-              {video.views}
-            </span>
-            <span className="text-yt-text-muted text-sm">•</span>
-            <span className="text-yt-text-muted text-sm">
-              {video.published}
-            </span>
-
-            <div className="flex items-center gap-2 ml-auto">
+          <div className="mt-3 pb-4 border-b border-yt-border">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-yt-text-muted text-sm">{video.views}</span>
+              <span className="text-yt-text-muted text-sm">•</span>
+              <span className="text-yt-text-muted text-sm">{video.published}</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
               {/* Like */}
               <button
                 onClick={() => {
@@ -360,7 +357,7 @@ export default function WatchPage({ params }: WatchPageProps) {
                   setLiked(nowLiked)
                   if (nowLiked) setDisliked(false)
                 }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium transition-colors ${
                   liked
                     ? 'bg-blue-600 text-white'
                     : 'bg-yt-secondary hover:bg-yt-hover text-yt-text border border-yt-border'
@@ -383,7 +380,7 @@ export default function WatchPage({ params }: WatchPageProps) {
                     return next
                   })
                 }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium transition-colors ${
                   disliked
                     ? 'bg-red-600 text-white'
                     : 'bg-yt-secondary hover:bg-yt-hover text-yt-text border border-yt-border'
@@ -398,7 +395,7 @@ export default function WatchPage({ params }: WatchPageProps) {
                 className="flex items-center gap-2 px-4 py-2 rounded-full bg-yt-secondary hover:bg-yt-hover text-yt-text border border-yt-border text-sm font-medium transition-colors"
               >
                 <Share2 className="w-4 h-4" />
-                <span className="hidden sm:block">{t('share')}</span>
+                <span className="hidden lg:block">{t('share')}</span>
               </button>
 
               {/* Download */}
@@ -407,7 +404,7 @@ export default function WatchPage({ params }: WatchPageProps) {
                 className="flex items-center gap-2 px-4 py-2 rounded-full bg-yt-secondary hover:bg-yt-hover text-yt-text border border-yt-border text-sm font-medium transition-colors"
               >
                 <Download className="w-4 h-4" />
-                <span className="hidden sm:block">{t('download')}</span>
+                <span className="hidden lg:block">{t('download')}</span>
               </button>
 
               {/* Add to queue */}
@@ -436,7 +433,7 @@ export default function WatchPage({ params }: WatchPageProps) {
                 }`}
               >
                 {inQueue ? <ListChecks className="w-4 h-4" /> : <ListPlus className="w-4 h-4" />}
-                <span className="hidden sm:block">{inQueue ? t('queue_in_queue') : t('queue_add')}</span>
+                <span className="hidden lg:block">{inQueue ? t('queue_in_queue') : t('queue_add')}</span>
               </button>
 
               {/* Save / Watch Later */}
@@ -453,7 +450,7 @@ export default function WatchPage({ params }: WatchPageProps) {
                 }`}
               >
                 {saved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
-                <span className="hidden sm:block">{t('save')}</span>
+                <span className="hidden lg:block">{t('save')}</span>
               </button>
             </div>
           </div>

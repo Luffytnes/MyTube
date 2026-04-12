@@ -23,7 +23,7 @@ import {
 import { formatDuration } from '@/lib/utils'
 import { getStreamUrl, getAudioUrl, getSubtitles, getSubtitleUrl, type VideoFormat, type SubtitleTrack } from '@/lib/api'
 import { useRegion } from '@/lib/regionContext'
-import { getPlaybackSettings } from '@/lib/playbackSettings'
+import { getPlaybackSettings, setPlaybackSettings } from '@/lib/playbackSettings'
 import { savePosition, getPosition } from '@/lib/resumePosition'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -341,6 +341,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, onEnded, 
     video.volume = vol
     if (audioRef.current) audioRef.current.volume = vol
     setVolume(vol)
+    setPlaybackSettings({ defaultVolume: vol })
     if (vol === 0) {
       video.muted = true
       if (audioRef.current) audioRef.current.muted = true
