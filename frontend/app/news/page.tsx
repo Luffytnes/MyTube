@@ -36,8 +36,8 @@ function ArticleCard({ article, t }: { article: NewsArticle; t: (k: string) => s
       rel="noopener noreferrer"
       className="flex gap-3 group p-3 rounded-xl hover:bg-yt-hover transition-colors border border-transparent hover:border-yt-border/40"
     >
-      {/* Thumbnail */}
-      {article.image && !imgError ? (
+      {/* Thumbnail — only if present (Google News RSS rarely includes images) */}
+      {article.image && !imgError && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={article.image}
@@ -45,10 +45,6 @@ function ArticleCard({ article, t }: { article: NewsArticle; t: (k: string) => s
           className="w-28 h-20 sm:w-36 sm:h-24 object-cover rounded-lg flex-shrink-0 bg-yt-secondary"
           onError={() => setImgError(true)}
         />
-      ) : (
-        <div className="w-28 h-20 sm:w-36 sm:h-24 rounded-lg flex-shrink-0 bg-yt-secondary flex items-center justify-center">
-          <Newspaper className="w-8 h-8 text-yt-text-muted" />
-        </div>
       )}
 
       {/* Info */}

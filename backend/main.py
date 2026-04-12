@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import html as html_lib
 import json
 import os
 import re
@@ -2843,8 +2844,6 @@ async def vpn_myip():
     raise HTTPException(status_code=503, detail="Could not fetch IP info")
 
 
-import xml.etree.ElementTree as ET
-
 NEWS_CACHE_TTL = 900  # 15 minutes
 _news_cache: Dict[str, tuple] = {}
 
@@ -2869,7 +2868,7 @@ GOOGLE_NEWS_CATEGORIES = {
     "health": "HEALTH",
     "world": "WORLD",
     "nation": "NATION",
-    "politics": "POLITICS",
+    "politics": "NATION",  # Google News has no POLITICS topic, NATION is closest
 }
 
 REGION_LANG_MAP = {
@@ -2880,37 +2879,57 @@ REGION_LANG_MAP = {
     "NO": "no", "DK": "da", "FI": "fi", "CH": "de", "BE": "fr",
 }
 
+def _extract_raw_tag(text: str, tag: str) -> str:
+    """Extract raw content of first tag occurrence, handling CDATA and encoded HTML."""
+    m = re.search(rf'<{tag}[^>]*>(.*?)</{tag}>', text, re.DOTALL)
+    if not m:
+        return ""
+    content = m.group(1).strip()
+    # Unwrap CDATA if present
+    cdata = re.match(r'<!\[CDATA\[(.*?)\]\]>', content, re.DOTALL)
+    if cdata:
+        return cdata.group(1).strip()
+    # Otherwise HTML-decode (Google News uses &lt; &gt; encoded HTML)
+    return html_lib.unescape(content)
+
 def _parse_rss(xml_text: str) -> list:
     articles = []
     try:
-        root = ET.fromstring(xml_text)
-        ns = {"media": "http://search.yahoo.com/mrss/"}
-        channel = root.find("channel")
-        if channel is None:
-            return []
-        for item in channel.findall("item"):
-            title = item.findtext("title") or ""
-            link = item.findtext("link") or ""
-            pub_date = item.findtext("pubDate") or ""
-            description = item.findtext("description") or ""
-            source_el = item.find("source")
-            source = source_el.text if source_el is not None else ""
+        items = re.findall(r'<item>(.*?)</item>', xml_text, re.DOTALL)
+        for raw in items:
+            title = re.sub(r"<[^>]+>", "", _extract_raw_tag(raw, "title")).strip()
+            if not title:
+                continue
 
-            # Image: try media:content, then enclosure
+            # <link> in RSS 2.0 is a bare text node
+            link_m = re.search(r'<link>(.*?)</link>', raw, re.DOTALL)
+            link = link_m.group(1).strip() if link_m else ""
+
+            pub_date = _extract_raw_tag(raw, "pubDate")
+
+            # Source
+            source_m = re.search(r'<source[^>]*>(.*?)</source>', raw, re.DOTALL)
+            source = source_m.group(1).strip() if source_m else ""
+
+            # Description: HTML-decode then extract image and clean text
+            desc_html = _extract_raw_tag(raw, "description")
+
+            # Image: look for <img src="..."> in decoded HTML
             image = None
-            media_content = item.find("media:content", ns)
-            if media_content is not None:
-                image = media_content.get("url")
+            img_m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', desc_html)
+            if img_m:
+                image = img_m.group(1)
             if not image:
-                enclosure = item.find("enclosure")
-                if enclosure is not None:
-                    image = enclosure.get("url")
+                media_m = re.search(r'<media:content[^>]+url=["\']([^"\']+)["\']', raw)
+                if media_m:
+                    image = media_m.group(1)
 
-            # Clean HTML from description
-            import re as _re
-            clean_desc = _re.sub(r"<[^>]+>", "", description).strip()
-            if len(clean_desc) > 200:
-                clean_desc = clean_desc[:200] + "…"
+            # Strip HTML tags from description, collapse whitespace
+            clean_desc = re.sub(r"<[^>]+>", " ", desc_html)
+            clean_desc = clean_desc.replace("\xa0", " ")  # non-breaking spaces
+            clean_desc = re.sub(r"\s{2,}", " ", clean_desc).strip()
+            if len(clean_desc) > 220:
+                clean_desc = clean_desc[:220] + "…"
 
             articles.append({
                 "title": title,
@@ -2943,7 +2962,7 @@ async def get_news(region: str = "FR", category: str = "general"):
 
     try:
         async with httpx_client(timeout=10.0) as client:
-            r = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            r = await client.get(url, headers={"User-Agent": "Mozilla/5.0"}, follow_redirects=True)
             if r.status_code != 200:
                 raise HTTPException(status_code=502, detail="Failed to fetch news feed")
             articles = _parse_rss(r.text)
