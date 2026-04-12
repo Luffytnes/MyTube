@@ -398,6 +398,53 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     ))}
                   </div>
                 </section>
+
+                <div className="border-t border-yt-border/40" />
+
+                <section>
+                  <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-3">{t('settings_tab_playback')}</p>
+                  <div className="space-y-3">
+                    {/* Hide watched */}
+                    <div className="flex items-center justify-between gap-3 py-1">
+                      <span className="text-sm text-yt-text">{t('settings_hide_watched')}</span>
+                      <button
+                        onClick={() => updatePbSetting('hideWatched', !pbSettings.hideWatched)}
+                        className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 overflow-hidden ${pbSettings.hideWatched ? 'bg-yt-red' : 'bg-yt-border'}`}
+                      >
+                        <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${pbSettings.hideWatched ? 'translate-x-4' : 'translate-x-0'}`} />
+                      </button>
+                    </div>
+
+                    {/* Grid density */}
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-yt-text flex-shrink-0">{t('settings_grid_density')}</span>
+                      <select
+                        value={pbSettings.gridDensity}
+                        onChange={(e) => updatePbSetting('gridDensity', e.target.value as PlaybackSettings['gridDensity'])}
+                        className="bg-yt-secondary border border-yt-border text-yt-text text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-yt-red cursor-pointer"
+                      >
+                        <option value="compact">{t('settings_density_compact')}</option>
+                        <option value="normal">{t('settings_density_normal')}</option>
+                        <option value="comfortable">{t('settings_density_comfortable')}</option>
+                      </select>
+                    </div>
+
+                    {/* History TTL */}
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-yt-text flex-shrink-0">{t('settings_history_ttl')}</span>
+                      <select
+                        value={pbSettings.historyTTL}
+                        onChange={(e) => updatePbSetting('historyTTL', parseInt(e.target.value))}
+                        className="bg-yt-secondary border border-yt-border text-yt-text text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-yt-red cursor-pointer"
+                      >
+                        <option value={0}>{t('settings_history_ttl_forever')}</option>
+                        <option value={7}>7 {t('settings_history_ttl_days')}</option>
+                        <option value={30}>30 {t('settings_history_ttl_days')}</option>
+                        <option value={90}>90 {t('settings_history_ttl_days')}</option>
+                      </select>
+                    </div>
+                  </div>
+                </section>
               </>
             )}
 
@@ -410,7 +457,6 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   { key: 'autoplayNext' as const, label: t('settings_playback_autoplay_next') },
                   { key: 'loop' as const, label: t('settings_playback_loop') },
                   { key: 'resumePlayback' as const, label: t('settings_playback_resume') },
-                  { key: 'hideWatched' as const, label: t('settings_hide_watched') },
                 ] ).map(({ key, label }) => (
                   <div key={key} className="flex items-center justify-between gap-3 py-2.5 border-b border-yt-border/40">
                     <span className="text-sm text-yt-text">{label}</span>
@@ -442,22 +488,6 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   </div>
                 </div>
 
-                {/* Grid density */}
-                <div className="py-2.5 border-b border-yt-border/40">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm text-yt-text flex-shrink-0">{t('settings_grid_density')}</span>
-                    <select
-                      value={pbSettings.gridDensity}
-                      onChange={(e) => updatePbSetting('gridDensity', e.target.value as PlaybackSettings['gridDensity'])}
-                      className="bg-yt-secondary border border-yt-border text-yt-text text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-yt-red cursor-pointer"
-                    >
-                      <option value="compact">{t('settings_density_compact')}</option>
-                      <option value="normal">{t('settings_density_normal')}</option>
-                      <option value="comfortable">{t('settings_density_comfortable')}</option>
-                    </select>
-                  </div>
-                </div>
-
                 {/* Subtitle lang */}
                 <div className="py-2.5 border-b border-yt-border/40">
                   <div className="flex items-center justify-between gap-3">
@@ -479,23 +509,6 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                       <option value="ru">Русский</option>
                       <option value="ar">العربية</option>
                       <option value="zh">中文</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* History TTL */}
-                <div className="py-2.5 border-b border-yt-border/40">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm text-yt-text flex-shrink-0">{t('settings_history_ttl')}</span>
-                    <select
-                      value={pbSettings.historyTTL}
-                      onChange={(e) => updatePbSetting('historyTTL', parseInt(e.target.value))}
-                      className="bg-yt-secondary border border-yt-border text-yt-text text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-yt-red cursor-pointer"
-                    >
-                      <option value={0}>{t('settings_history_ttl_forever')}</option>
-                      <option value={7}>7 {t('settings_history_ttl_days')}</option>
-                      <option value={30}>30 {t('settings_history_ttl_days')}</option>
-                      <option value={90}>90 {t('settings_history_ttl_days')}</option>
                     </select>
                   </div>
                 </div>
@@ -564,8 +577,6 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     )}
                   </div>
                 </section>
-
-                <div className="border-t border-yt-border/40" />
 
                 {/* Clear sections */}
                 <section>
