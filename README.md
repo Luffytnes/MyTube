@@ -26,42 +26,80 @@ MyTube is a **self-hosted YouTube frontend** that lets you browse, search, and w
 
 ### 📺 Video
 - Browse **trending videos** by country and category
-- **Search** with pagination
+- **Search** with filters — Videos, Channels, Playlists
 - Custom **HTML5 player** — no YouTube iframe, ever
 - **Quality selector** — choose your resolution
+- **Speed selector** — 0.25× to 2×
 - **Download** in multiple formats (video+audio, video only, audio only)
 - **Watch Later** and **History** stored locally
+- **Resume playback** — pick up where you left off
+- **"Continue watching"** section on the home page with progress bar
+
+### ▶️ Player
+- **Previous / Next buttons** in the player controls
+- **Autoplay** — automatically plays the next related video with a 5-second countdown
+- **Loop** — repeat the current video
+- **Video chapters** — timestamps parsed from the description, shown as markers on the progress bar with the current chapter name displayed
+- **Subtitles / CC** — manual and auto-generated tracks loaded on demand, proxied through your server
+- **Picture-in-picture** support via browser native API
+
+### 📋 Queue
+- **Add any video to the queue** — button on every video card (hover) and on the watch page action bar
+- Dedicated **Queue page** (`/queue`) — reorder, remove, play all
+- Queue-aware navigation: Prev/Next buttons and autoplay follow the queue order
+
+### 🎬 Playlists
+- **Save YouTube playlists** locally — no account needed
+- **Play a full playlist** via `?list=` — sidebar panel shows all videos, current one highlighted
+- Prev/Next and autoplay navigate within the playlist
+- Saved playlists page at `/playlists`
+
+### 🔍 Search
+- Results split into **Channels**, **Playlists**, and **Videos** sections
+- Channel cards with round avatar and one-click subscribe
+- Playlist cards with YouTube-style video-count stripe
+- Filter pills with result counts
+
+### 📡 Channels
+- Full channel pages with **banner, avatar, subscriber count**
+- Channel video list with **pagination**
+- **Subscribe** to channels — stored locally, no account needed
+- Subscriptions appear in the sidebar with avatar
+
+### 🏠 Home
+- Personalised feed based on **search history** and **subscribed channels**
+- **"Continue watching"** strip for partially watched videos
 
 ### 🎵 MyTube Music
 - Dedicated music section powered by YouTube Music
 - Browse trending **albums, artists, playlists**
 - Full **search** with filters (songs, albums, artists, playlists, podcasts)
 - Inline **audio player** with queue
-- **Podcasts** — browse & play episodes from YouTube Music, personalised by language and search history
+- **Podcasts** — browse & play episodes, personalised by language and search history
 - Follow/unfollow podcasts — stored locally in **My Podcasts**
-
-### 📡 Channels
-- Full channel pages with **banner, avatar, subscriber count**
-- Channel video list with **pagination**
-- **Subscribe** to channels — stored locally, no account needed
 
 ### 🌍 Multilingual
 - **9 languages**: 🇬🇧 English · 🇫🇷 French · 🇪🇸 Spanish · 🇩🇪 German · 🇧🇷 Portuguese · 🇮🇹 Italian · 🇯🇵 Japanese · 🇰🇷 Korean · 🇷🇺 Russian
 - **Region selector** for country-specific trending content
 
-### ⚙️ Settings panel
-- Theme selector (Light / Dark / Auto) in a single dropdown
-- Language & Region picker
-- **WireGuard VPN** integration via wireproxy — route all MyTube traffic through a personal VPN (e.g. ProtonVPN) without touching the rest of the system
+### ⚙️ Settings
+- **Theme** — Light / Dark / Auto
+- **Language & Region** picker
+- **Playback** — default quality, speed, volume, loop, autoplay next, resume position, hide watched videos
+- **Grid density** — Compact / Normal / Comfortable
+- **Default subtitles** — choose a language applied automatically on every video
+- **History TTL** — keep watch history for 7, 30, 90 days, or forever
+- **Data tab** — export all local data as JSON, import a backup, or clear individual sections (history, search, watch later, likes, queue, resume positions)
+- **WireGuard VPN** — route all backend traffic through a personal VPN (e.g. ProtonVPN), no system impact
 
 ### ⌨️ Keyboard Shortcuts
 | Key | Action |
 |-----|--------|
-| `Space` | Play / Pause |
+| `Space` / `K` | Play / Pause |
 | `F` | Toggle fullscreen |
 | `M` | Toggle mute |
 | `←` `→` | Seek ±5 seconds |
-| `↑` `↓` | Volume |
+| `↑` `↓` | Volume ±10% |
 
 ---
 
@@ -159,7 +197,7 @@ sudo chmod +x /usr/local/bin/wireproxy
 
 1. Start MyTube (`./start.sh`)
 2. Click the **⚙️ Settings** button (top right)
-3. Under **VPN WireGuard** → click **Import .conf file** → select your ProtonVPN file
+3. Under **Wireproxy** → click **Import .conf file** → select your ProtonVPN file
 4. Click **Connect** — status turns green (Connected)
 
 All MyTube traffic to YouTube/Google now goes through ProtonVPN. Your other apps are unaffected.
@@ -194,11 +232,13 @@ Every request your browser makes goes through **your own backend**, never direct
 |------|-----|
 | Video streams | Proxied through your server |
 | Thumbnails | Fetched server-side |
+| Subtitles / CC | Proxied through your server |
 | Search & trending | YouTube internal API via your server |
 | Music & Podcasts | ytmusicapi via your server |
 | Channel avatars & banners | Fetched server-side |
 | Watch history | `localStorage` only — never leaves your browser |
 | Subscriptions | `localStorage` only — never leaves your browser |
+| Queue / Playlists / Likes | `localStorage` only — never leaves your browser |
 | VPN (optional) | wireproxy — userspace WireGuard, no system impact |
 | Analytics | ❌ None |
 
@@ -209,11 +249,14 @@ Every request your browser makes goes through **your own backend**, never direct
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/trending?region=FR&category=all` | Trending videos |
-| `GET /api/search?q=...&page=1` | Search videos |
+| `GET /api/search?q=...&page=1` | Search videos, channels and playlists |
 | `GET /api/video/{id}` | Video metadata + formats |
 | `GET /api/stream/{id}?itag=...` | Proxy video stream |
 | `GET /api/stream/{id}/audio` | Proxy audio-only stream |
 | `GET /api/download/{id}?itag=...` | Download video |
+| `GET /api/playlist/{id}` | Playlist metadata + video list |
+| `GET /api/subtitles/{id}` | List available subtitle tracks |
+| `GET /api/subtitles/{id}/{lang}` | Proxy subtitle VTT file |
 | `GET /api/channel/{id}` | Channel info |
 | `GET /api/channel/{id}/videos` | Channel videos |
 | `GET /api/channel_thumbnail/{id}` | Channel avatar |
