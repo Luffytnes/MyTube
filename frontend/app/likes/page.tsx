@@ -28,7 +28,7 @@ export default function LikesPage() {
 
   if (entries.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-32 text-center px-4 min-h-screen">
+      <div className="flex flex-col items-center justify-center py-24 text-center px-4 max-w-4xl mx-auto">
         <ThumbsUp className="w-16 h-16 text-yt-text-muted mb-4" />
         <p className="text-yt-text text-xl font-medium mb-2">{t('likes_title')}</p>
         <p className="text-yt-text-muted text-sm">{t('likes_empty')}</p>
@@ -75,7 +75,7 @@ export default function LikesPage() {
             <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <Link href={`/watch/${entry.id}`}>
-                  <h3 className="text-yt-text text-sm font-medium leading-snug line-clamp-2 hover:text-white transition-colors">
+                  <h3 className="text-yt-text text-sm font-medium leading-snug line-clamp-2 hover:text-yt-red transition-colors">
                     {entry.title}
                   </h3>
                 </Link>
