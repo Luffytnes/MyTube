@@ -29,7 +29,7 @@ export interface Translations {
   videoUnavailable: string; channelNotFound: string; quality: string
   watchLater_title: string; watchLater_empty: string
   noChannelVideos: string; error_playback: string
-  home_forYou: string; home_basedOn: string; home_noActivity: string; home_continue_watching: string
+  home_forYou: string; home_basedOn: string; home_noActivity: string; home_continue_watching: string; home_see_all: string; home_show_less: string
   searchHistory_recent: string; searchHistory_clearAll: string
   // Music
   music_home: string; music_search: string; music_my_playlists: string; music_back: string
@@ -128,7 +128,7 @@ export const translations: Record<Lang, Translations> = {
     videoUnavailable: 'Video Unavailable', channelNotFound: 'Channel Not Found', quality: 'Quality',
     watchLater_title: 'Watch Later', watchLater_empty: 'No videos saved for later.',
     noChannelVideos: 'No videos found for this channel', error_playback: 'Playback Error',
-    home_forYou: 'For you', home_basedOn: 'Based on your searches and subscriptions', home_continue_watching: 'Continue watching',
+    home_forYou: 'For you', home_basedOn: 'Based on your searches and subscriptions', home_continue_watching: 'Continue watching', home_see_all: 'See all', home_show_less: 'Show less',
     home_noActivity: 'Search for videos or subscribe to channels to get personalized recommendations.',
     searchHistory_recent: 'Recent searches', searchHistory_clearAll: 'Clear all',
     music_home: 'Home', music_search: 'Search', music_my_playlists: 'My playlists', music_back: 'Back to MyTube',
@@ -222,7 +222,7 @@ export const translations: Record<Lang, Translations> = {
     videoUnavailable: 'Vidéo indisponible', channelNotFound: 'Chaîne introuvable', quality: 'Qualité',
     watchLater_title: 'À regarder plus tard', watchLater_empty: 'Aucune vidéo enregistrée.',
     noChannelVideos: 'Aucune vidéo trouvée pour cette chaîne', error_playback: 'Erreur de lecture',
-    home_forYou: 'Pour vous', home_basedOn: 'Basé sur vos recherches et abonnements', home_continue_watching: 'Continuer à regarder',
+    home_forYou: 'Pour vous', home_basedOn: 'Basé sur vos recherches et abonnements', home_continue_watching: 'Continuer à regarder', home_see_all: 'Voir tout', home_show_less: 'Réduire',
     home_noActivity: 'Recherchez des vidéos ou abonnez-vous à des chaînes pour obtenir des recommandations personnalisées.',
     searchHistory_recent: 'Recherches récentes', searchHistory_clearAll: 'Tout effacer',
     music_home: 'Accueil', music_search: 'Rechercher', music_my_playlists: 'Mes playlists', music_back: 'Retour à MyTube',
@@ -316,7 +316,7 @@ export const translations: Record<Lang, Translations> = {
     videoUnavailable: 'Vídeo no disponible', channelNotFound: 'Canal no encontrado', quality: 'Calidad',
     watchLater_title: 'Ver más tarde', watchLater_empty: 'Sin vídeos guardados.',
     noChannelVideos: 'No se encontraron vídeos para este canal', error_playback: 'Error de reproducción',
-    home_forYou: 'Para ti', home_basedOn: 'Basado en tus búsquedas y suscripciones', home_continue_watching: 'Continuar viendo',
+    home_forYou: 'Para ti', home_basedOn: 'Basado en tus búsquedas y suscripciones', home_continue_watching: 'Continuar viendo', home_see_all: 'Ver todo', home_show_less: 'Ver menos',
     home_noActivity: 'Busca vídeos o suscríbete a canales para obtener recomendaciones personalizadas.',
     searchHistory_recent: 'Búsquedas recientes', searchHistory_clearAll: 'Borrar todo',
     music_home: 'Inicio', music_search: 'Buscar', music_my_playlists: 'Mis playlists', music_back: 'Volver a MyTube',
@@ -410,7 +410,7 @@ export const translations: Record<Lang, Translations> = {
     videoUnavailable: 'Video nicht verfügbar', channelNotFound: 'Kanal nicht gefunden', quality: 'Qualität',
     watchLater_title: 'Später ansehen', watchLater_empty: 'Keine gespeicherten Videos.',
     noChannelVideos: 'Keine Videos für diesen Kanal gefunden', error_playback: 'Wiedergabefehler',
-    home_forYou: 'Für dich', home_basedOn: 'Basierend auf deinen Suchanfragen und Abonnements', home_continue_watching: 'Weiterschauen',
+    home_forYou: 'Für dich', home_basedOn: 'Basierend auf deinen Suchanfragen und Abonnements', home_continue_watching: 'Weiterschauen', home_see_all: 'Alle anzeigen', home_show_less: 'Weniger anzeigen',
     home_noActivity: 'Suche nach Videos oder abonniere Kanäle für personalisierte Empfehlungen.',
     searchHistory_recent: 'Letzte Suchanfragen', searchHistory_clearAll: 'Alle löschen',
     music_home: 'Startseite', music_search: 'Suchen', music_my_playlists: 'Meine Playlists', music_back: 'Zurück zu MyTube',
@@ -504,7 +504,7 @@ export const translations: Record<Lang, Translations> = {
     videoUnavailable: 'Vídeo Indisponível', channelNotFound: 'Canal Não Encontrado', quality: 'Qualidade',
     watchLater_title: 'Assistir mais tarde', watchLater_empty: 'Nenhum vídeo salvo.',
     noChannelVideos: 'Nenhum vídeo encontrado para este canal', error_playback: 'Erro de reprodução',
-    home_forYou: 'Para você', home_basedOn: 'Baseado nas suas pesquisas e inscrições', home_continue_watching: 'Continuar assistindo',
+    home_forYou: 'Para você', home_basedOn: 'Baseado nas suas pesquisas e inscrições', home_continue_watching: 'Continuar assistindo', home_see_all: 'Ver tudo', home_show_less: 'Ver menos',
     home_noActivity: 'Pesquise vídeos ou inscreva-se em canais para recomendações personalizadas.',
     searchHistory_recent: 'Pesquisas recentes', searchHistory_clearAll: 'Limpar tudo',
     music_home: 'Início', music_search: 'Pesquisar', music_my_playlists: 'Minhas playlists', music_back: 'Voltar ao MyTube',
@@ -598,7 +598,7 @@ export const translations: Record<Lang, Translations> = {
     videoUnavailable: 'Video Non Disponibile', channelNotFound: 'Canale Non Trovato', quality: 'Qualità',
     watchLater_title: 'Da guardare', watchLater_empty: 'Nessun video salvato.',
     noChannelVideos: 'Nessun video trovato per questo canale', error_playback: 'Errore di riproduzione',
-    home_forYou: 'Per te', home_basedOn: 'In base alle tue ricerche e iscrizioni', home_continue_watching: 'Continua a guardare',
+    home_forYou: 'Per te', home_basedOn: 'In base alle tue ricerche e iscrizioni', home_continue_watching: 'Continua a guardare', home_see_all: 'Vedi tutto', home_show_less: 'Vedi meno',
     home_noActivity: 'Cerca video o iscriviti a canali per ottenere consigli personalizzati.',
     searchHistory_recent: 'Ricerche recenti', searchHistory_clearAll: 'Cancella tutto',
     music_home: 'Home', music_search: 'Cerca', music_my_playlists: 'Le mie playlist', music_back: 'Torna a MyTube',
@@ -692,7 +692,7 @@ export const translations: Record<Lang, Translations> = {
     videoUnavailable: '動画を再生できません', channelNotFound: 'チャンネルが見つかりません', quality: '画質',
     watchLater_title: '後で見る', watchLater_empty: '保存された動画はありません。',
     noChannelVideos: 'このチャンネルの動画が見つかりません', error_playback: '再生エラー',
-    home_forYou: 'あなたへのおすすめ', home_basedOn: '検索履歴と登録チャンネルに基づく', home_continue_watching: '続きを見る',
+    home_forYou: 'あなたへのおすすめ', home_basedOn: '検索履歴と登録チャンネルに基づく', home_continue_watching: '続きを見る', home_see_all: 'すべて見る', home_show_less: '折りたたむ',
     home_noActivity: '動画を検索したりチャンネルを登録してパーソナライズされたおすすめを取得しましょう。',
     searchHistory_recent: '最近の検索', searchHistory_clearAll: 'すべて削除',
     music_home: 'ホーム', music_search: '検索', music_my_playlists: 'マイプレイリスト', music_back: 'MyTubeに戻る',
@@ -786,7 +786,7 @@ export const translations: Record<Lang, Translations> = {
     videoUnavailable: '동영상을 사용할 수 없음', channelNotFound: '채널을 찾을 수 없음', quality: '화질',
     watchLater_title: '나중에 볼 동영상', watchLater_empty: '저장된 동영상이 없습니다.',
     noChannelVideos: '이 채널에 대한 동영상을 찾을 수 없습니다', error_playback: '재생 오류',
-    home_forYou: '추천 동영상', home_basedOn: '검색 기록 및 구독을 기반으로', home_continue_watching: '이어서 보기',
+    home_forYou: '추천 동영상', home_basedOn: '검색 기록 및 구독을 기반으로', home_continue_watching: '이어서 보기', home_see_all: '모두 보기', home_show_less: '접기',
     home_noActivity: '동영상을 검색하거나 채널을 구독하여 맞춤 추천을 받아보세요.',
     searchHistory_recent: '최근 검색', searchHistory_clearAll: '모두 지우기',
     music_home: '홈', music_search: '검색', music_my_playlists: '내 플레이리스트', music_back: 'MyTube로 돌아가기',
@@ -880,7 +880,7 @@ export const translations: Record<Lang, Translations> = {
     videoUnavailable: 'Видео недоступно', channelNotFound: 'Канал не найден', quality: 'Качество',
     watchLater_title: 'Смотреть позже', watchLater_empty: 'Нет сохранённых видео.',
     noChannelVideos: 'Видео для этого канала не найдены', error_playback: 'Ошибка воспроизведения',
-    home_forYou: 'Для вас', home_basedOn: 'На основе ваших поисков и подписок', home_continue_watching: 'Продолжить просмотр',
+    home_forYou: 'Для вас', home_basedOn: 'На основе ваших поисков и подписок', home_continue_watching: 'Продолжить просмотр', home_see_all: 'Показать все', home_show_less: 'Свернуть',
     home_noActivity: 'Ищите видео или подписывайтесь на каналы, чтобы получать персональные рекомендации.',
     searchHistory_recent: 'Последние запросы', searchHistory_clearAll: 'Очистить всё',
     music_home: 'Главная', music_search: 'Поиск', music_my_playlists: 'Мои плейлисты', music_back: 'Вернуться в MyTube',

@@ -28,6 +28,7 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null)
   const [hasActivity, setHasActivity] = useState(false)
   const [resumeVideos, setResumeVideos] = useState<ResumeVideo[]>([])
+  const [showAllResume, setShowAllResume] = useState(false)
 
   useEffect(() => {
     const ids = getResumeVideoIds().slice(0, 10)
@@ -115,31 +116,58 @@ export default function HomePage() {
       {/* Continuer à regarder */}
       {resumeVideos.length > 0 && (
         <div className="mb-8">
-          <h2 className="text-yt-text text-lg font-semibold mb-3">{t('home_continue_watching')}</h2>
-          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-yt-border">
-            {resumeVideos.map((v) => (
-              <Link
-                key={v.id}
-                href={`/watch/${v.id}`}
-                className="flex-shrink-0 w-48 group"
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-yt-text text-lg font-semibold">{t('home_continue_watching')}</h2>
+            {resumeVideos.length > 6 && (
+              <button
+                onClick={() => setShowAllResume((p) => !p)}
+                className="text-sm text-yt-text-muted hover:text-yt-text transition-colors"
               >
-                <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-yt-secondary mb-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`}
-                    alt={v.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  {/* Progress bar */}
-                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
-                    <div className="h-full bg-yt-red" style={{ width: `${v.progress}%` }} />
-                  </div>
-                </div>
-                <p className="text-yt-text text-xs font-medium line-clamp-2 leading-snug">{v.title}</p>
-                <p className="text-yt-text-muted text-xs mt-0.5 truncate">{v.channel}</p>
-              </Link>
-            ))}
+                {showAllResume ? t('home_show_less') : t('home_see_all')}
+              </button>
+            )}
           </div>
+          {showAllResume ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              {resumeVideos.map((v) => (
+                <Link key={v.id} href={`/watch/${v.id}`} className="group">
+                  <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-yt-secondary mb-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`}
+                      alt={v.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
+                      <div className="h-full bg-yt-red" style={{ width: `${v.progress}%` }} />
+                    </div>
+                  </div>
+                  <p className="text-yt-text text-xs font-medium line-clamp-2 leading-snug">{v.title}</p>
+                  <p className="text-yt-text-muted text-xs mt-0.5 truncate">{v.channel}</p>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              {resumeVideos.slice(0, 6).map((v) => (
+                <Link key={v.id} href={`/watch/${v.id}`} className="group">
+                  <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-yt-secondary mb-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`}
+                      alt={v.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
+                      <div className="h-full bg-yt-red" style={{ width: `${v.progress}%` }} />
+                    </div>
+                  </div>
+                  <p className="text-yt-text text-xs font-medium line-clamp-2 leading-snug">{v.title}</p>
+                  <p className="text-yt-text-muted text-xs mt-0.5 truncate">{v.channel}</p>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
