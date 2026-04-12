@@ -357,8 +357,6 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   </div>
                 </section>
 
-                <div className="border-t border-yt-border/40" />
-
                 <section>
                   <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-3">{t('settings_language')}</p>
                   <select
@@ -376,8 +374,6 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     ))}
                   </select>
                 </section>
-
-                <div className="border-t border-yt-border/40" />
 
                 <section>
                   <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-3">Historique</p>
@@ -398,8 +394,6 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     ))}
                   </div>
                 </section>
-
-                <div className="border-t border-yt-border/40" />
 
                 <section>
                   <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-3">{t('settings_tab_playback')}</p>
