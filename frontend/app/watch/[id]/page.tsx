@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getVideo, getPlaylist, type PlaylistDetail, type PlaylistVideo } from '@/lib/api'
 import { getPlaybackSettings } from '@/lib/playbackSettings'
-import { getQueue, isInQueue } from '@/lib/queue'
+import { getQueue, isInQueue, addToQueue, removeFromQueue } from '@/lib/queue'
 import { saveToHistory } from '@/lib/history'
 import { useRegion } from '@/lib/regionContext'
 import type { VideoDetail } from '@/lib/api'
@@ -23,6 +23,8 @@ import {
   ChevronDown,
   ChevronUp,
   Bell,
+  ListPlus,
+  ListChecks,
 } from 'lucide-react'
 import { formatSubscribers } from '@/lib/utils'
 import { isInWatchLater, toggleWatchLater } from '@/lib/watchLater'
@@ -126,6 +128,7 @@ export default function WatchPage({ params }: WatchPageProps) {
   const [saved, setSaved] = useState(false)
   const [showShare, setShowShare] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [inQueue, setInQueue] = useState(false)
   const [autoplayCountdown, setAutoplayCountdown] = useState<number | null>(null)
   const autoplayTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const [prevVideoId, setPrevVideoId] = useState<string | null>(null)
@@ -143,6 +146,7 @@ export default function WatchPage({ params }: WatchPageProps) {
   useEffect(() => {
     setSaved(isInWatchLater(id))
     setLiked(isLiked(id))
+    setInQueue(isInQueue(id))
     // Retrieve previous video from sessionStorage on mount
     const stored = sessionStorage.getItem('yt_prev_video')
     setPrevVideoId(stored)
@@ -404,6 +408,35 @@ export default function WatchPage({ params }: WatchPageProps) {
               >
                 <Download className="w-4 h-4" />
                 <span className="hidden sm:block">{t('download')}</span>
+              </button>
+
+              {/* Add to queue */}
+              <button
+                onClick={() => {
+                  if (!video) return
+                  if (inQueue) {
+                    removeFromQueue(video.id)
+                    setInQueue(false)
+                  } else {
+                    addToQueue({
+                      id: video.id,
+                      title: video.title,
+                      thumbnail: `https://i.ytimg.com/vi/${video.id}/mqdefault.jpg`,
+                      duration: video.duration,
+                      channel: video.channel.name,
+                      channelId: video.channel.id,
+                    })
+                    setInQueue(true)
+                  }
+                }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
+                  inQueue
+                    ? 'bg-yt-red border-yt-red text-white'
+                    : 'bg-yt-secondary hover:bg-yt-hover text-yt-text border-yt-border'
+                }`}
+              >
+                {inQueue ? <ListChecks className="w-4 h-4" /> : <ListPlus className="w-4 h-4" />}
+                <span className="hidden sm:block">{inQueue ? t('queue_in_queue') : t('queue_add')}</span>
               </button>
 
               {/* Save / Watch Later */}

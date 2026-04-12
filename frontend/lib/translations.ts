@@ -85,6 +85,7 @@ export interface Translations {
   autoplay_next: string; autoplay_cancel: string
   nav_queue: string
   queue_title: string; queue_empty: string; queue_empty_desc: string; queue_clear: string; queue_play_all: string
+  queue_add: string; queue_in_queue: string
 }
 
 export const translations: Record<Lang, Translations> = {
@@ -180,7 +181,7 @@ export const translations: Record<Lang, Translations> = {
     playlist_save: 'Save playlist', playlist_saved: 'Saved', playlist_videos: 'videos',
     nav_playlists: 'My Playlists', playlists_title: 'My Playlists', playlists_empty: 'No saved playlists yet.', playlists_open_youtube: 'Open on YouTube', playlists_remove: 'Remove',
     autoplay_next: 'Playing next in', autoplay_cancel: 'Cancel',
-    nav_queue: 'Queue', queue_title: 'Queue', queue_empty: 'Your queue is empty', queue_empty_desc: 'Add videos to watch them in order.', queue_clear: 'Clear queue', queue_play_all: 'Play all',
+    nav_queue: 'Queue', queue_title: 'Queue', queue_empty: 'Your queue is empty', queue_empty_desc: 'Add videos to watch them in order.', queue_clear: 'Clear queue', queue_play_all: 'Play all', queue_add: 'Add to queue', queue_in_queue: 'In queue',
   },
   fr: {
     nav_home: 'Accueil', nav_trending: 'Tendances', nav_history: 'Historique',
@@ -274,7 +275,7 @@ export const translations: Record<Lang, Translations> = {
     playlist_save: 'Sauvegarder la playlist', playlist_saved: 'Sauvegardée', playlist_videos: 'vidéos',
     nav_playlists: 'Mes playlists', playlists_title: 'Mes playlists', playlists_empty: 'Aucune playlist sauvegardée.', playlists_open_youtube: 'Ouvrir sur YouTube', playlists_remove: 'Retirer',
     autoplay_next: 'Lecture dans', autoplay_cancel: 'Annuler',
-    nav_queue: 'File de lecture', queue_title: 'File de lecture', queue_empty: 'Votre file est vide', queue_empty_desc: 'Ajoutez des vidéos pour les regarder dans l\'ordre.', queue_clear: 'Vider la file', queue_play_all: 'Tout lire',
+    nav_queue: 'File de lecture', queue_title: 'File de lecture', queue_empty: 'Votre file est vide', queue_empty_desc: 'Ajoutez des vidéos pour les regarder dans l\'ordre.', queue_clear: 'Vider la file', queue_play_all: 'Tout lire', queue_add: 'Ajouter à la file', queue_in_queue: 'Dans la file',
   },
   es: {
     nav_home: 'Inicio', nav_trending: 'Tendencias', nav_history: 'Historial',
@@ -368,7 +369,7 @@ export const translations: Record<Lang, Translations> = {
     playlist_save: 'Guardar playlist', playlist_saved: 'Guardada', playlist_videos: 'vídeos',
     nav_playlists: 'Mis playlists', playlists_title: 'Mis playlists', playlists_empty: 'No hay playlists guardadas.', playlists_open_youtube: 'Abrir en YouTube', playlists_remove: 'Quitar',
     autoplay_next: 'Reproduciendo en', autoplay_cancel: 'Cancelar',
-    nav_queue: 'Cola', queue_title: 'Cola de reproducción', queue_empty: 'Tu cola está vacía', queue_empty_desc: 'Añade vídeos para verlos en orden.', queue_clear: 'Vaciar cola', queue_play_all: 'Reproducir todo',
+    nav_queue: 'Cola', queue_title: 'Cola de reproducción', queue_empty: 'Tu cola está vacía', queue_empty_desc: 'Añade vídeos para verlos en orden.', queue_clear: 'Vaciar cola', queue_play_all: 'Reproducir todo', queue_add: 'Añadir a la cola', queue_in_queue: 'En cola',
   },
   de: {
     nav_home: 'Startseite', nav_trending: 'Trends', nav_history: 'Verlauf',
@@ -462,7 +463,7 @@ export const translations: Record<Lang, Translations> = {
     playlist_save: 'Playlist speichern', playlist_saved: 'Gespeichert', playlist_videos: 'Videos',
     nav_playlists: 'Meine Playlists', playlists_title: 'Meine Playlists', playlists_empty: 'Keine gespeicherten Playlists.', playlists_open_youtube: 'Auf YouTube öffnen', playlists_remove: 'Entfernen',
     autoplay_next: 'Wiedergabe in', autoplay_cancel: 'Abbrechen',
-    nav_queue: 'Warteschlange', queue_title: 'Warteschlange', queue_empty: 'Deine Warteschlange ist leer', queue_empty_desc: 'Füge Videos hinzu, um sie der Reihe nach zu sehen.', queue_clear: 'Warteschlange leeren', queue_play_all: 'Alle abspielen',
+    nav_queue: 'Warteschlange', queue_title: 'Warteschlange', queue_empty: 'Deine Warteschlange ist leer', queue_empty_desc: 'Füge Videos hinzu, um sie der Reihe nach zu sehen.', queue_clear: 'Warteschlange leeren', queue_play_all: 'Alle abspielen', queue_add: 'Zur Warteschlange hinzufügen', queue_in_queue: 'In der Warteschlange',
   },
   pt: {
     nav_home: 'Início', nav_trending: 'Em Alta', nav_history: 'Histórico',
@@ -556,7 +557,7 @@ export const translations: Record<Lang, Translations> = {
     playlist_save: 'Salvar playlist', playlist_saved: 'Salva', playlist_videos: 'vídeos',
     nav_playlists: 'Minhas playlists', playlists_title: 'Minhas playlists', playlists_empty: 'Nenhuma playlist salva.', playlists_open_youtube: 'Abrir no YouTube', playlists_remove: 'Remover',
     autoplay_next: 'Reproduzindo em', autoplay_cancel: 'Cancelar',
-    nav_queue: 'Fila', queue_title: 'Fila de reprodução', queue_empty: 'Sua fila está vazia', queue_empty_desc: 'Adicione vídeos para assistir em ordem.', queue_clear: 'Limpar fila', queue_play_all: 'Reproduzir tudo',
+    nav_queue: 'Fila', queue_title: 'Fila de reprodução', queue_empty: 'Sua fila está vazia', queue_empty_desc: 'Adicione vídeos para assistir em ordem.', queue_clear: 'Limpar fila', queue_play_all: 'Reproduzir tudo', queue_add: 'Adicionar à fila', queue_in_queue: 'Na fila',
   },
   it: {
     nav_home: 'Home', nav_trending: 'Di tendenza', nav_history: 'Cronologia',
@@ -650,7 +651,7 @@ export const translations: Record<Lang, Translations> = {
     playlist_save: 'Salva playlist', playlist_saved: 'Salvata', playlist_videos: 'video',
     nav_playlists: 'Le mie playlist', playlists_title: 'Le mie playlist', playlists_empty: 'Nessuna playlist salvata.', playlists_open_youtube: 'Apri su YouTube', playlists_remove: 'Rimuovi',
     autoplay_next: 'Riproduzione tra', autoplay_cancel: 'Annulla',
-    nav_queue: 'Coda', queue_title: 'Coda di riproduzione', queue_empty: 'La tua coda è vuota', queue_empty_desc: 'Aggiungi video per guardarli in ordine.', queue_clear: 'Svuota coda', queue_play_all: 'Riproduci tutto',
+    nav_queue: 'Coda', queue_title: 'Coda di riproduzione', queue_empty: 'La tua coda è vuota', queue_empty_desc: 'Aggiungi video per guardarli in ordine.', queue_clear: 'Svuota coda', queue_play_all: 'Riproduci tutto', queue_add: 'Aggiungi alla coda', queue_in_queue: 'In coda',
   },
   ja: {
     nav_home: 'ホーム', nav_trending: 'トレンド', nav_history: '履歴',
@@ -744,7 +745,7 @@ export const translations: Record<Lang, Translations> = {
     playlist_save: 'プレイリストを保存', playlist_saved: '保存済み', playlist_videos: '動画',
     nav_playlists: 'マイプレイリスト', playlists_title: 'マイプレイリスト', playlists_empty: '保存済みプレイリストはありません。', playlists_open_youtube: 'YouTubeで開く', playlists_remove: '削除',
     autoplay_next: '次の動画まで', autoplay_cancel: 'キャンセル',
-    nav_queue: 'キュー', queue_title: '再生キュー', queue_empty: 'キューが空です', queue_empty_desc: '動画を追加して順番に視聴できます。', queue_clear: 'キューを削除', queue_play_all: 'すべて再生',
+    nav_queue: 'キュー', queue_title: '再生キュー', queue_empty: 'キューが空です', queue_empty_desc: '動画を追加して順番に視聴できます。', queue_clear: 'キューを削除', queue_play_all: 'すべて再生', queue_add: 'キューに追加', queue_in_queue: 'キュー内',
   },
   ko: {
     nav_home: '홈', nav_trending: '인기', nav_history: '시청 기록',
@@ -838,7 +839,7 @@ export const translations: Record<Lang, Translations> = {
     playlist_save: '재생목록 저장', playlist_saved: '저장됨', playlist_videos: '개 동영상',
     nav_playlists: '내 재생목록', playlists_title: '내 재생목록', playlists_empty: '저장된 재생목록이 없습니다.', playlists_open_youtube: 'YouTube에서 열기', playlists_remove: '제거',
     autoplay_next: '다음 재생까지', autoplay_cancel: '취소',
-    nav_queue: '재생 대기열', queue_title: '재생 대기열', queue_empty: '대기열이 비어 있습니다', queue_empty_desc: '순서대로 볼 동영상을 추가하세요.', queue_clear: '대기열 비우기', queue_play_all: '모두 재생',
+    nav_queue: '재생 대기열', queue_title: '재생 대기열', queue_empty: '대기열이 비어 있습니다', queue_empty_desc: '순서대로 볼 동영상을 추가하세요.', queue_clear: '대기열 비우기', queue_play_all: '모두 재생', queue_add: '대기열에 추가', queue_in_queue: '대기열에 있음',
   },
   ru: {
     nav_home: 'Главная', nav_trending: 'В тренде', nav_history: 'История',
@@ -932,6 +933,6 @@ export const translations: Record<Lang, Translations> = {
     playlist_save: 'Сохранить плейлист', playlist_saved: 'Сохранено', playlist_videos: 'видео',
     nav_playlists: 'Мои плейлисты', playlists_title: 'Мои плейлисты', playlists_empty: 'Нет сохранённых плейлистов.', playlists_open_youtube: 'Открыть на YouTube', playlists_remove: 'Удалить',
     autoplay_next: 'Следующее через', autoplay_cancel: 'Отмена',
-    nav_queue: 'Очередь', queue_title: 'Очередь воспроизведения', queue_empty: 'Очередь пуста', queue_empty_desc: 'Добавьте видео, чтобы смотреть их по порядку.', queue_clear: 'Очистить очередь', queue_play_all: 'Воспроизвести всё',
+    nav_queue: 'Очередь', queue_title: 'Очередь воспроизведения', queue_empty: 'Очередь пуста', queue_empty_desc: 'Добавьте видео, чтобы смотреть их по порядку.', queue_clear: 'Очистить очередь', queue_play_all: 'Воспроизвести всё', queue_add: 'Добавить в очередь', queue_in_queue: 'В очереди',
   },
 }
