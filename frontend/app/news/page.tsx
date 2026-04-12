@@ -83,6 +83,9 @@ export default function NewsPage() {
   const [articles, setArticles] = useState<NewsArticle[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [showAllCats, setShowAllCats] = useState(false)
+
+  const VISIBLE_CATS = 5
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -142,8 +145,8 @@ export default function NewsPage() {
       </div>
 
       {/* Category pills */}
-      <div className="flex gap-2 overflow-x-auto pb-1 mb-5 scrollbar-none">
-        {CATEGORIES.map((cat) => (
+      <div className="flex flex-wrap gap-2 mb-5">
+        {(showAllCats ? CATEGORIES : CATEGORIES.slice(0, VISIBLE_CATS)).map((cat) => (
           <button
             key={cat}
             onClick={() => setCategory(cat)}
@@ -156,6 +159,12 @@ export default function NewsPage() {
             {catLabel(cat)}
           </button>
         ))}
+        <button
+          onClick={() => setShowAllCats((p) => !p)}
+          className="flex-shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium bg-yt-secondary text-yt-text-muted hover:bg-yt-hover hover:text-yt-text border border-yt-border/60 transition-colors"
+        >
+          {showAllCats ? t('home_show_less') : t('home_see_all')}
+        </button>
       </div>
 
       {/* Content */}

@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Home, TrendingUp, History, Clock, Music2, ThumbsUp, ListVideo, ListOrdered, Newspaper } from 'lucide-react'
@@ -20,10 +21,13 @@ const NAV_ITEMS: { icon: typeof Home; labelKey: keyof Translations; href: string
   { icon: ListOrdered, labelKey: 'nav_queue', href: '/queue' },
 ]
 
+const SUB_PREVIEW = 4
+
 export default function Sidebar() {
   const pathname = usePathname()
   const { t } = useRegion()
   const { subscriptions } = useSubscriptions()
+  const [showAllSubs, setShowAllSubs] = useState(false)
 
   function isActive(href: string) {
     if (href === '/') return pathname === '/'
@@ -91,7 +95,7 @@ export default function Sidebar() {
                 {t('nav_subscriptions')}
               </p>
               <div className="flex flex-col gap-0.5">
-                {subscriptions.slice(0, 10).map((sub) => {
+                {(showAllSubs ? subscriptions : subscriptions.slice(0, SUB_PREVIEW)).map((sub) => {
                   const active = pathname === `/channel/${sub.id}`
                   return (
                     <Link
@@ -121,6 +125,19 @@ export default function Sidebar() {
                     </Link>
                   )
                 })}
+                {subscriptions.length > SUB_PREVIEW && (
+                  <button
+                    onClick={() => setShowAllSubs((p) => !p)}
+                    className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-yt-text-muted hover:bg-yt-hover hover:text-yt-text transition-colors text-left"
+                  >
+                    <span className="w-6 h-6 rounded-full flex-shrink-0 bg-yt-secondary flex items-center justify-center text-xs">
+                      {showAllSubs ? '↑' : `+${subscriptions.length - SUB_PREVIEW}`}
+                    </span>
+                    <span className="hidden xl:block truncate text-xs">
+                      {showAllSubs ? t('home_show_less') : t('home_see_all')}
+                    </span>
+                  </button>
+                )}
               </div>
             </div>
           </>
