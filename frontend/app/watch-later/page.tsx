@@ -75,7 +75,7 @@ export default function WatchLaterPage() {
             <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <Link href={`/watch/${entry.id}`}>
-                  <h3 className="text-yt-text text-sm font-medium leading-snug line-clamp-2 hover:text-white transition-colors">
+                  <h3 className="text-yt-text text-sm font-medium leading-snug line-clamp-2 hover:text-yt-red transition-colors">
                     {entry.title}
                   </h3>
                 </Link>

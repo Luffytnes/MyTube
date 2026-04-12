@@ -32,7 +32,7 @@ export default function QueuePage() {
   }
 
   return (
-    <div className="px-4 py-6 max-w-3xl">
+    <div className="px-4 py-6 max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-yt-text">{t('queue_title')}</h1>
         {queue.length > 0 && (
