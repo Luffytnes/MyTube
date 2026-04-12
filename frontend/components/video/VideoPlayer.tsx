@@ -16,20 +16,34 @@ import {
   Minimize,
   Settings,
   Radio,
+  SkipBack,
+  SkipForward,
+  Subtitles,
 } from 'lucide-react'
 import { formatDuration } from '@/lib/utils'
-import { getStreamUrl, getAudioUrl, type VideoFormat } from '@/lib/api'
+import { getStreamUrl, getAudioUrl, getSubtitles, getSubtitleUrl, type VideoFormat, type SubtitleTrack } from '@/lib/api'
 import { useRegion } from '@/lib/regionContext'
 import { getPlaybackSettings } from '@/lib/playbackSettings'
 import { savePosition, getPosition } from '@/lib/resumePosition'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+export interface Chapter {
+  time: number  // seconds
+  title: string
+}
+
 interface VideoPlayerProps {
   videoId: string
   formats: VideoFormat[]
   title: string
   isLive?: boolean
+  onEnded?: () => void
+  onNext?: () => void
+  onPrev?: () => void
+  hasNext?: boolean
+  hasPrev?: boolean
+  chapters?: Chapter[]
 }
 
 function getBestFormat(formats: VideoFormat[]): VideoFormat | null {
@@ -63,7 +77,7 @@ function getBestFormat(formats: VideoFormat[]): VideoFormat | null {
   return formats[0]
 }
 
-export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPlayerProps) {
+export default function VideoPlayer({ videoId, formats, title, isLive, onEnded, onNext, onPrev, hasNext, hasPrev, chapters = [] }: VideoPlayerProps) {
   const { t } = useRegion()
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -87,6 +101,9 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const savePositionTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [subtitleTracks, setSubtitleTracks] = useState<SubtitleTrack[]>([])
+  const [selectedSubtitle, setSelectedSubtitle] = useState<string>(() => getPlaybackSettings().subtitleLang)
+  const [showSubtitleMenu, setShowSubtitleMenu] = useState(false)
 
   // One entry per resolution ≥240p, prefer combined (audio+video) at each height.
   const allVideoFormats = (() => {
@@ -107,6 +124,16 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
       .sort((a, b) => b[0] - a[0])
       .map(([, f]) => f)
   })()
+
+  // Load subtitles when videoId changes
+  useEffect(() => {
+    setSubtitleTracks([])
+    const settings = getPlaybackSettings()
+    if (settings.subtitleLang !== 'off') {
+      getSubtitles(videoId).then(setSubtitleTracks).catch(() => {})
+    }
+    setSelectedSubtitle(settings.subtitleLang)
+  }, [videoId])
 
   // Reset on videoId change — apply playback settings
   useEffect(() => {
@@ -407,6 +434,13 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
           setLoading(false)
           if (videoRef.current && !videoRef.current.paused) safePlay(audioRef.current)
         }}
+        loop={getPlaybackSettings().loop}
+        onEnded={() => {
+          if (getPlaybackSettings().loop) return
+          setPlaying(false)
+          audioRef.current?.pause()
+          onEnded?.()
+        }}
         onError={handleVideoError}
         onVolumeChange={() => {
           const v = videoRef.current
@@ -419,7 +453,17 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
             }
           }
         }}
-      />
+      >
+        {selectedSubtitle !== 'off' && (
+          <track
+            key={selectedSubtitle}
+            kind="subtitles"
+            src={getSubtitleUrl(videoId, selectedSubtitle)}
+            label={selectedSubtitle}
+            default
+          />
+        )}
+      </video>
 
       {/* Live badge */}
       {isLive && (
@@ -460,11 +504,29 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
         <div className="relative z-10 px-3 pb-2 pointer-events-auto">
           {/* Progress bar — hidden for live */}
           {!isLive && (
-            <div className="relative mb-1">
+            <div className="relative mb-1 group/progress">
+              {/* Buffered */}
               <div
                 className="absolute top-1/2 -translate-y-1/2 left-0 h-1 bg-white/20 rounded pointer-events-none"
                 style={{ width: `${bufferedProgress}%` }}
               />
+              {/* Chapter markers */}
+              {chapters.length > 0 && duration > 0 && chapters.map((ch, i) => (
+                <div
+                  key={i}
+                  className="absolute top-1/2 -translate-y-1/2 w-0.5 h-3 bg-white/60 pointer-events-none z-20"
+                  style={{ left: `${(ch.time / duration) * 100}%` }}
+                />
+              ))}
+              {/* Current chapter name */}
+              {chapters.length > 0 && duration > 0 && (() => {
+                const ch = [...chapters].reverse().find((c) => c.time <= currentTime)
+                return ch ? (
+                  <div className="absolute bottom-full left-0 mb-2 text-[11px] text-white/80 bg-black/60 px-2 py-0.5 rounded pointer-events-none whitespace-nowrap max-w-[200px] truncate">
+                    {ch.title}
+                  </div>
+                ) : null
+              })()}
               <input
                 type="range" min="0" max="100" step="0.1" value={progress}
                 onChange={handleSeek}
@@ -476,9 +538,31 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
           )}
 
           <div className="flex items-center gap-2">
+            {onPrev && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onPrev() }}
+                disabled={!hasPrev}
+                className={`p-1 transition-colors ${hasPrev ? 'text-white hover:text-yt-text-secondary' : 'text-white/30 cursor-not-allowed'}`}
+                aria-label="Vidéo précédente"
+              >
+                <SkipBack className="w-5 h-5 fill-white" />
+              </button>
+            )}
+
             <button onClick={togglePlay} className="text-white hover:text-yt-text-secondary p-1 transition-colors" aria-label={playing ? 'Pause' : 'Play'}>
               {playing ? <Pause className="w-5 h-5 fill-white" /> : <Play className="w-5 h-5 fill-white ml-0.5" />}
             </button>
+
+            {onNext && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onNext() }}
+                disabled={!hasNext}
+                className={`p-1 transition-colors ${hasNext ? 'text-white hover:text-yt-text-secondary' : 'text-white/30 cursor-not-allowed'}`}
+                aria-label="Vidéo suivante"
+              >
+                <SkipForward className="w-5 h-5 fill-white" />
+              </button>
+            )}
 
             <button onClick={toggleMute} className="text-white hover:text-yt-text-secondary p-1 transition-colors" aria-label={muted ? 'Unmute' : 'Mute'}>
               {muted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
@@ -565,6 +649,58 @@ export default function VideoPlayer({ videoId, formats, title, isLive }: VideoPl
                         )}
                       </button>
                     ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Subtitles selector */}
+            {!isLive && (
+              <div className="relative">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (subtitleTracks.length === 0) {
+                      getSubtitles(videoId).then((tracks) => {
+                        setSubtitleTracks(tracks)
+                        setShowSubtitleMenu(true)
+                      })
+                    } else {
+                      setShowSubtitleMenu((v) => !v)
+                    }
+                    setShowSpeedMenu(false)
+                    setShowQualityMenu(false)
+                  }}
+                  className={`p-1 transition-colors ${selectedSubtitle !== 'off' ? 'text-yt-red' : 'text-white hover:text-yt-text-secondary'}`}
+                  aria-label="Subtitles"
+                >
+                  <Subtitles className="w-4 h-4" />
+                </button>
+                {showSubtitleMenu && (
+                  <div
+                    className="absolute bottom-full right-0 mb-2 bg-yt-secondary border border-yt-border rounded-xl shadow-2xl min-w-[160px] py-1 z-50"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <p className="text-yt-text-muted text-xs px-4 py-2 border-b border-yt-border">CC / Subtitles</p>
+                    <button
+                      onClick={() => { setSelectedSubtitle('off'); setShowSubtitleMenu(false) }}
+                      className={`w-full text-left px-4 py-2 text-sm transition-colors hover:bg-yt-hover ${selectedSubtitle === 'off' ? 'text-yt-red font-medium' : 'text-yt-text'}`}
+                    >
+                      {t('settings_playback_subtitle_off')}
+                    </button>
+                    {subtitleTracks.map((track) => (
+                      <button
+                        key={track.lang}
+                        onClick={() => { setSelectedSubtitle(track.lang); setShowSubtitleMenu(false) }}
+                        className={`w-full text-left px-4 py-2 text-sm transition-colors hover:bg-yt-hover flex items-center justify-between gap-2 ${selectedSubtitle === track.lang ? 'text-yt-red font-medium' : 'text-yt-text'}`}
+                      >
+                        <span>{track.label}</span>
+                        {track.auto && <span className="text-[10px] text-yt-text-muted">auto</span>}
+                      </button>
+                    ))}
+                    {subtitleTracks.length === 0 && (
+                      <p className="px-4 py-2 text-xs text-yt-text-muted">No subtitles available</p>
+                    )}
                   </div>
                 )}
               </div>

@@ -1616,6 +1616,152 @@ async def get_dash_mpd(video_id: str, request: Request):
         raise HTTPException(status_code=500, detail=f"MPD generation failed: {str(e)}")
 
 
+@app.get("/api/playlist/{playlist_id}")
+async def get_playlist(playlist_id: str):
+    """Fetch video list for a YouTube playlist."""
+    cached = cache_get(f"playlist:{playlist_id}")
+    if cached:
+        return cached
+
+    try:
+        opts = get_ydl_opts(**{
+            "extract_flat": True,
+            "playlistend": 100,
+            "quiet": True,
+        })
+        loop = asyncio.get_event_loop()
+
+        def _fetch():
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                return ydl.extract_info(
+                    f"https://www.youtube.com/playlist?list={playlist_id}", download=False
+                )
+
+        info = await loop.run_in_executor(None, _fetch)
+        if not info:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+
+        videos = []
+        for entry in (info.get("entries") or []):
+            if not entry or not entry.get("id"):
+                continue
+            videos.append({
+                "id": entry["id"],
+                "title": entry.get("title", ""),
+                "duration": format_duration(entry.get("duration") or 0),
+                "thumbnail": f"https://i.ytimg.com/vi/{entry['id']}/mqdefault.jpg",
+                "channel": entry.get("uploader") or entry.get("channel") or "",
+                "channelId": entry.get("channel_id") or entry.get("uploader_id") or "",
+            })
+
+        result = {
+            "id": playlist_id,
+            "title": info.get("title", ""),
+            "uploader": info.get("uploader") or info.get("channel") or "",
+            "videoCount": len(videos),
+            "videos": videos,
+        }
+        cache_set(f"playlist:{playlist_id}", result)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/subtitles/{video_id}")
+async def list_subtitles(video_id: str):
+    """Return list of available subtitle/caption tracks for a video."""
+    try:
+        opts = get_ydl_opts(**{
+            "listsubtitles": False,
+            "writesubtitles": False,
+            "writeautomaticsub": False,
+            "skip_download": True,
+        })
+        loop = asyncio.get_event_loop()
+
+        def _fetch():
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                return ydl.extract_info(
+                    f"https://www.youtube.com/watch?v={video_id}", download=False
+                )
+
+        info = await loop.run_in_executor(None, _fetch)
+        if not info:
+            return {"subtitles": []}
+
+        tracks = []
+        seen = set()
+        # Manual subtitles first
+        for lang, subs in (info.get("subtitles") or {}).items():
+            if lang in seen:
+                continue
+            seen.add(lang)
+            fmt = next((s for s in subs if s.get("ext") == "vtt"), subs[0] if subs else None)
+            if fmt:
+                tracks.append({"lang": lang, "label": lang, "auto": False, "url": fmt.get("url", "")})
+        # Auto-generated subtitles
+        for lang, subs in (info.get("automatic_captions") or {}).items():
+            if lang in seen:
+                continue
+            seen.add(lang)
+            fmt = next((s for s in subs if s.get("ext") == "vtt"), subs[0] if subs else None)
+            if fmt:
+                tracks.append({"lang": lang, "label": f"{lang} (auto)", "auto": True, "url": fmt.get("url", "")})
+
+        return {"subtitles": tracks}
+    except Exception as e:
+        return {"subtitles": [], "error": str(e)}
+
+
+@app.get("/api/subtitles/{video_id}/{lang}")
+async def get_subtitle_vtt(video_id: str, lang: str, auto: bool = False):
+    """Proxy a subtitle VTT file for a given language."""
+    try:
+        opts = get_ydl_opts(**{"skip_download": True})
+        loop = asyncio.get_event_loop()
+
+        def _fetch():
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                return ydl.extract_info(
+                    f"https://www.youtube.com/watch?v={video_id}", download=False
+                )
+
+        info = await loop.run_in_executor(None, _fetch)
+        if not info:
+            raise HTTPException(status_code=404, detail="Video not found")
+
+        # Try manual subtitles first, then auto-captions
+        source = info.get("subtitles", {})
+        subs = source.get(lang)
+        if not subs and (auto or True):
+            source = info.get("automatic_captions", {})
+            subs = source.get(lang)
+
+        if not subs:
+            raise HTTPException(status_code=404, detail=f"No subtitles for language: {lang}")
+
+        fmt = next((s for s in subs if s.get("ext") == "vtt"), subs[0])
+        url = fmt.get("url")
+        if not url:
+            raise HTTPException(status_code=404, detail="No subtitle URL available")
+
+        async with httpx_client(timeout=15.0, follow_redirects=True) as client:
+            resp = await client.get(url)
+            if resp.status_code != 200:
+                raise HTTPException(status_code=resp.status_code, detail="Failed to fetch subtitle")
+            return Response(
+                content=resp.content,
+                media_type="text/vtt; charset=utf-8",
+                headers={"Cache-Control": "public, max-age=3600", "Access-Control-Allow-Origin": "*"},
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/thumbnail/{video_id}")
 async def get_thumbnail(video_id: str):
     cached = thumb_cache_get(video_id)

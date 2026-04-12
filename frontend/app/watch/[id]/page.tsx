@@ -1,12 +1,15 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { getVideo } from '@/lib/api'
+import { getVideo, getPlaylist, type PlaylistDetail, type PlaylistVideo } from '@/lib/api'
+import { getPlaybackSettings } from '@/lib/playbackSettings'
+import { getQueue, isInQueue } from '@/lib/queue'
 import { saveToHistory } from '@/lib/history'
 import { useRegion } from '@/lib/regionContext'
 import type { VideoDetail } from '@/lib/api'
-import VideoPlayer from '@/components/video/VideoPlayer'
+import VideoPlayer, { type Chapter } from '@/components/video/VideoPlayer'
 import VideoCard from '@/components/video/VideoCard'
 import DownloadModal from '@/components/video/DownloadModal'
 import { WatchPageSkeleton } from '@/components/ui/Skeleton'
@@ -80,12 +83,37 @@ function ChannelAvatar({
   )
 }
 
+function parseChapters(description: string): Chapter[] {
+  const lines = description.split('\n')
+  const chapters: Chapter[] = []
+  // Match timestamps like 0:00, 1:23, 1:23:45
+  const re = /(?:^|\s)((\d+:)?\d{1,2}:\d{2})\s+(.+)/
+  for (const line of lines) {
+    const m = line.match(re)
+    if (!m) continue
+    const timeStr = m[1]
+    const parts = timeStr.split(':').map(Number)
+    let seconds = 0
+    if (parts.length === 2) seconds = parts[0] * 60 + parts[1]
+    else if (parts.length === 3) seconds = parts[0] * 3600 + parts[1] * 60 + parts[2]
+    const chTitle = m[3].trim()
+    if (chTitle) chapters.push({ time: seconds, title: chTitle })
+  }
+  return chapters.length >= 2 ? chapters : []
+}
+
 interface WatchPageProps {
   params: { id: string }
 }
 
 export default function WatchPage({ params }: WatchPageProps) {
   const { id } = params
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const fromQueue = searchParams.get('queue') === '1'
+  const listId = searchParams.get('list') || null
+  const [playlist, setPlaylist] = useState<PlaylistDetail | null>(null)
+  const [playlistLoading, setPlaylistLoading] = useState(false)
   const { t } = useRegion()
   const { isSubscribed, toggle: toggleSubscription } = useSubscriptions()
   const [video, setVideo] = useState<VideoDetail | null>(null)
@@ -98,11 +126,106 @@ export default function WatchPage({ params }: WatchPageProps) {
   const [saved, setSaved] = useState(false)
   const [showShare, setShowShare] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [autoplayCountdown, setAutoplayCountdown] = useState<number | null>(null)
+  const autoplayTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [prevVideoId, setPrevVideoId] = useState<string | null>(null)
+
+  // Load playlist if ?list= present
+  useEffect(() => {
+    if (!listId) { setPlaylist(null); return }
+    setPlaylistLoading(true)
+    getPlaylist(listId)
+      .then(setPlaylist)
+      .catch(() => setPlaylist(null))
+      .finally(() => setPlaylistLoading(false))
+  }, [listId])
 
   useEffect(() => {
     setSaved(isInWatchLater(id))
     setLiked(isLiked(id))
+    // Retrieve previous video from sessionStorage on mount
+    const stored = sessionStorage.getItem('yt_prev_video')
+    setPrevVideoId(stored)
   }, [id])
+
+  // Countdown auto-play
+  useEffect(() => {
+    if (autoplayCountdown === null) return
+    if (autoplayCountdown <= 0) {
+      const nextId = video?.related?.[0]?.id
+      if (nextId) {
+        sessionStorage.setItem('yt_prev_video', id)
+        router.push(`/watch/${nextId}`)
+      }
+      setAutoplayCountdown(null)
+      return
+    }
+    autoplayTimer.current = setInterval(() => {
+      setAutoplayCountdown((v) => (v !== null ? v - 1 : null))
+    }, 1000)
+    return () => {
+      if (autoplayTimer.current) clearInterval(autoplayTimer.current)
+    }
+  }, [autoplayCountdown]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleEnded() {
+    if (!getPlaybackSettings().autoplayNext) return
+    // Check queue first
+    if (fromQueue) {
+      const q = getQueue()
+      const next = q.find((item) => item.id !== id)
+      if (next) { setAutoplayCountdown(5); return }
+    }
+    const nextId = video?.related?.[0]?.id
+    if (nextId) setAutoplayCountdown(5)
+  }
+
+  const nextQueueItem = fromQueue ? getQueue().find((item) => item.id !== id) : null
+  const playlistIdx = playlist ? playlist.videos.findIndex((v) => v.id === id) : -1
+  const nextPlaylistVideo = playlist && playlistIdx >= 0 && playlistIdx < playlist.videos.length - 1
+    ? playlist.videos[playlistIdx + 1] : null
+  const prevPlaylistVideo = playlist && playlistIdx > 0 ? playlist.videos[playlistIdx - 1] : null
+  const nextVideoId = nextQueueItem?.id ?? nextPlaylistVideo?.id ?? video?.related?.[0]?.id
+
+  function handleNext() {
+    cancelAutoplay()
+    if (fromQueue) {
+      const q = getQueue()
+      const next = q.find((item) => item.id !== id)
+      if (next) {
+        sessionStorage.setItem('yt_prev_video', id)
+        router.push(`/watch/${next.id}?queue=1`)
+        return
+      }
+    }
+    if (nextPlaylistVideo && listId) {
+      sessionStorage.setItem('yt_prev_video', id)
+      router.push(`/watch/${nextPlaylistVideo.id}?list=${listId}`)
+      return
+    }
+    const nextId = video?.related?.[0]?.id
+    if (!nextId) return
+    sessionStorage.setItem('yt_prev_video', id)
+    router.push(`/watch/${nextId}`)
+  }
+
+  function handlePrev() {
+    cancelAutoplay()
+    if (prevPlaylistVideo && listId) {
+      router.push(`/watch/${prevPlaylistVideo.id}?list=${listId}`)
+      return
+    }
+    if (prevVideoId) {
+      router.push(`/watch/${prevVideoId}`)
+    } else {
+      router.back()
+    }
+  }
+
+  function cancelAutoplay() {
+    if (autoplayTimer.current) clearInterval(autoplayTimer.current)
+    setAutoplayCountdown(null)
+  }
 
   const loadVideo = useCallback(async () => {
     setLoading(true)
@@ -167,12 +290,47 @@ export default function WatchPage({ params }: WatchPageProps) {
         {/* Main content */}
         <div className="flex-1 min-w-0">
           {/* Video Player */}
-          <VideoPlayer
-            videoId={id}
-            formats={video.formats}
-            title={video.title}
-            isLive={video.isLive}
-          />
+          <div className="relative">
+            <VideoPlayer
+              videoId={id}
+              formats={video.formats}
+              title={video.title}
+              isLive={video.isLive}
+              onEnded={handleEnded}
+              onNext={handleNext}
+              onPrev={handlePrev}
+              hasNext={!!(nextQueueItem || video.related?.[0])}
+              hasPrev={true}
+              chapters={video.description ? parseChapters(video.description) : []}
+            />
+
+            {/* Autoplay countdown overlay */}
+            {autoplayCountdown !== null && nextVideoId && (
+              <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center rounded-xl z-20">
+                <p className="text-white text-sm font-medium mb-3 opacity-80">{t('autoplay_next')}</p>
+                <div className="flex items-center gap-3 bg-yt-secondary border border-yt-border rounded-xl p-3 max-w-xs w-full mx-4">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`https://i.ytimg.com/vi/${nextVideoId}/mqdefault.jpg`}
+                    alt=""
+                    className="w-20 h-12 object-cover rounded-lg flex-shrink-0"
+                  />
+                  <p className="text-yt-text text-sm font-medium line-clamp-2 flex-1">
+                    {nextQueueItem?.title ?? video.related[0]?.title}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 mt-4">
+                  <span className="text-white text-3xl font-bold tabular-nums w-10 text-center">{autoplayCountdown}</span>
+                </div>
+                <button
+                  onClick={cancelAutoplay}
+                  className="mt-4 px-5 py-2 rounded-full border border-white/40 text-white text-sm hover:bg-white/10 transition-colors"
+                >
+                  {t('autoplay_cancel')}
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Title */}
           <h1 className="text-yt-text text-xl font-semibold mt-4 leading-snug">
@@ -371,9 +529,9 @@ export default function WatchPage({ params }: WatchPageProps) {
           </div>
         </div>
 
-        {/* Right sidebar - Related videos */}
+        {/* Right sidebar */}
         <aside className="w-full lg:w-96 flex-shrink-0">
-          {/* Download button for mobile */}
+          {/* Download buttons */}
           <button
             onClick={() => setShowDownload(true)}
             className="lg:hidden w-full flex items-center justify-center gap-2 px-4 py-3 mb-4 bg-yt-red hover:bg-yt-red-hover text-white rounded-xl text-sm font-medium transition-colors"
@@ -381,8 +539,6 @@ export default function WatchPage({ params }: WatchPageProps) {
             <Download className="w-4 h-4" />
             {t('download')}
           </button>
-
-          {/* Desktop download button */}
           <button
             onClick={() => setShowDownload(true)}
             className="hidden lg:flex w-full items-center justify-center gap-2 px-4 py-3 mb-4 bg-yt-red hover:bg-yt-red-hover text-white rounded-xl text-sm font-medium transition-colors"
@@ -390,6 +546,45 @@ export default function WatchPage({ params }: WatchPageProps) {
             <Download className="w-4 h-4" />
             {t('download')}
           </button>
+
+          {/* Playlist panel */}
+          {listId && (
+            <div className="mb-4 bg-yt-secondary rounded-xl overflow-hidden border border-yt-border/60">
+              <div className="px-4 py-3 border-b border-yt-border/40">
+                {playlistLoading ? (
+                  <p className="text-yt-text-muted text-sm">Loading playlist...</p>
+                ) : playlist ? (
+                  <>
+                    <p className="text-yt-text font-semibold text-sm line-clamp-1">{playlist.title}</p>
+                    <p className="text-yt-text-muted text-xs mt-0.5">{playlist.uploader} · {playlistIdx + 1} / {playlist.videoCount}</p>
+                  </>
+                ) : null}
+              </div>
+              {playlist && (
+                <div className="max-h-72 overflow-y-auto">
+                  {playlist.videos.map((v, idx) => {
+                    const isCurrent = v.id === id
+                    return (
+                      <Link
+                        key={v.id}
+                        href={`/watch/${v.id}?list=${listId}`}
+                        className={`flex items-center gap-2 px-3 py-2 hover:bg-yt-hover transition-colors ${isCurrent ? 'bg-yt-hover' : ''}`}
+                      >
+                        <span className="text-yt-text-muted text-xs w-5 text-center flex-shrink-0">{idx + 1}</span>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={v.thumbnail} alt={v.title} className="w-16 h-9 object-cover rounded flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-medium line-clamp-2 leading-snug ${isCurrent ? 'text-yt-red' : 'text-yt-text'}`}>{v.title}</p>
+                          <p className="text-yt-text-muted text-[10px] mt-0.5 truncate">{v.channel}</p>
+                        </div>
+                        {v.duration && <span className="text-yt-text-muted text-[10px] flex-shrink-0">{v.duration}</span>}
+                      </Link>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           <h2 className="text-yt-text font-semibold mb-3">{t('upNext')}</h2>
 

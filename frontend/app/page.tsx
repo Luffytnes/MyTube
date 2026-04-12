@@ -1,12 +1,24 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import VideoGrid from '@/components/video/VideoGrid'
 import { getTrending, searchVideos, getChannelVideos } from '@/lib/api'
 import type { VideoCard } from '@/lib/api'
 import { useRegion } from '@/lib/regionContext'
 import { useSubscriptions } from '@/lib/subscriptionsContext'
 import { getSearchHistory } from '@/lib/searchHistory'
+import { getHistory } from '@/lib/history'
+import { getResumeVideoIds, getPosition } from '@/lib/resumePosition'
+
+interface ResumeVideo {
+  id: string
+  title: string
+  channel: string
+  channelId: string
+  progress: number // 0-100
+  position: number // seconds
+}
 
 export default function HomePage() {
   const { t, region, lang } = useRegion()
@@ -15,6 +27,29 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [hasActivity, setHasActivity] = useState(false)
+  const [resumeVideos, setResumeVideos] = useState<ResumeVideo[]>([])
+
+  useEffect(() => {
+    const ids = getResumeVideoIds().slice(0, 10)
+    if (ids.length === 0) return
+    const history = getHistory()
+    const histMap = new Map(history.map((h) => [h.id, h]))
+    const items: ResumeVideo[] = []
+    for (const id of ids) {
+      const h = histMap.get(id)
+      if (!h) continue
+      const pos = getPosition(id)
+      if (pos === null) continue
+      // We don't have duration stored in history, so we'll approximate progress from resumePosition
+      // We stored position/duration in resumePosition
+      const raw = localStorage.getItem('mytube-resume-positions')
+      const posData = raw ? JSON.parse(raw) : {}
+      const entry = posData[id]
+      const progress = entry?.duration > 0 ? Math.round((entry.position / entry.duration) * 100) : 0
+      items.push({ id, title: h.title, channel: h.channel, channelId: h.channelId, progress, position: pos })
+    }
+    setResumeVideos(items)
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -77,6 +112,37 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen px-4 py-6">
+      {/* Continuer à regarder */}
+      {resumeVideos.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-yt-text text-lg font-semibold mb-3">{t('home_continue_watching')}</h2>
+          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-yt-border">
+            {resumeVideos.map((v) => (
+              <Link
+                key={v.id}
+                href={`/watch/${v.id}`}
+                className="flex-shrink-0 w-48 group"
+              >
+                <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-yt-secondary mb-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`}
+                    alt={v.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                  {/* Progress bar */}
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
+                    <div className="h-full bg-yt-red" style={{ width: `${v.progress}%` }} />
+                  </div>
+                </div>
+                <p className="text-yt-text text-xs font-medium line-clamp-2 leading-snug">{v.title}</p>
+                <p className="text-yt-text-muted text-xs mt-0.5 truncate">{v.channel}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-yt-text text-2xl font-semibold">{t('home_forYou')}</h1>

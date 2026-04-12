@@ -29,7 +29,7 @@ export interface Translations {
   videoUnavailable: string; channelNotFound: string; quality: string
   watchLater_title: string; watchLater_empty: string
   noChannelVideos: string; error_playback: string
-  home_forYou: string; home_basedOn: string; home_noActivity: string
+  home_forYou: string; home_basedOn: string; home_noActivity: string; home_continue_watching: string
   searchHistory_recent: string; searchHistory_clearAll: string
   // Music
   music_home: string; music_search: string; music_my_playlists: string; music_back: string
@@ -68,12 +68,23 @@ export interface Translations {
   settings_history_watch: string; settings_history_search: string
   settings_playback_quality: string; settings_playback_autoplay: string
   settings_playback_speed: string; settings_playback_volume: string; settings_playback_resume: string
+  settings_playback_loop: string; settings_playback_autoplay_next: string
+  settings_playback_subtitle_lang: string; settings_playback_subtitle_off: string
   settings_quality_auto: string
   settings_on: string; settings_off: string
+  settings_grid_density: string; settings_density_compact: string; settings_density_normal: string; settings_density_comfortable: string
+  settings_hide_watched: string
+  settings_history_ttl: string; settings_history_ttl_forever: string; settings_history_ttl_days: string
+  settings_data_tab: string; settings_data_export: string; settings_data_import: string; settings_data_import_ok: string; settings_data_import_err: string
+  settings_data_clear_history: string; settings_data_clear_search: string; settings_data_clear_watch_later: string; settings_data_clear_likes: string; settings_data_clear_queue: string; settings_data_clear_resume: string; settings_data_clear_confirm: string
   nav_likes: string; likes_title: string; likes_empty: string; likes_open_youtube: string
   share_modal_title: string; share_copy: string; share_copied: string
   subscribe_active: string
   playlist_save: string; playlist_saved: string; playlist_videos: string
+  nav_playlists: string; playlists_title: string; playlists_empty: string; playlists_open_youtube: string; playlists_remove: string
+  autoplay_next: string; autoplay_cancel: string
+  nav_queue: string
+  queue_title: string; queue_empty: string; queue_empty_desc: string; queue_clear: string; queue_play_all: string
 }
 
 export const translations: Record<Lang, Translations> = {
@@ -116,7 +127,7 @@ export const translations: Record<Lang, Translations> = {
     videoUnavailable: 'Video Unavailable', channelNotFound: 'Channel Not Found', quality: 'Quality',
     watchLater_title: 'Watch Later', watchLater_empty: 'No videos saved for later.',
     noChannelVideos: 'No videos found for this channel', error_playback: 'Playback Error',
-    home_forYou: 'For you', home_basedOn: 'Based on your searches and subscriptions',
+    home_forYou: 'For you', home_basedOn: 'Based on your searches and subscriptions', home_continue_watching: 'Continue watching',
     home_noActivity: 'Search for videos or subscribe to channels to get personalized recommendations.',
     searchHistory_recent: 'Recent searches', searchHistory_clearAll: 'Clear all',
     music_home: 'Home', music_search: 'Search', music_my_playlists: 'My playlists', music_back: 'Back to MyTube',
@@ -156,10 +167,20 @@ export const translations: Record<Lang, Translations> = {
     settings_playback_speed: 'Default speed', settings_playback_volume: 'Default volume', settings_playback_resume: 'Resume where I left off',
     settings_quality_auto: 'Automatic',
     settings_on: 'On', settings_off: 'Off',
+    settings_playback_loop: 'Loop video', settings_playback_autoplay_next: 'Autoplay next video',
+    settings_playback_subtitle_lang: 'Default subtitles', settings_playback_subtitle_off: 'Off',
+    settings_grid_density: 'Grid density', settings_density_compact: 'Compact', settings_density_normal: 'Normal', settings_density_comfortable: 'Comfortable',
+    settings_hide_watched: 'Hide watched videos',
+    settings_history_ttl: 'Keep history for', settings_history_ttl_forever: 'Forever', settings_history_ttl_days: 'days',
+    settings_data_tab: 'Data', settings_data_export: 'Export all data', settings_data_import: 'Import data', settings_data_import_ok: 'Data imported!', settings_data_import_err: 'Import failed',
+    settings_data_clear_history: 'Watch history', settings_data_clear_search: 'Search history', settings_data_clear_watch_later: 'Watch Later', settings_data_clear_likes: 'Likes', settings_data_clear_queue: 'Queue', settings_data_clear_resume: 'Resume positions', settings_data_clear_confirm: 'Clear',
     nav_likes: 'My Likes', likes_title: 'My Likes', likes_empty: 'No liked videos yet.', likes_open_youtube: 'Watch on YouTube',
     share_modal_title: 'Share video', share_copy: 'Copy link', share_copied: 'Copied!',
     subscribe_active: 'Subscribed',
     playlist_save: 'Save playlist', playlist_saved: 'Saved', playlist_videos: 'videos',
+    nav_playlists: 'My Playlists', playlists_title: 'My Playlists', playlists_empty: 'No saved playlists yet.', playlists_open_youtube: 'Open on YouTube', playlists_remove: 'Remove',
+    autoplay_next: 'Playing next in', autoplay_cancel: 'Cancel',
+    nav_queue: 'Queue', queue_title: 'Queue', queue_empty: 'Your queue is empty', queue_empty_desc: 'Add videos to watch them in order.', queue_clear: 'Clear queue', queue_play_all: 'Play all',
   },
   fr: {
     nav_home: 'Accueil', nav_trending: 'Tendances', nav_history: 'Historique',
@@ -200,7 +221,7 @@ export const translations: Record<Lang, Translations> = {
     videoUnavailable: 'Vidéo indisponible', channelNotFound: 'Chaîne introuvable', quality: 'Qualité',
     watchLater_title: 'À regarder plus tard', watchLater_empty: 'Aucune vidéo enregistrée.',
     noChannelVideos: 'Aucune vidéo trouvée pour cette chaîne', error_playback: 'Erreur de lecture',
-    home_forYou: 'Pour vous', home_basedOn: 'Basé sur vos recherches et abonnements',
+    home_forYou: 'Pour vous', home_basedOn: 'Basé sur vos recherches et abonnements', home_continue_watching: 'Continuer à regarder',
     home_noActivity: 'Recherchez des vidéos ou abonnez-vous à des chaînes pour obtenir des recommandations personnalisées.',
     searchHistory_recent: 'Recherches récentes', searchHistory_clearAll: 'Tout effacer',
     music_home: 'Accueil', music_search: 'Rechercher', music_my_playlists: 'Mes playlists', music_back: 'Retour à MyTube',
@@ -240,10 +261,20 @@ export const translations: Record<Lang, Translations> = {
     settings_playback_speed: 'Vitesse par défaut', settings_playback_volume: 'Volume par défaut', settings_playback_resume: 'Reprendre là où je me suis arrêté',
     settings_quality_auto: 'Automatique',
     settings_on: 'Activé', settings_off: 'Désactivé',
+    settings_playback_loop: 'Répéter la vidéo', settings_playback_autoplay_next: 'Lecture automatique de la suivante',
+    settings_playback_subtitle_lang: 'Sous-titres par défaut', settings_playback_subtitle_off: 'Désactivés',
+    settings_grid_density: 'Densité de la grille', settings_density_compact: 'Compact', settings_density_normal: 'Normal', settings_density_comfortable: 'Confortable',
+    settings_hide_watched: 'Masquer les vidéos vues',
+    settings_history_ttl: 'Conserver l\'historique pendant', settings_history_ttl_forever: 'Indéfiniment', settings_history_ttl_days: 'jours',
+    settings_data_tab: 'Données', settings_data_export: 'Exporter toutes les données', settings_data_import: 'Importer des données', settings_data_import_ok: 'Données importées !', settings_data_import_err: 'Échec de l\'import',
+    settings_data_clear_history: 'Historique de visionnage', settings_data_clear_search: 'Historique de recherche', settings_data_clear_watch_later: 'À regarder plus tard', settings_data_clear_likes: 'Likes', settings_data_clear_queue: 'File de lecture', settings_data_clear_resume: 'Positions de reprise', settings_data_clear_confirm: 'Effacer',
     nav_likes: 'Mes likes', likes_title: 'Mes likes', likes_empty: 'Aucune vidéo aimée pour l\'instant.', likes_open_youtube: 'Voir sur YouTube',
     share_modal_title: 'Partager la vidéo', share_copy: 'Copier le lien', share_copied: 'Copié !',
     subscribe_active: 'Abonné',
     playlist_save: 'Sauvegarder la playlist', playlist_saved: 'Sauvegardée', playlist_videos: 'vidéos',
+    nav_playlists: 'Mes playlists', playlists_title: 'Mes playlists', playlists_empty: 'Aucune playlist sauvegardée.', playlists_open_youtube: 'Ouvrir sur YouTube', playlists_remove: 'Retirer',
+    autoplay_next: 'Lecture dans', autoplay_cancel: 'Annuler',
+    nav_queue: 'File de lecture', queue_title: 'File de lecture', queue_empty: 'Votre file est vide', queue_empty_desc: 'Ajoutez des vidéos pour les regarder dans l\'ordre.', queue_clear: 'Vider la file', queue_play_all: 'Tout lire',
   },
   es: {
     nav_home: 'Inicio', nav_trending: 'Tendencias', nav_history: 'Historial',
@@ -284,7 +315,7 @@ export const translations: Record<Lang, Translations> = {
     videoUnavailable: 'Vídeo no disponible', channelNotFound: 'Canal no encontrado', quality: 'Calidad',
     watchLater_title: 'Ver más tarde', watchLater_empty: 'Sin vídeos guardados.',
     noChannelVideos: 'No se encontraron vídeos para este canal', error_playback: 'Error de reproducción',
-    home_forYou: 'Para ti', home_basedOn: 'Basado en tus búsquedas y suscripciones',
+    home_forYou: 'Para ti', home_basedOn: 'Basado en tus búsquedas y suscripciones', home_continue_watching: 'Continuar viendo',
     home_noActivity: 'Busca vídeos o suscríbete a canales para obtener recomendaciones personalizadas.',
     searchHistory_recent: 'Búsquedas recientes', searchHistory_clearAll: 'Borrar todo',
     music_home: 'Inicio', music_search: 'Buscar', music_my_playlists: 'Mis playlists', music_back: 'Volver a MyTube',
@@ -324,10 +355,20 @@ export const translations: Record<Lang, Translations> = {
     settings_playback_speed: 'Velocidad por defecto', settings_playback_volume: 'Volumen por defecto', settings_playback_resume: 'Reanudar donde lo dejé',
     settings_quality_auto: 'Automático',
     settings_on: 'Activado', settings_off: 'Desactivado',
+    settings_playback_loop: 'Repetir vídeo', settings_playback_autoplay_next: 'Reproducir siguiente automáticamente',
+    settings_playback_subtitle_lang: 'Subtítulos por defecto', settings_playback_subtitle_off: 'Desactivados',
+    settings_grid_density: 'Densidad de cuadrícula', settings_density_compact: 'Compacto', settings_density_normal: 'Normal', settings_density_comfortable: 'Cómodo',
+    settings_hide_watched: 'Ocultar vídeos vistos',
+    settings_history_ttl: 'Conservar historial durante', settings_history_ttl_forever: 'Siempre', settings_history_ttl_days: 'días',
+    settings_data_tab: 'Datos', settings_data_export: 'Exportar todos los datos', settings_data_import: 'Importar datos', settings_data_import_ok: '¡Datos importados!', settings_data_import_err: 'Error al importar',
+    settings_data_clear_history: 'Historial de visualización', settings_data_clear_search: 'Historial de búsqueda', settings_data_clear_watch_later: 'Ver más tarde', settings_data_clear_likes: 'Me gusta', settings_data_clear_queue: 'Cola', settings_data_clear_resume: 'Posiciones de reanudación', settings_data_clear_confirm: 'Borrar',
     nav_likes: 'Mis likes', likes_title: 'Mis likes', likes_empty: 'Aún no hay vídeos que te gusten.', likes_open_youtube: 'Ver en YouTube',
     share_modal_title: 'Compartir vídeo', share_copy: 'Copiar enlace', share_copied: '¡Copiado!',
     subscribe_active: 'Suscrito',
     playlist_save: 'Guardar playlist', playlist_saved: 'Guardada', playlist_videos: 'vídeos',
+    nav_playlists: 'Mis playlists', playlists_title: 'Mis playlists', playlists_empty: 'No hay playlists guardadas.', playlists_open_youtube: 'Abrir en YouTube', playlists_remove: 'Quitar',
+    autoplay_next: 'Reproduciendo en', autoplay_cancel: 'Cancelar',
+    nav_queue: 'Cola', queue_title: 'Cola de reproducción', queue_empty: 'Tu cola está vacía', queue_empty_desc: 'Añade vídeos para verlos en orden.', queue_clear: 'Vaciar cola', queue_play_all: 'Reproducir todo',
   },
   de: {
     nav_home: 'Startseite', nav_trending: 'Trends', nav_history: 'Verlauf',
@@ -368,7 +409,7 @@ export const translations: Record<Lang, Translations> = {
     videoUnavailable: 'Video nicht verfügbar', channelNotFound: 'Kanal nicht gefunden', quality: 'Qualität',
     watchLater_title: 'Später ansehen', watchLater_empty: 'Keine gespeicherten Videos.',
     noChannelVideos: 'Keine Videos für diesen Kanal gefunden', error_playback: 'Wiedergabefehler',
-    home_forYou: 'Für dich', home_basedOn: 'Basierend auf deinen Suchanfragen und Abonnements',
+    home_forYou: 'Für dich', home_basedOn: 'Basierend auf deinen Suchanfragen und Abonnements', home_continue_watching: 'Weiterschauen',
     home_noActivity: 'Suche nach Videos oder abonniere Kanäle für personalisierte Empfehlungen.',
     searchHistory_recent: 'Letzte Suchanfragen', searchHistory_clearAll: 'Alle löschen',
     music_home: 'Startseite', music_search: 'Suchen', music_my_playlists: 'Meine Playlists', music_back: 'Zurück zu MyTube',
@@ -408,10 +449,20 @@ export const translations: Record<Lang, Translations> = {
     settings_playback_speed: 'Standardgeschwindigkeit', settings_playback_volume: 'Standardlautstärke', settings_playback_resume: 'Dort weitermachen, wo ich aufgehört habe',
     settings_quality_auto: 'Automatisch',
     settings_on: 'An', settings_off: 'Aus',
+    settings_playback_loop: 'Video wiederholen', settings_playback_autoplay_next: 'Nächstes Video automatisch abspielen',
+    settings_playback_subtitle_lang: 'Standard-Untertitel', settings_playback_subtitle_off: 'Deaktiviert',
+    settings_grid_density: 'Rasterdichte', settings_density_compact: 'Kompakt', settings_density_normal: 'Normal', settings_density_comfortable: 'Komfortabel',
+    settings_hide_watched: 'Gesehene Videos ausblenden',
+    settings_history_ttl: 'Verlauf aufbewahren für', settings_history_ttl_forever: 'Immer', settings_history_ttl_days: 'Tage',
+    settings_data_tab: 'Daten', settings_data_export: 'Alle Daten exportieren', settings_data_import: 'Daten importieren', settings_data_import_ok: 'Daten importiert!', settings_data_import_err: 'Import fehlgeschlagen',
+    settings_data_clear_history: 'Wiedergabeverlauf', settings_data_clear_search: 'Suchverlauf', settings_data_clear_watch_later: 'Später ansehen', settings_data_clear_likes: 'Likes', settings_data_clear_queue: 'Warteschlange', settings_data_clear_resume: 'Wiedergabepositionen', settings_data_clear_confirm: 'Löschen',
     nav_likes: 'Meine Likes', likes_title: 'Meine Likes', likes_empty: 'Noch keine gelikten Videos.', likes_open_youtube: 'Auf YouTube ansehen',
     share_modal_title: 'Video teilen', share_copy: 'Link kopieren', share_copied: 'Kopiert!',
     subscribe_active: 'Abonniert',
     playlist_save: 'Playlist speichern', playlist_saved: 'Gespeichert', playlist_videos: 'Videos',
+    nav_playlists: 'Meine Playlists', playlists_title: 'Meine Playlists', playlists_empty: 'Keine gespeicherten Playlists.', playlists_open_youtube: 'Auf YouTube öffnen', playlists_remove: 'Entfernen',
+    autoplay_next: 'Wiedergabe in', autoplay_cancel: 'Abbrechen',
+    nav_queue: 'Warteschlange', queue_title: 'Warteschlange', queue_empty: 'Deine Warteschlange ist leer', queue_empty_desc: 'Füge Videos hinzu, um sie der Reihe nach zu sehen.', queue_clear: 'Warteschlange leeren', queue_play_all: 'Alle abspielen',
   },
   pt: {
     nav_home: 'Início', nav_trending: 'Em Alta', nav_history: 'Histórico',
@@ -452,7 +503,7 @@ export const translations: Record<Lang, Translations> = {
     videoUnavailable: 'Vídeo Indisponível', channelNotFound: 'Canal Não Encontrado', quality: 'Qualidade',
     watchLater_title: 'Assistir mais tarde', watchLater_empty: 'Nenhum vídeo salvo.',
     noChannelVideos: 'Nenhum vídeo encontrado para este canal', error_playback: 'Erro de reprodução',
-    home_forYou: 'Para você', home_basedOn: 'Baseado nas suas pesquisas e inscrições',
+    home_forYou: 'Para você', home_basedOn: 'Baseado nas suas pesquisas e inscrições', home_continue_watching: 'Continuar assistindo',
     home_noActivity: 'Pesquise vídeos ou inscreva-se em canais para recomendações personalizadas.',
     searchHistory_recent: 'Pesquisas recentes', searchHistory_clearAll: 'Limpar tudo',
     music_home: 'Início', music_search: 'Pesquisar', music_my_playlists: 'Minhas playlists', music_back: 'Voltar ao MyTube',
@@ -492,10 +543,20 @@ export const translations: Record<Lang, Translations> = {
     settings_playback_speed: 'Velocidade padrão', settings_playback_volume: 'Volume padrão', settings_playback_resume: 'Retomar de onde parei',
     settings_quality_auto: 'Automático',
     settings_on: 'Ativado', settings_off: 'Desativado',
+    settings_playback_loop: 'Repetir vídeo', settings_playback_autoplay_next: 'Reproduzir próximo automaticamente',
+    settings_playback_subtitle_lang: 'Legendas padrão', settings_playback_subtitle_off: 'Desativadas',
+    settings_grid_density: 'Densidade da grade', settings_density_compact: 'Compacto', settings_density_normal: 'Normal', settings_density_comfortable: 'Confortável',
+    settings_hide_watched: 'Ocultar vídeos assistidos',
+    settings_history_ttl: 'Manter histórico por', settings_history_ttl_forever: 'Sempre', settings_history_ttl_days: 'dias',
+    settings_data_tab: 'Dados', settings_data_export: 'Exportar todos os dados', settings_data_import: 'Importar dados', settings_data_import_ok: 'Dados importados!', settings_data_import_err: 'Falha na importação',
+    settings_data_clear_history: 'Histórico de visualização', settings_data_clear_search: 'Histórico de pesquisa', settings_data_clear_watch_later: 'Assistir mais tarde', settings_data_clear_likes: 'Curtidas', settings_data_clear_queue: 'Fila', settings_data_clear_resume: 'Posições de retomada', settings_data_clear_confirm: 'Limpar',
     nav_likes: 'Meus likes', likes_title: 'Meus likes', likes_empty: 'Nenhum vídeo curtido ainda.', likes_open_youtube: 'Ver no YouTube',
     share_modal_title: 'Compartilhar vídeo', share_copy: 'Copiar link', share_copied: 'Copiado!',
     subscribe_active: 'Inscrito',
     playlist_save: 'Salvar playlist', playlist_saved: 'Salva', playlist_videos: 'vídeos',
+    nav_playlists: 'Minhas playlists', playlists_title: 'Minhas playlists', playlists_empty: 'Nenhuma playlist salva.', playlists_open_youtube: 'Abrir no YouTube', playlists_remove: 'Remover',
+    autoplay_next: 'Reproduzindo em', autoplay_cancel: 'Cancelar',
+    nav_queue: 'Fila', queue_title: 'Fila de reprodução', queue_empty: 'Sua fila está vazia', queue_empty_desc: 'Adicione vídeos para assistir em ordem.', queue_clear: 'Limpar fila', queue_play_all: 'Reproduzir tudo',
   },
   it: {
     nav_home: 'Home', nav_trending: 'Di tendenza', nav_history: 'Cronologia',
@@ -536,7 +597,7 @@ export const translations: Record<Lang, Translations> = {
     videoUnavailable: 'Video Non Disponibile', channelNotFound: 'Canale Non Trovato', quality: 'Qualità',
     watchLater_title: 'Da guardare', watchLater_empty: 'Nessun video salvato.',
     noChannelVideos: 'Nessun video trovato per questo canale', error_playback: 'Errore di riproduzione',
-    home_forYou: 'Per te', home_basedOn: 'In base alle tue ricerche e iscrizioni',
+    home_forYou: 'Per te', home_basedOn: 'In base alle tue ricerche e iscrizioni', home_continue_watching: 'Continua a guardare',
     home_noActivity: 'Cerca video o iscriviti a canali per ottenere consigli personalizzati.',
     searchHistory_recent: 'Ricerche recenti', searchHistory_clearAll: 'Cancella tutto',
     music_home: 'Home', music_search: 'Cerca', music_my_playlists: 'Le mie playlist', music_back: 'Torna a MyTube',
@@ -576,10 +637,20 @@ export const translations: Record<Lang, Translations> = {
     settings_playback_speed: 'Velocità predefinita', settings_playback_volume: 'Volume predefinito', settings_playback_resume: 'Riprendi da dove ho lasciato',
     settings_quality_auto: 'Automatico',
     settings_on: 'Attivato', settings_off: 'Disattivato',
+    settings_playback_loop: 'Ripeti video', settings_playback_autoplay_next: 'Riproduci automaticamente il successivo',
+    settings_playback_subtitle_lang: 'Sottotitoli predefiniti', settings_playback_subtitle_off: 'Disattivati',
+    settings_grid_density: 'Densità griglia', settings_density_compact: 'Compatto', settings_density_normal: 'Normale', settings_density_comfortable: 'Comodo',
+    settings_hide_watched: 'Nascondi video già visti',
+    settings_history_ttl: 'Conserva cronologia per', settings_history_ttl_forever: 'Sempre', settings_history_ttl_days: 'giorni',
+    settings_data_tab: 'Dati', settings_data_export: 'Esporta tutti i dati', settings_data_import: 'Importa dati', settings_data_import_ok: 'Dati importati!', settings_data_import_err: 'Importazione fallita',
+    settings_data_clear_history: 'Cronologia visioni', settings_data_clear_search: 'Cronologia ricerche', settings_data_clear_watch_later: 'Da guardare', settings_data_clear_likes: 'Mi piace', settings_data_clear_queue: 'Coda', settings_data_clear_resume: 'Posizioni di ripresa', settings_data_clear_confirm: 'Cancella',
     nav_likes: 'I miei like', likes_title: 'I miei like', likes_empty: 'Nessun video apprezzato ancora.', likes_open_youtube: 'Guarda su YouTube',
     share_modal_title: 'Condividi video', share_copy: 'Copia link', share_copied: 'Copiato!',
     subscribe_active: 'Iscritto',
     playlist_save: 'Salva playlist', playlist_saved: 'Salvata', playlist_videos: 'video',
+    nav_playlists: 'Le mie playlist', playlists_title: 'Le mie playlist', playlists_empty: 'Nessuna playlist salvata.', playlists_open_youtube: 'Apri su YouTube', playlists_remove: 'Rimuovi',
+    autoplay_next: 'Riproduzione tra', autoplay_cancel: 'Annulla',
+    nav_queue: 'Coda', queue_title: 'Coda di riproduzione', queue_empty: 'La tua coda è vuota', queue_empty_desc: 'Aggiungi video per guardarli in ordine.', queue_clear: 'Svuota coda', queue_play_all: 'Riproduci tutto',
   },
   ja: {
     nav_home: 'ホーム', nav_trending: 'トレンド', nav_history: '履歴',
@@ -620,7 +691,7 @@ export const translations: Record<Lang, Translations> = {
     videoUnavailable: '動画を再生できません', channelNotFound: 'チャンネルが見つかりません', quality: '画質',
     watchLater_title: '後で見る', watchLater_empty: '保存された動画はありません。',
     noChannelVideos: 'このチャンネルの動画が見つかりません', error_playback: '再生エラー',
-    home_forYou: 'あなたへのおすすめ', home_basedOn: '検索履歴と登録チャンネルに基づく',
+    home_forYou: 'あなたへのおすすめ', home_basedOn: '検索履歴と登録チャンネルに基づく', home_continue_watching: '続きを見る',
     home_noActivity: '動画を検索したりチャンネルを登録してパーソナライズされたおすすめを取得しましょう。',
     searchHistory_recent: '最近の検索', searchHistory_clearAll: 'すべて削除',
     music_home: 'ホーム', music_search: '検索', music_my_playlists: 'マイプレイリスト', music_back: 'MyTubeに戻る',
@@ -660,10 +731,20 @@ export const translations: Record<Lang, Translations> = {
     settings_playback_speed: 'デフォルト速度', settings_playback_volume: 'デフォルト音量', settings_playback_resume: '続きから再生',
     settings_quality_auto: '自動',
     settings_on: 'オン', settings_off: 'オフ',
+    settings_playback_loop: '動画を繰り返す', settings_playback_autoplay_next: '次の動画を自動再生',
+    settings_playback_subtitle_lang: 'デフォルト字幕', settings_playback_subtitle_off: 'オフ',
+    settings_grid_density: 'グリッド密度', settings_density_compact: 'コンパクト', settings_density_normal: '標準', settings_density_comfortable: '広め',
+    settings_hide_watched: '視聴済み動画を非表示',
+    settings_history_ttl: '履歴保存期間', settings_history_ttl_forever: '無制限', settings_history_ttl_days: '日',
+    settings_data_tab: 'データ', settings_data_export: '全データをエクスポート', settings_data_import: 'データをインポート', settings_data_import_ok: 'データをインポートしました！', settings_data_import_err: 'インポートに失敗しました',
+    settings_data_clear_history: '視聴履歴', settings_data_clear_search: '検索履歴', settings_data_clear_watch_later: '後で見る', settings_data_clear_likes: 'いいね', settings_data_clear_queue: 'キュー', settings_data_clear_resume: '再生位置', settings_data_clear_confirm: '削除',
     nav_likes: 'マイいいね', likes_title: 'マイいいね', likes_empty: 'いいねした動画はありません。', likes_open_youtube: 'YouTubeで見る',
     share_modal_title: '動画をシェア', share_copy: 'リンクをコピー', share_copied: 'コピーしました！',
     subscribe_active: '登録済み',
     playlist_save: 'プレイリストを保存', playlist_saved: '保存済み', playlist_videos: '動画',
+    nav_playlists: 'マイプレイリスト', playlists_title: 'マイプレイリスト', playlists_empty: '保存済みプレイリストはありません。', playlists_open_youtube: 'YouTubeで開く', playlists_remove: '削除',
+    autoplay_next: '次の動画まで', autoplay_cancel: 'キャンセル',
+    nav_queue: 'キュー', queue_title: '再生キュー', queue_empty: 'キューが空です', queue_empty_desc: '動画を追加して順番に視聴できます。', queue_clear: 'キューを削除', queue_play_all: 'すべて再生',
   },
   ko: {
     nav_home: '홈', nav_trending: '인기', nav_history: '시청 기록',
@@ -704,7 +785,7 @@ export const translations: Record<Lang, Translations> = {
     videoUnavailable: '동영상을 사용할 수 없음', channelNotFound: '채널을 찾을 수 없음', quality: '화질',
     watchLater_title: '나중에 볼 동영상', watchLater_empty: '저장된 동영상이 없습니다.',
     noChannelVideos: '이 채널에 대한 동영상을 찾을 수 없습니다', error_playback: '재생 오류',
-    home_forYou: '추천 동영상', home_basedOn: '검색 기록 및 구독을 기반으로',
+    home_forYou: '추천 동영상', home_basedOn: '검색 기록 및 구독을 기반으로', home_continue_watching: '이어서 보기',
     home_noActivity: '동영상을 검색하거나 채널을 구독하여 맞춤 추천을 받아보세요.',
     searchHistory_recent: '최근 검색', searchHistory_clearAll: '모두 지우기',
     music_home: '홈', music_search: '검색', music_my_playlists: '내 플레이리스트', music_back: 'MyTube로 돌아가기',
@@ -744,10 +825,20 @@ export const translations: Record<Lang, Translations> = {
     settings_playback_speed: '기본 속도', settings_playback_volume: '기본 볼륨', settings_playback_resume: '이어서 보기',
     settings_quality_auto: '자동',
     settings_on: '켜짐', settings_off: '꺼짐',
+    settings_playback_loop: '동영상 반복', settings_playback_autoplay_next: '다음 동영상 자동 재생',
+    settings_playback_subtitle_lang: '기본 자막', settings_playback_subtitle_off: '끄기',
+    settings_grid_density: '그리드 밀도', settings_density_compact: '촘촘히', settings_density_normal: '보통', settings_density_comfortable: '여유롭게',
+    settings_hide_watched: '시청한 동영상 숨기기',
+    settings_history_ttl: '기록 보관 기간', settings_history_ttl_forever: '영구 보관', settings_history_ttl_days: '일',
+    settings_data_tab: '데이터', settings_data_export: '모든 데이터 내보내기', settings_data_import: '데이터 가져오기', settings_data_import_ok: '데이터 가져오기 완료!', settings_data_import_err: '가져오기 실패',
+    settings_data_clear_history: '시청 기록', settings_data_clear_search: '검색 기록', settings_data_clear_watch_later: '나중에 볼 동영상', settings_data_clear_likes: '좋아요', settings_data_clear_queue: '재생 대기열', settings_data_clear_resume: '재생 위치', settings_data_clear_confirm: '삭제',
     nav_likes: '좋아요', likes_title: '좋아요', likes_empty: '좋아요한 동영상이 없습니다.', likes_open_youtube: 'YouTube에서 보기',
     share_modal_title: '동영상 공유', share_copy: '링크 복사', share_copied: '복사됨!',
     subscribe_active: '구독 중',
     playlist_save: '재생목록 저장', playlist_saved: '저장됨', playlist_videos: '개 동영상',
+    nav_playlists: '내 재생목록', playlists_title: '내 재생목록', playlists_empty: '저장된 재생목록이 없습니다.', playlists_open_youtube: 'YouTube에서 열기', playlists_remove: '제거',
+    autoplay_next: '다음 재생까지', autoplay_cancel: '취소',
+    nav_queue: '재생 대기열', queue_title: '재생 대기열', queue_empty: '대기열이 비어 있습니다', queue_empty_desc: '순서대로 볼 동영상을 추가하세요.', queue_clear: '대기열 비우기', queue_play_all: '모두 재생',
   },
   ru: {
     nav_home: 'Главная', nav_trending: 'В тренде', nav_history: 'История',
@@ -788,7 +879,7 @@ export const translations: Record<Lang, Translations> = {
     videoUnavailable: 'Видео недоступно', channelNotFound: 'Канал не найден', quality: 'Качество',
     watchLater_title: 'Смотреть позже', watchLater_empty: 'Нет сохранённых видео.',
     noChannelVideos: 'Видео для этого канала не найдены', error_playback: 'Ошибка воспроизведения',
-    home_forYou: 'Для вас', home_basedOn: 'На основе ваших поисков и подписок',
+    home_forYou: 'Для вас', home_basedOn: 'На основе ваших поисков и подписок', home_continue_watching: 'Продолжить просмотр',
     home_noActivity: 'Ищите видео или подписывайтесь на каналы, чтобы получать персональные рекомендации.',
     searchHistory_recent: 'Последние запросы', searchHistory_clearAll: 'Очистить всё',
     music_home: 'Главная', music_search: 'Поиск', music_my_playlists: 'Мои плейлисты', music_back: 'Вернуться в MyTube',
@@ -828,9 +919,19 @@ export const translations: Record<Lang, Translations> = {
     settings_playback_speed: 'Скорость по умолчанию', settings_playback_volume: 'Громкость по умолчанию', settings_playback_resume: 'Продолжить с места остановки',
     settings_quality_auto: 'Автоматически',
     settings_on: 'Вкл', settings_off: 'Выкл',
+    settings_playback_loop: 'Повторять видео', settings_playback_autoplay_next: 'Автоматически воспроизводить следующее',
+    settings_playback_subtitle_lang: 'Субтитры по умолчанию', settings_playback_subtitle_off: 'Выкл',
+    settings_grid_density: 'Плотность сетки', settings_density_compact: 'Компактно', settings_density_normal: 'Нормально', settings_density_comfortable: 'Свободно',
+    settings_hide_watched: 'Скрыть просмотренные видео',
+    settings_history_ttl: 'Хранить историю', settings_history_ttl_forever: 'Всегда', settings_history_ttl_days: 'дней',
+    settings_data_tab: 'Данные', settings_data_export: 'Экспортировать все данные', settings_data_import: 'Импортировать данные', settings_data_import_ok: 'Данные импортированы!', settings_data_import_err: 'Ошибка импорта',
+    settings_data_clear_history: 'История просмотров', settings_data_clear_search: 'История поиска', settings_data_clear_watch_later: 'Смотреть позже', settings_data_clear_likes: 'Нравится', settings_data_clear_queue: 'Очередь', settings_data_clear_resume: 'Позиции воспроизведения', settings_data_clear_confirm: 'Очистить',
     nav_likes: 'Мне нравится', likes_title: 'Мне нравится', likes_empty: 'Нет понравившихся видео.', likes_open_youtube: 'Смотреть на YouTube',
     share_modal_title: 'Поделиться видео', share_copy: 'Копировать ссылку', share_copied: 'Скопировано!',
     subscribe_active: 'Подписан',
     playlist_save: 'Сохранить плейлист', playlist_saved: 'Сохранено', playlist_videos: 'видео',
+    nav_playlists: 'Мои плейлисты', playlists_title: 'Мои плейлисты', playlists_empty: 'Нет сохранённых плейлистов.', playlists_open_youtube: 'Открыть на YouTube', playlists_remove: 'Удалить',
+    autoplay_next: 'Следующее через', autoplay_cancel: 'Отмена',
+    nav_queue: 'Очередь', queue_title: 'Очередь воспроизведения', queue_empty: 'Очередь пуста', queue_empty_desc: 'Добавьте видео, чтобы смотреть их по порядку.', queue_clear: 'Очистить очередь', queue_play_all: 'Воспроизвести всё',
   },
 }

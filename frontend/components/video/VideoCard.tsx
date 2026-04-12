@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Bookmark, BookmarkCheck } from 'lucide-react'
+import { Bookmark, BookmarkCheck, ListPlus, ListChecks } from 'lucide-react'
 import { VideoCard as VideoCardType } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { isInWatchLater, toggleWatchLater } from '@/lib/watchLater'
+import { isInQueue, addToQueue, removeFromQueue } from '@/lib/queue'
 
 interface VideoCardProps {
   video: VideoCardType
@@ -66,9 +67,11 @@ function stringToColor(str: string): string {
 
 export default function VideoCard({ video, layout = 'grid' }: VideoCardProps) {
   const [saved, setSaved] = useState(false)
+  const [inQueue, setInQueue] = useState(false)
 
   useEffect(() => {
     setSaved(isInWatchLater(video.id))
+    setInQueue(isInQueue(video.id))
   }, [video.id])
 
   function handleWatchLater(e: React.MouseEvent) {
@@ -81,6 +84,25 @@ export default function VideoCard({ video, layout = 'grid' }: VideoCardProps) {
       channelId: video.channel.id,
     })
     setSaved(isNowSaved)
+  }
+
+  function handleQueue(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (inQueue) {
+      removeFromQueue(video.id)
+      setInQueue(false)
+    } else {
+      addToQueue({
+        id: video.id,
+        title: video.title,
+        thumbnail: `https://i.ytimg.com/vi/${video.id}/mqdefault.jpg`,
+        duration: video.duration,
+        channel: video.channel.name,
+        channelId: video.channel.id,
+      })
+      setInQueue(true)
+    }
   }
 
   if (layout === 'list') {
@@ -158,6 +180,20 @@ export default function VideoCard({ video, layout = 'grid' }: VideoCardProps) {
             aria-label={saved ? 'Remove from Watch Later' : 'Save to Watch Later'}
           >
             {saved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+          </button>
+          {/* Queue button */}
+          <button
+            onClick={handleQueue}
+            className={cn(
+              'absolute top-2 left-2 p-1.5 rounded-full transition-all',
+              'opacity-0 group-hover:opacity-100',
+              inQueue
+                ? 'bg-yt-red text-white opacity-100'
+                : 'bg-black/70 text-white hover:bg-black/90'
+            )}
+            aria-label={inQueue ? 'Remove from queue' : 'Add to queue'}
+          >
+            {inQueue ? <ListChecks className="w-4 h-4" /> : <ListPlus className="w-4 h-4" />}
           </button>
         </div>
       </Link>

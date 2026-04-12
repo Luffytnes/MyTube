@@ -35,7 +35,7 @@ export default function PlaylistCard({ playlist }: Props) {
   }
 
   const watchUrl = playlist.firstVideoId
-    ? `/watch/${playlist.firstVideoId}`
+    ? `/watch/${playlist.firstVideoId}?list=${playlist.id}`
     : `https://www.youtube.com/playlist?list=${playlist.id}`
 
   const isExternal = !playlist.firstVideoId
@@ -100,7 +100,7 @@ export default function PlaylistCard({ playlist }: Props) {
             onClick={handleSave}
             className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${
               saved
-                ? 'border-yt-red text-yt-red bg-yt-red/10'
+                ? 'border-green-500 text-green-500 bg-green-500/10'
                 : 'border-yt-border text-yt-text-muted hover:border-yt-text hover:text-yt-text'
             }`}
           >

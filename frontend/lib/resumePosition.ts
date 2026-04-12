@@ -55,3 +55,17 @@ export function clearPosition(videoId: string) {
     save(data)
   } catch {}
 }
+
+export function getAllPositions(): Record<string, PositionEntry & { videoId: string }> {
+  const data = load()
+  return Object.fromEntries(
+    Object.entries(data).map(([id, entry]) => [id, { ...entry, videoId: id }])
+  )
+}
+
+export function getResumeVideoIds(): string[] {
+  const data = load()
+  return Object.entries(data)
+    .sort((a, b) => b[1].savedAt - a[1].savedAt)
+    .map(([id]) => id)
+}

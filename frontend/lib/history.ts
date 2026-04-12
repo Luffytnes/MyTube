@@ -24,7 +24,21 @@ export function saveToHistory(entry: Omit<HistoryEntry, 'watchedAt'>): void {
 
 export function getHistory(): HistoryEntry[] {
   try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]')
+    const all: HistoryEntry[] = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]')
+    // Apply TTL filtering
+    try {
+      const { getPlaybackSettings } = require('./playbackSettings')
+      const ttl = getPlaybackSettings().historyTTL as number
+      if (ttl > 0) {
+        const cutoff = Date.now() - ttl * 24 * 60 * 60 * 1000
+        const filtered = all.filter((h) => h.watchedAt >= cutoff)
+        if (filtered.length !== all.length) {
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(filtered))
+          return filtered
+        }
+      }
+    } catch {}
+    return all
   } catch { return [] }
 }
 

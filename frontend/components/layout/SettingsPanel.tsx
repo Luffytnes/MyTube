@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Sun, Moon, Monitor, Upload, Wifi, WifiOff, AlertCircle, Loader2, Shield, RefreshCw, MapPin, Trash2, Check, Globe, Network, Play } from 'lucide-react'
+import { X, Sun, Moon, Monitor, Upload, Wifi, WifiOff, AlertCircle, Loader2, Shield, RefreshCw, MapPin, Trash2, Check, Globe, Network, Play, Database, Download, CheckCircle2 } from 'lucide-react'
 import { useTheme, type ThemeMode } from '@/lib/themeContext'
 import { useRegion, REGIONS } from '@/lib/regionContext'
 import { getPlaybackSettings, setPlaybackSettings, type PlaybackSettings } from '@/lib/playbackSettings'
@@ -9,7 +9,7 @@ import { getPlaybackSettings, setPlaybackSettings, type PlaybackSettings } from 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 type VpnStatus = 'disconnected' | 'connecting' | 'connected' | 'disconnecting' | 'error'
-type Tab = 'general' | 'playback' | 'wireproxy'
+type Tab = 'general' | 'playback' | 'data' | 'wireproxy'
 
 interface VpnState {
   status: VpnStatus
@@ -40,7 +40,10 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const [savedConfigs, setSavedConfigs] = useState<string[]>([])
   const [ipInfo, setIpInfo] = useState<IpInfo | null>(null)
   const [ipLoading, setIpLoading] = useState(false)
+  const [importStatus, setImportStatus] = useState<'idle' | 'ok' | 'err'>('idle')
+  const [clearConfirm, setClearConfirm] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const importInputRef = useRef<HTMLInputElement>(null)
   const modalRef = useRef<HTMLDivElement>(null)
 
   const fetchIpInfo = useCallback(async () => {
@@ -208,6 +211,49 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const vpnConnected = vpn.status === 'connected'
   const vpnBusy = vpn.status === 'connecting' || vpn.status === 'disconnecting'
 
+  function handleExport() {
+    const data: Record<string, unknown> = {}
+    const keys = ['mytube-history', 'mytube-search-history', 'mytube-watch-later', 'mytube-likes', 'mytube-queue', 'mytube-resume-positions', 'mytube-saved-playlists', 'mytube-subscriptions', 'mytube-playback-settings']
+    for (const k of keys) {
+      const raw = localStorage.getItem(k)
+      if (raw) data[k] = JSON.parse(raw)
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `mytube-backup-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string)
+        for (const [k, v] of Object.entries(data)) {
+          localStorage.setItem(k, JSON.stringify(v))
+        }
+        setImportStatus('ok')
+        setPbSettings(getPlaybackSettings())
+      } catch {
+        setImportStatus('err')
+      }
+      setTimeout(() => setImportStatus('idle'), 3000)
+    }
+    reader.readAsText(file)
+    if (importInputRef.current) importInputRef.current.value = ''
+  }
+
+  function handleClearSection(key: string) {
+    if (clearConfirm !== key) { setClearConfirm(key); return }
+    localStorage.removeItem(key)
+    setClearConfirm(null)
+  }
+
   const TABS: { id: Tab; label: string; icon: React.ReactNode; badge?: React.ReactNode }[] = [
     {
       id: 'general',
@@ -218,6 +264,11 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       id: 'playback',
       label: t('settings_tab_playback'),
       icon: <Play className="w-4 h-4" />,
+    },
+    {
+      id: 'data',
+      label: t('settings_data_tab'),
+      icon: <Database className="w-4 h-4" />,
     },
     {
       id: 'wireproxy',
@@ -272,7 +323,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-yt-border/50">
             <h2 className="text-yt-text font-semibold text-base">
-              {tab === 'general' ? 'Général' : tab === 'playback' ? t('settings_tab_playback') : 'Wireproxy'}
+              {tab === 'general' ? 'Général' : tab === 'playback' ? t('settings_tab_playback') : tab === 'data' ? t('settings_data_tab') : 'Wireproxy'}
             </h2>
             <button
               onClick={onClose}
@@ -356,7 +407,10 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 {/* Toggles */}
                 {([
                   { key: 'autoplay' as const, label: t('settings_playback_autoplay') },
+                  { key: 'autoplayNext' as const, label: t('settings_playback_autoplay_next') },
+                  { key: 'loop' as const, label: t('settings_playback_loop') },
                   { key: 'resumePlayback' as const, label: t('settings_playback_resume') },
+                  { key: 'hideWatched' as const, label: t('settings_hide_watched') },
                 ] ).map(({ key, label }) => (
                   <div key={key} className="flex items-center justify-between gap-3 py-2.5 border-b border-yt-border/40">
                     <span className="text-sm text-yt-text">{label}</span>
@@ -384,6 +438,64 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                       <option value="480p">480p</option>
                       <option value="360p">360p</option>
                       <option value="240p">240p</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Grid density */}
+                <div className="py-2.5 border-b border-yt-border/40">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-yt-text flex-shrink-0">{t('settings_grid_density')}</span>
+                    <select
+                      value={pbSettings.gridDensity}
+                      onChange={(e) => updatePbSetting('gridDensity', e.target.value as PlaybackSettings['gridDensity'])}
+                      className="bg-yt-secondary border border-yt-border text-yt-text text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-yt-red cursor-pointer"
+                    >
+                      <option value="compact">{t('settings_density_compact')}</option>
+                      <option value="normal">{t('settings_density_normal')}</option>
+                      <option value="comfortable">{t('settings_density_comfortable')}</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Subtitle lang */}
+                <div className="py-2.5 border-b border-yt-border/40">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-yt-text flex-shrink-0">{t('settings_playback_subtitle_lang')}</span>
+                    <select
+                      value={pbSettings.subtitleLang}
+                      onChange={(e) => updatePbSetting('subtitleLang', e.target.value)}
+                      className="bg-yt-secondary border border-yt-border text-yt-text text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-yt-red cursor-pointer"
+                    >
+                      <option value="off">{t('settings_playback_subtitle_off')}</option>
+                      <option value="fr">Français</option>
+                      <option value="en">English</option>
+                      <option value="es">Español</option>
+                      <option value="de">Deutsch</option>
+                      <option value="pt">Português</option>
+                      <option value="it">Italiano</option>
+                      <option value="ja">日本語</option>
+                      <option value="ko">한국어</option>
+                      <option value="ru">Русский</option>
+                      <option value="ar">العربية</option>
+                      <option value="zh">中文</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* History TTL */}
+                <div className="py-2.5 border-b border-yt-border/40">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-yt-text flex-shrink-0">{t('settings_history_ttl')}</span>
+                    <select
+                      value={pbSettings.historyTTL}
+                      onChange={(e) => updatePbSetting('historyTTL', parseInt(e.target.value))}
+                      className="bg-yt-secondary border border-yt-border text-yt-text text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-yt-red cursor-pointer"
+                    >
+                      <option value={0}>{t('settings_history_ttl_forever')}</option>
+                      <option value={7}>7 {t('settings_history_ttl_days')}</option>
+                      <option value={30}>30 {t('settings_history_ttl_days')}</option>
+                      <option value={90}>90 {t('settings_history_ttl_days')}</option>
                     </select>
                   </div>
                 </div>
@@ -419,6 +531,78 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     </span>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* ── DONNÉES ── */}
+            {tab === 'data' && (
+              <div className="space-y-6">
+                {/* Export / Import */}
+                <section>
+                  <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-3">Export / Import</p>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={handleExport}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-yt-secondary border border-yt-border text-yt-text text-sm hover:bg-yt-hover transition-colors"
+                    >
+                      <Download className="w-4 h-4 text-yt-text-muted" />
+                      {t('settings_data_export')}
+                    </button>
+                    <input ref={importInputRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
+                    <button
+                      onClick={() => importInputRef.current?.click()}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-yt-secondary border border-yt-border text-yt-text text-sm hover:bg-yt-hover transition-colors"
+                    >
+                      <Upload className="w-4 h-4 text-yt-text-muted" />
+                      {t('settings_data_import')}
+                    </button>
+                    {importStatus === 'ok' && (
+                      <p className="flex items-center gap-1.5 text-xs text-green-400"><CheckCircle2 className="w-3.5 h-3.5" />{t('settings_data_import_ok')}</p>
+                    )}
+                    {importStatus === 'err' && (
+                      <p className="flex items-center gap-1.5 text-xs text-red-400"><AlertCircle className="w-3.5 h-3.5" />{t('settings_data_import_err')}</p>
+                    )}
+                  </div>
+                </section>
+
+                <div className="border-t border-yt-border/40" />
+
+                {/* Clear sections */}
+                <section>
+                  <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-3">Effacer</p>
+                  <div className="space-y-1.5">
+                    {([
+                      { key: 'mytube-history', label: t('settings_data_clear_history') },
+                      { key: 'mytube-search-history', label: t('settings_data_clear_search') },
+                      { key: 'mytube-watch-later', label: t('settings_data_clear_watch_later') },
+                      { key: 'mytube-likes', label: t('settings_data_clear_likes') },
+                      { key: 'mytube-queue', label: t('settings_data_clear_queue') },
+                      { key: 'mytube-resume-positions', label: t('settings_data_clear_resume') },
+                    ]).map(({ key, label }) => (
+                      <div key={key} className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-yt-secondary border border-yt-border/60">
+                        <span className="text-sm text-yt-text">{label}</span>
+                        <button
+                          onClick={() => handleClearSection(key)}
+                          className={`text-xs px-3 py-1 rounded-lg font-medium transition-colors flex-shrink-0 ${
+                            clearConfirm === key
+                              ? 'bg-red-500 hover:bg-red-600 text-white'
+                              : 'border border-yt-border text-yt-text-muted hover:text-red-400 hover:border-red-400'
+                          }`}
+                        >
+                          {clearConfirm === key ? t('settings_data_clear_confirm') : <Trash2 className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  {clearConfirm && (
+                    <button
+                      onClick={() => setClearConfirm(null)}
+                      className="mt-2 text-xs text-yt-text-muted hover:text-yt-text"
+                    >
+                      {t('autoplay_cancel')}
+                    </button>
+                  )}
+                </section>
               </div>
             )}
 

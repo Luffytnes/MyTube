@@ -188,3 +188,48 @@ export function getLiveUrl(videoId: string): string {
 export function getDownloadUrl(videoId: string, itag: string): string {
   return `${API_BASE}/api/download/${videoId}?itag=${encodeURIComponent(itag)}`
 }
+
+export interface SubtitleTrack {
+  lang: string
+  label: string
+  auto: boolean
+  url: string
+}
+
+export async function getSubtitles(videoId: string): Promise<SubtitleTrack[]> {
+  try {
+    const res = await fetch(`${API_BASE}/api/subtitles/${videoId}`)
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.subtitles || []
+  } catch {
+    return []
+  }
+}
+
+export function getSubtitleUrl(videoId: string, lang: string): string {
+  return `${API_BASE}/api/subtitles/${videoId}/${encodeURIComponent(lang)}`
+}
+
+export interface PlaylistVideo {
+  id: string
+  title: string
+  duration: string
+  thumbnail: string
+  channel: string
+  channelId: string
+}
+
+export interface PlaylistDetail {
+  id: string
+  title: string
+  uploader: string
+  videoCount: number
+  videos: PlaylistVideo[]
+}
+
+export async function getPlaylist(playlistId: string): Promise<PlaylistDetail> {
+  const res = await fetch(`${API_BASE}/api/playlist/${playlistId}`, { cache: 'no-store' })
+  if (!res.ok) throw new Error(`Failed to fetch playlist: ${res.statusText}`)
+  return res.json()
+}
