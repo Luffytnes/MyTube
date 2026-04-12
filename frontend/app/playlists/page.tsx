@@ -65,28 +65,53 @@ export default function PlaylistsPage() {
                 </button>
 
                 {/* Thumbnail */}
-                <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-yt-secondary">
-                  {pl.thumbnail ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={pl.thumbnail}
-                      alt={pl.title}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <ListVideo className="w-10 h-10 text-yt-text-muted" />
-                    </div>
-                  )}
+                {watchUrl ? (
+                  <Link href={watchUrl} className="relative w-full aspect-video rounded-xl overflow-hidden bg-yt-secondary block">
+                    {pl.thumbnail ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={pl.thumbnail}
+                        alt={pl.title}
+                        className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <ListVideo className="w-10 h-10 text-yt-text-muted" />
+                      </div>
+                    )}
 
-                  {/* Video count stripe */}
-                  {pl.videoCount && (
-                    <div className="absolute inset-y-0 right-0 w-14 bg-black/80 flex flex-col items-center justify-center gap-1">
-                      <ListVideo className="w-4 h-4 text-white" />
-                      <span className="text-white text-[11px] font-bold leading-none">{pl.videoCount}</span>
-                    </div>
-                  )}
-                </div>
+                    {/* Video count stripe */}
+                    {pl.videoCount && (
+                      <div className="absolute inset-y-0 right-0 w-14 bg-black/80 flex flex-col items-center justify-center gap-1">
+                        <ListVideo className="w-4 h-4 text-white" />
+                        <span className="text-white text-[11px] font-bold leading-none">{pl.videoCount}</span>
+                      </div>
+                    )}
+                  </Link>
+                ) : (
+                  <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-yt-secondary">
+                    {pl.thumbnail ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={pl.thumbnail}
+                        alt={pl.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <ListVideo className="w-10 h-10 text-yt-text-muted" />
+                      </div>
+                    )}
+
+                    {/* Video count stripe */}
+                    {pl.videoCount && (
+                      <div className="absolute inset-y-0 right-0 w-14 bg-black/80 flex flex-col items-center justify-center gap-1">
+                        <ListVideo className="w-4 h-4 text-white" />
+                        <span className="text-white text-[11px] font-bold leading-none">{pl.videoCount}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Info */}
                 <div className="flex flex-col gap-0.5 px-1">
