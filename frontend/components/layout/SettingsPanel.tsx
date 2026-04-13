@@ -698,8 +698,6 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     </button>
                   </div>
 
-                  <div className="border-t border-yt-border/40 mb-4" />
-
                   {/* Status + toggle */}
                   <div className="flex items-center gap-3 mb-2">
                     <div className={`flex items-center gap-1.5 text-xs font-medium flex-1 ${
