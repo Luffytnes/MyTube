@@ -16,6 +16,8 @@ interface VpnState {
   conf_loaded: boolean
   conf_name: string | null
   error: string | null
+  auto_mode: boolean
+  all_failed: boolean
 }
 
 interface IpInfo {
@@ -35,7 +37,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const { region, setRegion, t } = useRegion()
   const [tab, setTab] = useState<Tab>('general')
   const [pbSettings, setPbSettings] = useState<PlaybackSettings>(() => getPlaybackSettings())
-  const [vpn, setVpn] = useState<VpnState>({ status: 'disconnected', conf_loaded: false, conf_name: null, error: null })
+  const [vpn, setVpn] = useState<VpnState>({ status: 'disconnected', conf_loaded: false, conf_name: null, error: null, auto_mode: false, all_failed: false })
   const [vpnLoading, setVpnLoading] = useState(false)
   const [savedConfigs, setSavedConfigs] = useState<string[]>([])
   const [ipInfo, setIpInfo] = useState<IpInfo | null>(null)
@@ -82,6 +84,8 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           conf_loaded: data.conf_loaded,
           conf_name: data.conf_name ?? null,
           error: data.error ?? null,
+          auto_mode: data.auto_mode ?? false,
+          all_failed: data.all_failed ?? false,
         })
       }
     } catch {}
@@ -206,6 +210,25 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         setVpn((prev) => ({ ...prev, status: 'error', error: t('settings_vpn_error') }))
       }
     }
+  }
+
+  async function handleAutoModeToggle() {
+    const next = !vpn.auto_mode
+    try {
+      const res = await fetch(`${API_BASE}/api/vpn/auto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: next }),
+      })
+      if (res.ok) setVpn((prev) => ({ ...prev, auto_mode: next, all_failed: false }))
+    } catch {}
+  }
+
+  async function handleResetFailover() {
+    try {
+      await fetch(`${API_BASE}/api/vpn/reset_failover`, { method: 'POST' })
+      setVpn((prev) => ({ ...prev, all_failed: false }))
+    } catch {}
   }
 
   const vpnConnected = vpn.status === 'connected'
@@ -708,6 +731,33 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   </div>
 
                   {vpn.error && <p className="text-xs text-red-400 mb-3 px-1">{vpn.error}</p>}
+
+                  {/* Auto failover toggle */}
+                  <div className="flex items-center justify-between gap-3 py-2.5 border-t border-yt-border/40 mt-2">
+                    <div className="min-w-0">
+                      <p className="text-sm text-yt-text">{t('settings_vpn_auto_mode')}</p>
+                      <p className="text-xs text-yt-text-muted mt-0.5">{t('settings_vpn_auto_mode_desc')}</p>
+                    </div>
+                    <button
+                      onClick={handleAutoModeToggle}
+                      className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 overflow-hidden ${vpn.auto_mode ? 'bg-yt-red' : 'bg-yt-border'}`}
+                    >
+                      <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${vpn.auto_mode ? 'translate-x-4' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+
+                  {/* All failed banner */}
+                  {vpn.all_failed && (
+                    <div className="mt-2 flex items-start gap-2 px-3 py-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-400">
+                      <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="font-medium">{t('settings_vpn_all_failed')}</p>
+                        <button onClick={handleResetFailover} className="mt-1 underline hover:no-underline">
+                          {t('settings_vpn_reset_failover')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* IP visible */}
                   <div className="pt-3 border-t border-yt-border/40">

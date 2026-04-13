@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback, FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Search, Mic, Shield, Play, X, Clock, Trash2, Settings } from 'lucide-react'
+import { Search, Mic, Shield, Play, X, Clock, Trash2, Settings, AlertTriangle } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 import SettingsPanel from './SettingsPanel'
 import {
@@ -25,6 +25,7 @@ export default function Header() {
   const [showSettings, setShowSettings] = useState(false)
   const [vpnConnected, setVpnConnected] = useState(false)
   const [vpnConfName, setVpnConfName] = useState<string | null>(null)
+  const [vpnAllFailed, setVpnAllFailed] = useState(false)
   const [shieldTooltip, setShieldTooltip] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -36,6 +37,7 @@ export default function Header() {
         const data = await res.json()
         setVpnConnected(!!data.running)
         setVpnConfName(data.conf_name ?? null)
+        setVpnAllFailed(!!data.all_failed)
       }
     } catch {}
   }, [])
@@ -117,6 +119,17 @@ export default function Header() {
   const showDropdown = focused && filtered.length > 0
 
   return (
+    <>
+    {/* VPN all-failed toast */}
+    {vpnAllFailed && (
+      <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm shadow-lg max-w-sm w-full mx-4">
+        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+        <span className="flex-1">{t('settings_vpn_all_failed')}</span>
+        <button onClick={() => setVpnAllFailed(false)} className="ml-1 hover:opacity-70 transition-opacity">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    )}
     <header className="fixed top-0 left-0 right-0 z-50 flex items-center h-14 px-4 bg-yt-bg border-b border-yt-border/40">
       {/* Logo */}
       <Link href="/" className="flex items-center gap-1.5 mr-4 flex-shrink-0 group" aria-label="MyTube Home">
@@ -217,5 +230,6 @@ export default function Header() {
 
       <SettingsPanel open={showSettings} onClose={() => { setShowSettings(false); fetchVpnStatus(); fetchShieldTooltip() }} />
     </header>
+    </>
   )
 }

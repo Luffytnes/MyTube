@@ -676,12 +676,15 @@ async def youtubei_search(
                     headers=_YT_HEADERS,
                 )
                 if resp.status_code == 200:
+                    reset_youtube_errors()
                     videos, channels, playlists, token = _extract_search_results(resp.json())
                     if token:
                         _search_continuations[f"{query}:{page + 1}"] = token
                     if videos or channels or playlists:
                         return videos, channels, playlists
                     return None
+                else:
+                    record_youtube_error(resp.status_code)
             else:
                 token = _search_continuations.get(f"{query}:{page}")
                 if not token:
@@ -692,10 +695,13 @@ async def youtubei_search(
                     headers=_YT_HEADERS,
                 )
                 if resp.status_code == 200:
+                    reset_youtube_errors()
                     videos, next_token = _extract_continuation_videos(resp.json())
                     if next_token:
                         _search_continuations[f"{query}:{page + 1}"] = next_token
                     return (videos, [], []) if videos else None
+                else:
+                    record_youtube_error(resp.status_code)
     except Exception:
         pass
     return None
@@ -2610,6 +2616,14 @@ _wireproxy_conf_path: Optional[str] = None  # path to the currently active .conf
 _wireproxy_conf_name: Optional[str] = None  # display name of active .conf
 _wireproxy_socks_port: int = 25344
 
+# ── Auto-failover state ──────────────────────────────────────────────────────
+_vpn_auto_mode: bool = False          # user-enabled auto failover
+_vpn_error_count: int = 0             # consecutive YouTube errors on current conf
+_vpn_failed_confs: set = set()        # confs that have already been tried and failed
+_vpn_all_failed: bool = False         # True when all confs exhausted
+_vpn_failover_threshold: int = 3      # errors before switching conf
+_vpn_failover_lock = asyncio.Lock()   # prevent concurrent failovers
+
 WIREPROXY_BIN = shutil.which("wireproxy") or "/usr/local/bin/wireproxy"
 
 SOCKS5_SECTION = f"\n[Socks5]\nBindAddress = 127.0.0.1:{_wireproxy_socks_port}\n"
@@ -2647,6 +2661,114 @@ def _restore_active_conf():
 _restore_active_conf()
 
 
+def _list_all_confs() -> List[str]:
+    """Return sorted list of all saved .conf filenames."""
+    try:
+        return sorted(f for f in os.listdir(VPN_CONFIGS_DIR) if f.endswith(".conf"))
+    except Exception:
+        return []
+
+
+def _stop_wireproxy_sync():
+    """Stop wireproxy synchronously."""
+    global _wireproxy_process
+    if _wireproxy_process:
+        try:
+            _wireproxy_process.terminate()
+            _wireproxy_process.wait(timeout=5)
+        except Exception:
+            try:
+                _wireproxy_process.kill()
+            except Exception:
+                pass
+        _wireproxy_process = None
+    _ytm_cache.clear()
+
+
+def _start_wireproxy_sync(conf_path: str) -> bool:
+    """Start wireproxy with given conf. Returns True on success."""
+    global _wireproxy_process
+    import time
+    try:
+        _wireproxy_process = subprocess.Popen(
+            [WIREPROXY_BIN, "-c", conf_path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        time.sleep(1.5)
+        if _wireproxy_process.poll() is not None:
+            _wireproxy_process = None
+            return False
+        _ytm_cache.clear()
+        return True
+    except Exception:
+        _wireproxy_process = None
+        return False
+
+
+async def _vpn_failover():
+    """Try the next available conf. If all exhausted, disable wireproxy."""
+    global _wireproxy_conf_path, _wireproxy_conf_name
+    global _vpn_error_count, _vpn_failed_confs, _vpn_all_failed
+
+    async with _vpn_failover_lock:
+        if not _vpn_auto_mode:
+            return
+
+        # Mark current conf as failed
+        if _wireproxy_conf_name:
+            _vpn_failed_confs.add(_wireproxy_conf_name)
+
+        all_confs = _list_all_confs()
+        candidates = [c for c in all_confs if c not in _vpn_failed_confs]
+
+        if not candidates:
+            # All confs exhausted — disable wireproxy
+            _stop_wireproxy_sync()
+            _vpn_all_failed = True
+            _vpn_error_count = 0
+            return
+
+        # Try next candidate
+        next_conf = candidates[0]
+        next_path = os.path.join(VPN_CONFIGS_DIR, next_conf)
+
+        _stop_wireproxy_sync()
+
+        loop = asyncio.get_event_loop()
+        success = await loop.run_in_executor(None, _start_wireproxy_sync, next_path)
+
+        if success:
+            _wireproxy_conf_path = next_path
+            _wireproxy_conf_name = next_conf
+            _vpn_state_save({"active": next_conf})
+            _vpn_error_count = 0
+        else:
+            _vpn_failed_confs.add(next_conf)
+            # Recurse to try the next one
+            await _vpn_failover()
+
+
+def record_youtube_error(status_code: int):
+    """Call this when YouTube returns a blocking error. Triggers failover if needed."""
+    global _vpn_error_count
+    if not _vpn_auto_mode:
+        return
+    if _wireproxy_process is None or _wireproxy_process.poll() is not None:
+        return
+    if status_code in (403, 429, 451):
+        _vpn_error_count += 1
+        if _vpn_error_count >= _vpn_failover_threshold:
+            _vpn_error_count = 0
+            asyncio.create_task(_vpn_failover())
+
+
+def reset_youtube_errors():
+    """Call this on a successful YouTube response to reset the error counter."""
+    global _vpn_error_count
+    _vpn_error_count = 0
+
+
 def _get_proxy_url() -> Optional[str]:
     if _wireproxy_process and _wireproxy_process.poll() is None:
         return f"socks5://127.0.0.1:{_wireproxy_socks_port}"
@@ -2669,7 +2791,32 @@ async def vpn_status():
         "conf_name": _wireproxy_conf_name,
         "error": None,
         "proxy": _get_proxy_url(),
+        "auto_mode": _vpn_auto_mode,
+        "all_failed": _vpn_all_failed,
+        "error_count": _vpn_error_count,
     }
+
+
+@app.post("/api/vpn/auto")
+async def vpn_set_auto_mode(body: dict):
+    global _vpn_auto_mode, _vpn_error_count, _vpn_failed_confs, _vpn_all_failed
+    enabled = bool(body.get("enabled", False))
+    _vpn_auto_mode = enabled
+    # Reset failover state when toggling
+    _vpn_error_count = 0
+    _vpn_failed_confs = set()
+    _vpn_all_failed = False
+    return {"auto_mode": _vpn_auto_mode}
+
+
+@app.post("/api/vpn/reset_failover")
+async def vpn_reset_failover():
+    """Reset the failover state so all confs are candidates again."""
+    global _vpn_error_count, _vpn_failed_confs, _vpn_all_failed
+    _vpn_error_count = 0
+    _vpn_failed_confs = set()
+    _vpn_all_failed = False
+    return {"ok": True}
 
 
 @app.get("/api/vpn/configs")
