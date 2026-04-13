@@ -25,6 +25,7 @@ import {
   Bell,
   ListPlus,
   ListChecks,
+  ArrowLeft,
 } from 'lucide-react'
 import { formatSubscribers } from '@/lib/utils'
 import { isInWatchLater, toggleWatchLater } from '@/lib/watchLater'
@@ -336,8 +337,17 @@ export default function WatchPage({ params }: WatchPageProps) {
             )}
           </div>
 
+          {/* Back button */}
+          <button
+            onClick={() => router.back()}
+            className="flex items-center gap-1.5 mt-4 text-yt-text-muted hover:text-yt-text transition-colors text-sm"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            {t('nav_back')}
+          </button>
+
           {/* Title */}
-          <h1 className="text-yt-text text-xl font-semibold mt-4 leading-snug">
+          <h1 className="text-yt-text text-xl font-semibold mt-2 leading-snug">
             {video.title}
           </h1>
 

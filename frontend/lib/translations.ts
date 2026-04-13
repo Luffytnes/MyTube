@@ -1,7 +1,7 @@
 export type Lang = 'en' | 'fr' | 'es' | 'de' | 'pt' | 'it' | 'ja' | 'ko' | 'ru'
 
 export interface Translations {
-  nav_home: string; nav_trending: string; nav_history: string
+  nav_home: string; nav_trending: string; nav_history: string; nav_back: string
   nav_watchLater: string; nav_music: string
   nav_privacyFirst: string; nav_noTracking: string; nav_selfHosted: string
   nav_subscriptions: string
@@ -97,7 +97,7 @@ export interface Translations {
 
 export const translations: Record<Lang, Translations> = {
   en: {
-    nav_home: 'Home', nav_trending: 'Trending', nav_history: 'History',
+    nav_home: 'Home', nav_trending: 'Trending', nav_history: 'History', nav_back: 'Back',
     nav_watchLater: 'Watch Later', nav_music: 'Music',
     nav_privacyFirst: 'Privacy First', nav_noTracking: 'No tracking. No ads. No Google.',
     nav_selfHosted: 'Self-hosted YouTube frontend.',
@@ -194,7 +194,7 @@ export const translations: Record<Lang, Translations> = {
     news_ago_just_now: 'Just now', news_ago_minutes: 'min ago', news_ago_hours: 'h ago', news_ago_days: 'd ago', news_read_more: 'Read',
   },
   fr: {
-    nav_home: 'Accueil', nav_trending: 'Tendances', nav_history: 'Historique',
+    nav_home: 'Accueil', nav_trending: 'Tendances', nav_history: 'Historique', nav_back: 'Retour',
     nav_watchLater: 'À regarder plus tard', nav_music: 'Musique',
     nav_privacyFirst: 'Vie privée d\'abord', nav_noTracking: 'Pas de traçage. Pas de pub. Pas de Google.',
     nav_selfHosted: 'Frontend YouTube auto-hébergé.',
@@ -291,7 +291,7 @@ export const translations: Record<Lang, Translations> = {
     news_ago_just_now: 'À l\'instant', news_ago_minutes: 'min', news_ago_hours: 'h', news_ago_days: 'j', news_read_more: 'Lire',
   },
   es: {
-    nav_home: 'Inicio', nav_trending: 'Tendencias', nav_history: 'Historial',
+    nav_home: 'Inicio', nav_trending: 'Tendencias', nav_history: 'Historial', nav_back: 'Volver',
     nav_watchLater: 'Ver más tarde', nav_music: 'Música',
     nav_privacyFirst: 'Privacidad primero', nav_noTracking: 'Sin rastreo. Sin anuncios. Sin Google.',
     nav_selfHosted: 'Frontend de YouTube auto-alojado.',
@@ -388,7 +388,7 @@ export const translations: Record<Lang, Translations> = {
     news_ago_just_now: 'Ahora', news_ago_minutes: 'min', news_ago_hours: 'h', news_ago_days: 'd', news_read_more: 'Leer',
   },
   de: {
-    nav_home: 'Startseite', nav_trending: 'Trends', nav_history: 'Verlauf',
+    nav_home: 'Startseite', nav_trending: 'Trends', nav_history: 'Verlauf', nav_back: 'Zurück',
     nav_watchLater: 'Später ansehen', nav_music: 'Musik',
     nav_privacyFirst: 'Datenschutz zuerst', nav_noTracking: 'Kein Tracking. Keine Werbung. Kein Google.',
     nav_selfHosted: 'Selbst gehostetes YouTube-Frontend.',
@@ -485,7 +485,7 @@ export const translations: Record<Lang, Translations> = {
     news_ago_just_now: 'Jetzt', news_ago_minutes: 'Min.', news_ago_hours: 'Std.', news_ago_days: 'T.', news_read_more: 'Lesen',
   },
   pt: {
-    nav_home: 'Início', nav_trending: 'Em Alta', nav_history: 'Histórico',
+    nav_home: 'Início', nav_trending: 'Em Alta', nav_history: 'Histórico', nav_back: 'Voltar',
     nav_watchLater: 'Assistir mais tarde', nav_music: 'Música',
     nav_privacyFirst: 'Privacidade primeiro', nav_noTracking: 'Sem rastreamento. Sem anúncios. Sem Google.',
     nav_selfHosted: 'Frontend YouTube auto-hospedado.',
@@ -582,7 +582,7 @@ export const translations: Record<Lang, Translations> = {
     news_ago_just_now: 'Agora', news_ago_minutes: 'min', news_ago_hours: 'h', news_ago_days: 'd', news_read_more: 'Ler',
   },
   it: {
-    nav_home: 'Home', nav_trending: 'Di tendenza', nav_history: 'Cronologia',
+    nav_home: 'Home', nav_trending: 'Di tendenza', nav_history: 'Cronologia', nav_back: 'Indietro',
     nav_watchLater: 'Da guardare', nav_music: 'Musica',
     nav_privacyFirst: 'Privacy prima', nav_noTracking: 'Nessun tracciamento. Nessuna pub. Nessun Google.',
     nav_selfHosted: 'Frontend YouTube self-hosted.',
@@ -679,7 +679,7 @@ export const translations: Record<Lang, Translations> = {
     news_ago_just_now: 'Ora', news_ago_minutes: 'min fa', news_ago_hours: 'ore fa', news_ago_days: 'gg fa', news_read_more: 'Leggi',
   },
   ja: {
-    nav_home: 'ホーム', nav_trending: 'トレンド', nav_history: '履歴',
+    nav_home: 'ホーム', nav_trending: 'トレンド', nav_history: '履歴', nav_back: '戻る',
     nav_watchLater: '後で見る', nav_music: 'ミュージック',
     nav_privacyFirst: 'プライバシー優先', nav_noTracking: 'トラッキングなし。広告なし。Googleなし。',
     nav_selfHosted: 'セルフホスト型YouTubeフロントエンド。',
@@ -776,7 +776,7 @@ export const translations: Record<Lang, Translations> = {
     news_ago_just_now: 'たった今', news_ago_minutes: '分前', news_ago_hours: '時間前', news_ago_days: '日前', news_read_more: '読む',
   },
   ko: {
-    nav_home: '홈', nav_trending: '인기', nav_history: '시청 기록',
+    nav_home: '홈', nav_trending: '인기', nav_history: '시청 기록', nav_back: '뒤로',
     nav_watchLater: '나중에 볼 동영상', nav_music: '음악',
     nav_privacyFirst: '개인정보 보호 우선', nav_noTracking: '추적 없음. 광고 없음. Google 없음.',
     nav_selfHosted: '자체 호스팅 YouTube 프런트엔드.',
@@ -873,7 +873,7 @@ export const translations: Record<Lang, Translations> = {
     news_ago_just_now: '방금', news_ago_minutes: '분 전', news_ago_hours: '시간 전', news_ago_days: '일 전', news_read_more: '읽기',
   },
   ru: {
-    nav_home: 'Главная', nav_trending: 'В тренде', nav_history: 'История',
+    nav_home: 'Главная', nav_trending: 'В тренде', nav_history: 'История', nav_back: 'Назад',
     nav_watchLater: 'Смотреть позже', nav_music: 'Музыка',
     nav_privacyFirst: 'Приватность прежде всего', nav_noTracking: 'Без слежки. Без рекламы. Без Google.',
     nav_selfHosted: 'Самостоятельно размещённый фронтенд.',
