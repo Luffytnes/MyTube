@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Sun, Moon, Monitor, Upload, Wifi, WifiOff, AlertCircle, Loader2, Shield, RefreshCw, MapPin, Trash2, Check, Globe, Network, Play, Database, Download, CheckCircle2 } from 'lucide-react'
+import { X, Sun, Moon, Monitor, Upload, Wifi, WifiOff, AlertCircle, Loader2, Shield, RefreshCw, MapPin, Trash2, Check, Globe, Network, Play, Database, Download, CheckCircle2, Mic2, Eye, EyeOff } from 'lucide-react'
 import { useTheme, type ThemeMode } from '@/lib/themeContext'
 import { useRegion, REGIONS } from '@/lib/regionContext'
 import { getPlaybackSettings, setPlaybackSettings, type PlaybackSettings } from '@/lib/playbackSettings'
@@ -9,7 +9,7 @@ import { getPlaybackSettings, setPlaybackSettings, type PlaybackSettings } from 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 type VpnStatus = 'disconnected' | 'connecting' | 'connected' | 'disconnecting' | 'error'
-type Tab = 'general' | 'playback' | 'data' | 'wireproxy'
+type Tab = 'general' | 'playback' | 'data' | 'wireproxy' | 'podcast'
 
 interface VpnState {
   status: VpnStatus
@@ -44,6 +44,11 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const [ipLoading, setIpLoading] = useState(false)
   const [importStatus, setImportStatus] = useState<'idle' | 'ok' | 'err'>('idle')
   const [clearConfirm, setClearConfirm] = useState<string | null>(null)
+  const [piKey, setPiKey] = useState('')
+  const [piSecret, setPiSecret] = useState('')
+  const [piShowSecret, setPiShowSecret] = useState(false)
+  const [piSaving, setPiSaving] = useState(false)
+  const [piSaved, setPiSaved] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
   const modalRef = useRef<HTMLDivElement>(null)
@@ -277,6 +282,34 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     setClearConfirm(null)
   }
 
+  // Load Podcast Index keys when tab opens
+  useEffect(() => {
+    if (tab !== 'podcast') return
+    fetch(`${API_BASE}/api/podcasts/config`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (d) {
+          setPiKey(d.key || '')
+          setPiSecret(d.secret ? '••••••••' : '')
+        }
+      })
+      .catch(() => {})
+  }, [tab])
+
+  async function handleSavePiKeys() {
+    setPiSaving(true)
+    try {
+      await fetch(`${API_BASE}/api/podcasts/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: piKey, secret: piSecret === '••••••••' ? null : piSecret }),
+      })
+      setPiSaved(true)
+      setTimeout(() => setPiSaved(false), 2000)
+    } catch {}
+    setPiSaving(false)
+  }
+
   const TABS: { id: Tab; label: string; icon: React.ReactNode; badge?: React.ReactNode }[] = [
     {
       id: 'general',
@@ -292,6 +325,11 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       id: 'data',
       label: t('settings_data_tab'),
       icon: <Database className="w-4 h-4" />,
+    },
+    {
+      id: 'podcast',
+      label: 'Podcast',
+      icon: <Mic2 className="w-4 h-4" />,
     },
     {
       id: 'wireproxy',
@@ -346,7 +384,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-yt-border/50">
             <h2 className="text-yt-text font-semibold text-base">
-              {tab === 'general' ? 'Général' : tab === 'playback' ? t('settings_tab_playback') : tab === 'data' ? t('settings_data_tab') : 'Wireproxy'}
+              {tab === 'general' ? 'Général' : tab === 'playback' ? t('settings_tab_playback') : tab === 'data' ? t('settings_data_tab') : tab === 'podcast' ? 'Podcast Index' : 'Wireproxy'}
             </h2>
             <button
               onClick={onClose}
@@ -630,6 +668,64 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                       {t('autoplay_cancel')}
                     </button>
                   )}
+                </section>
+              </div>
+            )}
+
+            {/* ── PODCAST INDEX ── */}
+            {tab === 'podcast' && (
+              <div className="space-y-6">
+                <section>
+                  <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-1">Podcast Index API</p>
+                  <p className="text-xs text-yt-text-muted mb-4">
+                    Clé gratuite sur{' '}
+                    <span className="text-yt-text font-medium">podcastindex.org/developer</span>
+                  </p>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs text-yt-text-muted mb-1">API Key</label>
+                      <input
+                        type="text"
+                        value={piKey}
+                        onChange={(e) => setPiKey(e.target.value)}
+                        placeholder="Votre clé API"
+                        className="w-full px-3 py-2 rounded-xl bg-yt-secondary border border-yt-border text-sm text-yt-text placeholder-yt-text-muted focus:outline-none focus:border-yt-red transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-yt-text-muted mb-1">API Secret</label>
+                      <div className="relative">
+                        <input
+                          type={piShowSecret ? 'text' : 'password'}
+                          value={piSecret}
+                          onChange={(e) => setPiSecret(e.target.value)}
+                          placeholder="Votre secret API"
+                          className="w-full px-3 py-2 pr-10 rounded-xl bg-yt-secondary border border-yt-border text-sm text-yt-text placeholder-yt-text-muted focus:outline-none focus:border-yt-red transition-colors"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setPiShowSecret((v) => !v)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-yt-text-muted hover:text-yt-text transition-colors"
+                        >
+                          {piShowSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleSavePiKeys}
+                      disabled={piSaving || !piKey.trim() || !piSecret.trim()}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl bg-yt-red hover:bg-yt-red-hover disabled:opacity-40 text-white text-sm font-medium transition-colors"
+                    >
+                      {piSaving ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : piSaved ? (
+                        <CheckCircle2 className="w-4 h-4" />
+                      ) : (
+                        <Check className="w-4 h-4" />
+                      )}
+                      {piSaved ? 'Enregistré !' : 'Enregistrer'}
+                    </button>
+                  </div>
                 </section>
               </div>
             )}

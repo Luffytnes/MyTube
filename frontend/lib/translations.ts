@@ -53,6 +53,7 @@ export interface Translations {
   podcast_episode: string; podcast_episodes: string; podcast_episodes_title: string; podcast_no_episodes: string
   podcast_cat_news: string; podcast_cat_culture: string; podcast_cat_science: string; podcast_cat_sport: string; podcast_cat_business: string; podcast_cat_comedy: string
   podcast_follow: string; podcast_unfollow: string
+  podcast_not_configured_title: string; podcast_not_configured_desc: string
   podcast_my_subscriptions: string; podcast_no_subscriptions: string; podcast_no_subscriptions_desc: string; podcast_discover: string
   theme_light: string; theme_dark: string; theme_auto: string
   settings_title: string; settings_appearance: string; settings_language: string
@@ -161,6 +162,7 @@ export const translations: Record<Lang, Translations> = {
     podcast_episode: 'episode', podcast_episodes: 'episodes', podcast_episodes_title: 'Episodes', podcast_no_episodes: 'No episodes available.',
     podcast_cat_news: 'News', podcast_cat_culture: 'Culture', podcast_cat_science: 'Science & Tech', podcast_cat_sport: 'Sport', podcast_cat_business: 'Business', podcast_cat_comedy: 'Comedy',
     podcast_follow: 'Follow', podcast_unfollow: 'Unfollow',
+    podcast_not_configured_title: 'Podcast Index not configured', podcast_not_configured_desc: 'Add your API key in Settings → Podcasts. Get a free key at podcastindex.org/developer.',
     podcast_my_subscriptions: 'My Podcasts', podcast_no_subscriptions: 'No subscriptions yet', podcast_no_subscriptions_desc: 'Follow podcasts to find them here easily.', podcast_discover: 'Discover podcasts',
     theme_light: 'Light', theme_dark: 'Dark', theme_auto: 'Auto',
     settings_title: 'Settings', settings_appearance: 'Appearance', settings_language: 'Language & Region',
@@ -260,6 +262,7 @@ export const translations: Record<Lang, Translations> = {
     podcast_episode: 'épisode', podcast_episodes: 'épisodes', podcast_episodes_title: 'Épisodes', podcast_no_episodes: 'Aucun épisode disponible.',
     podcast_cat_news: 'Actualités', podcast_cat_culture: 'Culture', podcast_cat_science: 'Science & Tech', podcast_cat_sport: 'Sport', podcast_cat_business: 'Business', podcast_cat_comedy: 'Humour',
     podcast_follow: 'Suivre', podcast_unfollow: 'Ne plus suivre',
+    podcast_not_configured_title: 'Podcast Index non configuré', podcast_not_configured_desc: 'Ajoute ta clé API dans Réglages → Podcasts. Clé gratuite sur podcastindex.org/developer.',
     podcast_my_subscriptions: 'Mes podcasts', podcast_no_subscriptions: 'Aucun abonnement', podcast_no_subscriptions_desc: 'Suis des podcasts pour les retrouver ici facilement.', podcast_discover: 'Découvrir des podcasts',
     theme_light: 'Clair', theme_dark: 'Sombre', theme_auto: 'Automatique',
     settings_title: 'Réglages', settings_appearance: 'Apparence', settings_language: 'Langue & Région',
@@ -359,6 +362,7 @@ export const translations: Record<Lang, Translations> = {
     podcast_episode: 'episodio', podcast_episodes: 'episodios', podcast_episodes_title: 'Episodios', podcast_no_episodes: 'No hay episodios disponibles.',
     podcast_cat_news: 'Noticias', podcast_cat_culture: 'Cultura', podcast_cat_science: 'Ciencia & Tech', podcast_cat_sport: 'Deporte', podcast_cat_business: 'Negocios', podcast_cat_comedy: 'Comedia',
     podcast_follow: 'Seguir', podcast_unfollow: 'Dejar de seguir',
+    podcast_not_configured_title: 'Podcast Index no configurado', podcast_not_configured_desc: 'Añade tu clave API en Ajustes → Podcasts. Clave gratuita en podcastindex.org/developer.',
     podcast_my_subscriptions: 'Mis podcasts', podcast_no_subscriptions: 'Sin suscripciones', podcast_no_subscriptions_desc: 'Sigue podcasts para encontrarlos aquí fácilmente.', podcast_discover: 'Descubrir podcasts',
     theme_light: 'Claro', theme_dark: 'Oscuro', theme_auto: 'Automático',
     settings_title: 'Ajustes', settings_appearance: 'Apariencia', settings_language: 'Idioma & Región',
@@ -458,6 +462,7 @@ export const translations: Record<Lang, Translations> = {
     podcast_episode: 'Folge', podcast_episodes: 'Folgen', podcast_episodes_title: 'Folgen', podcast_no_episodes: 'Keine Folgen verfügbar.',
     podcast_cat_news: 'Nachrichten', podcast_cat_culture: 'Kultur', podcast_cat_science: 'Wissenschaft & Tech', podcast_cat_sport: 'Sport', podcast_cat_business: 'Wirtschaft', podcast_cat_comedy: 'Comedy',
     podcast_follow: 'Folgen', podcast_unfollow: 'Entfolgen',
+    podcast_not_configured_title: 'Podcast Index nicht konfiguriert', podcast_not_configured_desc: 'API-Schlüssel unter Einstellungen → Podcasts hinzufügen. Kostenloser Schlüssel auf podcastindex.org/developer.',
     podcast_my_subscriptions: 'Meine Podcasts', podcast_no_subscriptions: 'Keine Abonnements', podcast_no_subscriptions_desc: 'Folge Podcasts, um sie hier leicht zu finden.', podcast_discover: 'Podcasts entdecken',
     theme_light: 'Hell', theme_dark: 'Dunkel', theme_auto: 'Automatisch',
     settings_title: 'Einstellungen', settings_appearance: 'Darstellung', settings_language: 'Sprache & Region',
@@ -557,6 +562,7 @@ export const translations: Record<Lang, Translations> = {
     podcast_episode: 'episódio', podcast_episodes: 'episódios', podcast_episodes_title: 'Episódios', podcast_no_episodes: 'Nenhum episódio disponível.',
     podcast_cat_news: 'Notícias', podcast_cat_culture: 'Cultura', podcast_cat_science: 'Ciência & Tech', podcast_cat_sport: 'Esporte', podcast_cat_business: 'Negócios', podcast_cat_comedy: 'Comédia',
     podcast_follow: 'Seguir', podcast_unfollow: 'Deixar de seguir',
+    podcast_not_configured_title: 'Podcast Index não configurado', podcast_not_configured_desc: 'Adicione sua chave API em Configurações → Podcasts. Chave gratuita em podcastindex.org/developer.',
     podcast_my_subscriptions: 'Meus podcasts', podcast_no_subscriptions: 'Sem assinaturas', podcast_no_subscriptions_desc: 'Siga podcasts para encontrá-los aqui facilmente.', podcast_discover: 'Descobrir podcasts',
     theme_light: 'Claro', theme_dark: 'Escuro', theme_auto: 'Automático',
     settings_title: 'Configurações', settings_appearance: 'Aparência', settings_language: 'Idioma & Região',
@@ -656,6 +662,7 @@ export const translations: Record<Lang, Translations> = {
     podcast_episode: 'episodio', podcast_episodes: 'episodi', podcast_episodes_title: 'Episodi', podcast_no_episodes: 'Nessun episodio disponibile.',
     podcast_cat_news: 'Notizie', podcast_cat_culture: 'Cultura', podcast_cat_science: 'Scienza & Tech', podcast_cat_sport: 'Sport', podcast_cat_business: 'Business', podcast_cat_comedy: 'Commedia',
     podcast_follow: 'Segui', podcast_unfollow: 'Non seguire più',
+    podcast_not_configured_title: 'Podcast Index non configurato', podcast_not_configured_desc: 'Aggiungi la tua chiave API in Impostazioni → Podcast. Chiave gratuita su podcastindex.org/developer.',
     podcast_my_subscriptions: 'I miei podcast', podcast_no_subscriptions: 'Nessun abbonamento', podcast_no_subscriptions_desc: 'Segui i podcast per trovarli qui facilmente.', podcast_discover: 'Scopri i podcast',
     theme_light: 'Chiaro', theme_dark: 'Scuro', theme_auto: 'Automatico',
     settings_title: 'Impostazioni', settings_appearance: 'Aspetto', settings_language: 'Lingua & Regione',
@@ -755,6 +762,7 @@ export const translations: Record<Lang, Translations> = {
     podcast_episode: 'エピソード', podcast_episodes: 'エピソード', podcast_episodes_title: 'エピソード', podcast_no_episodes: 'エピソードがありません。',
     podcast_cat_news: 'ニュース', podcast_cat_culture: 'カルチャー', podcast_cat_science: 'サイエンス & テック', podcast_cat_sport: 'スポーツ', podcast_cat_business: 'ビジネス', podcast_cat_comedy: 'コメディ',
     podcast_follow: 'フォロー', podcast_unfollow: 'フォロー解除',
+    podcast_not_configured_title: 'Podcast Index 未設定', podcast_not_configured_desc: '設定 → ポッドキャストでAPIキーを追加してください。podcastindex.org/developer で無料取得。',
     podcast_my_subscriptions: 'マイポッドキャスト', podcast_no_subscriptions: 'サブスクリプションなし', podcast_no_subscriptions_desc: 'ポッドキャストをフォローしてここで簡単に見つけましょう。', podcast_discover: 'ポッドキャストを探す',
     theme_light: 'ライト', theme_dark: 'ダーク', theme_auto: '自動',
     settings_title: '設定', settings_appearance: '外観', settings_language: '言語 & 地域',
@@ -854,6 +862,7 @@ export const translations: Record<Lang, Translations> = {
     podcast_episode: '에피소드', podcast_episodes: '에피소드', podcast_episodes_title: '에피소드', podcast_no_episodes: '에피소드가 없습니다.',
     podcast_cat_news: '뉴스', podcast_cat_culture: '문화', podcast_cat_science: '과학 & 기술', podcast_cat_sport: '스포츠', podcast_cat_business: '비즈니스', podcast_cat_comedy: '코미디',
     podcast_follow: '팔로우', podcast_unfollow: '팔로우 취소',
+    podcast_not_configured_title: 'Podcast Index 미설정', podcast_not_configured_desc: '설정 → 팟캐스트에서 API 키를 추가하세요. podcastindex.org/developer에서 무료 키를 발급받으세요.',
     podcast_my_subscriptions: '내 팟캐스트', podcast_no_subscriptions: '구독 없음', podcast_no_subscriptions_desc: '팟캐스트를 팔로우하여 여기서 쉽게 찾으세요.', podcast_discover: '팟캐스트 탐색',
     theme_light: '라이트', theme_dark: '다크', theme_auto: '자동',
     settings_title: '설정', settings_appearance: '외관', settings_language: '언어 & 지역',
@@ -953,6 +962,7 @@ export const translations: Record<Lang, Translations> = {
     podcast_episode: 'эпизод', podcast_episodes: 'эпизодов', podcast_episodes_title: 'Эпизоды', podcast_no_episodes: 'Нет доступных эпизодов.',
     podcast_cat_news: 'Новости', podcast_cat_culture: 'Культура', podcast_cat_science: 'Наука & Технологии', podcast_cat_sport: 'Спорт', podcast_cat_business: 'Бизнес', podcast_cat_comedy: 'Юмор',
     podcast_follow: 'Подписаться', podcast_unfollow: 'Отписаться',
+    podcast_not_configured_title: 'Podcast Index не настроен', podcast_not_configured_desc: 'Добавьте API-ключ в Настройки → Подкасты. Бесплатный ключ на podcastindex.org/developer.',
     podcast_my_subscriptions: 'Мои подкасты', podcast_no_subscriptions: 'Нет подписок', podcast_no_subscriptions_desc: 'Подпишитесь на подкасты, чтобы легко их находить здесь.', podcast_discover: 'Найти подкасты',
     theme_light: 'Светлая', theme_dark: 'Тёмная', theme_auto: 'Авто',
     settings_title: 'Настройки', settings_appearance: 'Внешний вид', settings_language: 'Язык & Регион',

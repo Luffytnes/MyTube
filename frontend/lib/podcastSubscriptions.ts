@@ -1,7 +1,7 @@
 const STORAGE_KEY = 'mytube-podcast-subscriptions'
 
 export interface PodcastSubscription {
-  browseId: string
+  id: string
   title: string
   author?: string
   thumbnail?: string
@@ -26,23 +26,23 @@ export function getPodcastSubscriptions(): PodcastSubscription[] {
   return load()
 }
 
-export function isPodcastSubscribed(browseId: string): boolean {
-  return load().some((e) => e.browseId === browseId)
+export function isPodcastSubscribed(id: string): boolean {
+  return load().some((e) => e.id === id)
 }
 
 export function subscribePodcast(entry: PodcastSubscription) {
-  const entries = load().filter((e) => e.browseId !== entry.browseId)
+  const entries = load().filter((e) => e.id !== entry.id)
   entries.unshift(entry)
   save(entries)
 }
 
-export function unsubscribePodcast(browseId: string) {
-  save(load().filter((e) => e.browseId !== browseId))
+export function unsubscribePodcast(id: string) {
+  save(load().filter((e) => e.id !== id))
 }
 
 export function togglePodcastSubscription(entry: PodcastSubscription): boolean {
-  if (isPodcastSubscribed(entry.browseId)) {
-    unsubscribePodcast(entry.browseId)
+  if (isPodcastSubscribed(entry.id)) {
+    unsubscribePodcast(entry.id)
     return false
   } else {
     subscribePodcast(entry)

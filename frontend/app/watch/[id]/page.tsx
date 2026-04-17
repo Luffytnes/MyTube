@@ -301,6 +301,7 @@ export default function WatchPage({ params }: WatchPageProps) {
               formats={video.formats}
               title={video.title}
               isLive={video.isLive}
+              knownDuration={video.duration ? video.duration.split(':').reverse().reduce((acc, v, i) => acc + parseInt(v) * Math.pow(60, i), 0) : undefined}
               onEnded={handleEnded}
               onNext={handleNext}
               onPrev={handlePrev}

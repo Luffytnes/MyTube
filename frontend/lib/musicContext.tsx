@@ -15,6 +15,7 @@ export interface MusicTrack {
   thumbnail?: string | null
   duration?: string | null
   durationMs?: number
+  directUrl?: string  // for podcast episodes with a direct enclosure URL
 }
 
 type RepeatMode = 'none' | 'one' | 'all'
@@ -116,8 +117,14 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const audio = audioRef.current
     const track = currentIndex >= 0 && currentIndex < queue.length ? queue[currentIndex] : null
-    if (!audio || !track?.videoId) return
-    audio.src = `${API_BASE}/api/stream/${track.videoId}/audio`
+    if (!audio || !track) return
+    if (track.directUrl) {
+      audio.src = `${API_BASE}/api/podcasts/audio/proxy?url=${encodeURIComponent(track.directUrl)}`
+    } else if (track.videoId) {
+      audio.src = `${API_BASE}/api/stream/${track.videoId}/audio`
+    } else {
+      return
+    }
     audio.play().catch(() => {})
   }, [currentIndex, queue])
 

@@ -41,8 +41,8 @@ export default function PodcastSubscriptionsPage() {
       ) : (
         <div className="space-y-2">
           {subs.map((p) => (
-            <div key={p.browseId} className="flex items-center gap-3 p-3 rounded-xl hover:bg-yt-secondary transition-colors group">
-              <Link href={`/music/podcasts/${p.browseId}`} className="flex items-center gap-3 flex-1 min-w-0">
+            <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-yt-secondary transition-colors group">
+              <Link href={`/music/podcasts/${p.id}`} className="flex items-center gap-3 flex-1 min-w-0">
                 <div className="w-14 h-14 rounded-xl overflow-hidden bg-yt-hover flex-shrink-0">
                   {p.thumbnail ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -59,7 +59,7 @@ export default function PodcastSubscriptionsPage() {
                 </div>
               </Link>
               <button
-                onClick={() => handleUnsubscribe(p.browseId)}
+                onClick={() => handleUnsubscribe(p.id)}
                 className="p-2 rounded-full opacity-0 group-hover:opacity-100 hover:bg-yt-hover text-yt-text-muted hover:text-red-400 transition-all flex-shrink-0"
                 aria-label={t('podcast_unfollow')}
               >

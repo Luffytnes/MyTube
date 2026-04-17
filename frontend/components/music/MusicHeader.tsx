@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, FormEvent } from 'react'
+import { useState, useEffect, useCallback, FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Music2, Search, X, Shield, Settings } from 'lucide-react'
@@ -8,11 +8,46 @@ import { saveMusicSearchQuery } from '@/lib/musicSearchHistory'
 import SettingsPanel from '@/components/layout/SettingsPanel'
 import { useRegion } from '@/lib/regionContext'
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
 export default function MusicHeader() {
   const router = useRouter()
   const { t } = useRegion()
   const [query, setQuery] = useState('')
   const [showSettings, setShowSettings] = useState(false)
+  const [vpnConnected, setVpnConnected] = useState(false)
+  const [shieldTooltip, setShieldTooltip] = useState('')
+
+  const fetchVpnStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/vpn/status`)
+      if (res.ok) {
+        const data = await res.json()
+        setVpnConnected(!!data.running)
+      }
+    } catch {}
+  }, [])
+
+  const fetchShieldTooltip = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/vpn/myip`)
+      if (res.ok) {
+        const d = await res.json()
+        const parts = [d.ip, d.city, d.country].filter(Boolean).join(' — ')
+        const org = d.org ? `\n${d.org}` : ''
+        setShieldTooltip(parts + org)
+      } else {
+        setShieldTooltip('')
+      }
+    } catch {
+      setShieldTooltip('')
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchVpnStatus()
+    fetchShieldTooltip()
+  }, [fetchVpnStatus, fetchShieldTooltip])
 
   function handleSearch(e: FormEvent) {
     e.preventDefault()
@@ -61,9 +96,9 @@ export default function MusicHeader() {
       <div className="flex items-center gap-2 flex-shrink-0">
         <div
           className="flex items-center gap-1.5 px-3 h-8 rounded-full bg-yt-secondary border border-yt-border text-xs text-yt-text-secondary cursor-default"
-          title="Privacy-focused: no tracking, no ads, no Google fonts"
+          title={shieldTooltip || (vpnConnected ? 'VPN actif' : 'Sans VPN — votre IP réelle est utilisée')}
         >
-          <Shield className="w-3.5 h-3.5 text-green-400" />
+          <Shield className={`w-3.5 h-3.5 ${vpnConnected ? 'text-green-400' : 'text-red-400'}`} />
           <span className="hidden md:block">{t('privacy_badge')}</span>
         </div>
 
@@ -84,7 +119,7 @@ export default function MusicHeader() {
         </Link>
       </div>
 
-      <SettingsPanel open={showSettings} onClose={() => setShowSettings(false)} />
+      <SettingsPanel open={showSettings} onClose={() => { setShowSettings(false); fetchVpnStatus(); fetchShieldTooltip() }} />
     </header>
   )
 }

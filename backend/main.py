@@ -84,6 +84,8 @@ def httpx_client(**kwargs) -> httpx.AsyncClient:
     proxy = _get_proxy_url() if '_wireproxy_process' in globals() else None
     if proxy:
         kwargs.setdefault("proxy", proxy)
+        if 'vpn_record_activity' in globals():
+            vpn_record_activity()
     return httpx.AsyncClient(**kwargs)
 
 # Simple TTL cache (trending/search results)
@@ -1399,6 +1401,201 @@ async def stream_audio(video_id: str, request: Request, itag: Optional[str] = No
         raise HTTPException(status_code=500, detail=f"Audio stream error: {str(e)}")
 
 
+import tempfile
+import shutil
+from pathlib import Path
+from fastapi.responses import FileResponse
+
+# Active HLS transcoding sessions: key = f"{video_id}:{itag}"
+_hls_sessions: Dict[str, Dict[str, Any]] = {}
+_hls_lock = asyncio.Lock()
+
+async def _get_video_and_audio_urls(video_id: str, itag: str) -> tuple:
+    """Return (video_url, audio_url), using cache where possible."""
+    video_cache_key = f"stream:{video_id}:{itag}"
+    audio_cache_key = f"stream:{video_id}:bestaudio_m4a"
+
+    cached_v = stream_url_cache_get(video_cache_key)
+    cached_a = stream_url_cache_get(audio_cache_key)
+
+    if cached_v and cached_a:
+        return cached_v[0], cached_a[0]
+
+    opts = get_ydl_opts(**{"quiet": True, "no_warnings": True})
+    loop = asyncio.get_event_loop()
+
+    def _fetch():
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+            if not info:
+                return None, None
+            v_url = None
+            for fmt in info.get("formats", []):
+                if str(fmt.get("format_id")) == str(itag):
+                    v_url = fmt.get("url")
+                    stream_url_cache_set(video_cache_key, v_url, fmt.get("ext", "mp4"))
+                    break
+            a_url = None
+            for fmt in sorted(info.get("formats", []), key=lambda f: -(f.get("abr") or 0)):
+                if (fmt.get("acodec", "none") != "none"
+                        and fmt.get("vcodec", "none") == "none"
+                        and fmt.get("ext") in ("m4a", "mp4")):
+                    a_url = fmt.get("url")
+                    stream_url_cache_set(audio_cache_key, a_url, fmt.get("ext", "m4a"))
+                    break
+            return v_url, a_url
+
+    return await loop.run_in_executor(None, _fetch)
+
+
+async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
+    """Start ffmpeg transcoding from `start` seconds. Returns the session key."""
+    session_key = f"{video_id}:{itag}:{start}"
+
+    async with _hls_lock:
+        if session_key in _hls_sessions:
+            return session_key
+
+        video_url, audio_url = await _get_video_and_audio_urls(video_id, itag)
+        if not video_url or not audio_url:
+            raise HTTPException(status_code=404, detail="Stream URLs not found")
+
+        tmpdir = tempfile.mkdtemp(prefix="mytube_hls_")
+        ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+        seek = ["-ss", str(start)] if start > 0 else []
+
+        cmd = [
+            "ffmpeg", "-loglevel", "error", "-y",
+            *seek,
+            "-headers", f"User-Agent: {ua}\r\nReferer: https://www.youtube.com/\r\n",
+            "-i", video_url,
+            *seek,
+            "-headers", f"User-Agent: {ua}\r\nReferer: https://www.youtube.com/\r\n",
+            "-i", audio_url,
+            "-map", "0:v:0", "-map", "1:a:0",
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+            "-avoid_negative_ts", "make_zero",
+            "-fflags", "+genpts",
+            "-f", "hls",
+            "-hls_time", "1",
+            "-hls_list_size", "0",
+            "-hls_flags", "append_list",
+            "-hls_segment_filename", str(Path(tmpdir) / "seg%05d.ts"),
+            str(Path(tmpdir) / "stream.m3u8"),
+        ]
+
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+
+        _hls_sessions[session_key] = {"dir": tmpdir, "process": process, "start": start}
+        return session_key
+
+
+def _kill_hls_sessions_for(video_id: str, itag: str):
+    """Kill all existing sessions for a given video+itag (synchronous, call inside lock)."""
+    prefix = f"{video_id}:{itag}:"
+    to_remove = [k for k in _hls_sessions if k.startswith(prefix)]
+    for k in to_remove:
+        session = _hls_sessions.pop(k)
+        try:
+            session["process"].kill()
+        except Exception:
+            pass
+        shutil.rmtree(session["dir"], ignore_errors=True)
+
+
+@app.get("/api/hls/{video_id}/{itag}/stream.m3u8")
+async def hls_playlist(video_id: str, itag: str, start: int = 0):
+    """Start (or reuse) an ffmpeg HLS session from `start` seconds."""
+    try:
+        async with _hls_lock:
+            # Kill any existing session for a different start time
+            prefix = f"{video_id}:{itag}:"
+            existing = [k for k in _hls_sessions if k.startswith(prefix) and k != f"{video_id}:{itag}:{start}"]
+            for k in existing:
+                session = _hls_sessions.pop(k)
+                try:
+                    session["process"].kill()
+                except Exception:
+                    pass
+                shutil.rmtree(session["dir"], ignore_errors=True)
+
+        session_key = await _start_hls_session(video_id, itag, start)
+        session = _hls_sessions[session_key]
+        tmpdir = session["dir"]
+        playlist_path = Path(tmpdir) / "stream.m3u8"
+
+        # Wait up to 12s for the first playlist, invalidate cache if ffmpeg dies
+        for _ in range(120):
+            if playlist_path.exists() and playlist_path.stat().st_size > 10:
+                break
+            # Check if ffmpeg process died unexpectedly
+            proc = session["process"]
+            if proc.returncode is not None and proc.returncode != 0:
+                # URL may have expired — clear stream cache and let client retry
+                stream_url_cache_invalidate(video_id)
+                async with _hls_lock:
+                    _hls_sessions.pop(session_key, None)
+                shutil.rmtree(tmpdir, ignore_errors=True)
+                raise HTTPException(status_code=503, detail="ffmpeg failed, stream URLs may have expired")
+            await asyncio.sleep(0.1)
+        else:
+            raise HTTPException(status_code=504, detail="Transcoding timeout")
+
+        content = playlist_path.read_text()
+        # Rewrite segment filenames to include start offset in URL
+        content = re.sub(
+            r'^(seg\d+\.ts)$',
+            lambda m: f"/api/hls/{video_id}/{itag}/{start}/{m.group(1)}",
+            content,
+            flags=re.MULTILINE,
+        )
+
+        return Response(
+            content=content,
+            media_type="application/vnd.apple.mpegurl",
+            headers={"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/hls/{video_id}/{itag}/{start}/{segment}")
+async def hls_segment(video_id: str, itag: str, start: int, segment: str):
+    """Serve an HLS segment from the correct session temp dir."""
+    if not re.match(r'^seg\d+\.ts$', segment):
+        raise HTTPException(status_code=400, detail="Invalid segment name")
+
+    session_key = f"{video_id}:{itag}:{start}"
+    session = _hls_sessions.get(session_key)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    seg_path = Path(session["dir"]) / segment
+
+    for _ in range(50):
+        if seg_path.exists() and seg_path.stat().st_size > 0:
+            return FileResponse(seg_path, media_type="video/mp2t",
+                                headers={"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"})
+        await asyncio.sleep(0.1)
+
+    raise HTTPException(status_code=404, detail="Segment not ready")
+
+
+@app.delete("/api/hls/{video_id}/{itag}")
+async def hls_stop(video_id: str, itag: str):
+    """Kill all ffmpeg sessions for this video+itag and clean up."""
+    async with _hls_lock:
+        _kill_hls_sessions_for(video_id, itag)
+    return {"ok": True}
+
+
 @app.get("/api/stream/{video_id}")
 async def stream_video(video_id: str, request: Request, itag: Optional[str] = None):
     try:
@@ -1527,63 +1724,72 @@ async def get_dash_mpd(video_id: str, request: Request):
             tbr = fmt.get("tbr") or 0
             bandwidth = int(tbr * 1000) if tbr else 500000
 
-            if has_video and not has_audio and ext in ("mp4", "webm"):
+            # Only mp4 video-only streams (consistent container, no webm mixing)
+            if has_video and not has_audio and ext == "mp4":
                 height = fmt.get("height") or 0
                 width = fmt.get("width") or 0
-                vcodec = fmt.get("vcodec", "avc1")
-                # Shorten codec string (e.g. "avc1.640028" → keep as-is, "vp09.00.50.08" → keep)
+                vcodec = html_lib.escape(fmt.get("vcodec") or "avc1", quote=True)
                 video_reprs.append({
                     "itag": itag,
-                    "mime": f"video/{ext}",
+                    "mime": "video/mp4",
                     "codecs": vcodec,
                     "bandwidth": bandwidth,
                     "width": width,
                     "height": height,
                 })
 
-            elif has_audio and not has_video and ext in ("m4a", "webm", "mp4"):
-                acodec = fmt.get("acodec", "mp4a.40.2")
+            # Only m4a/mp4 audio-only streams
+            elif has_audio and not has_video and ext in ("m4a", "mp4"):
+                acodec = html_lib.escape(fmt.get("acodec") or "mp4a.40.2", quote=True)
                 abr = fmt.get("abr") or 0
                 audio_bandwidth = int(abr * 1000) if abr else 128000
                 audio_reprs.append({
                     "itag": itag,
-                    "mime": f"audio/{ext}",
+                    "mime": "audio/mp4",
                     "codecs": acodec,
                     "bandwidth": audio_bandwidth,
                 })
+
+        if not video_reprs or not audio_reprs:
+            raise HTTPException(status_code=404, detail="No compatible mp4 streams found for DASH")
 
         # Sort: video by height descending, audio by bandwidth descending
         video_reprs.sort(key=lambda r: -r["height"])
         audio_reprs.sort(key=lambda r: -r["bandwidth"])
 
-        # Build base URL prefix (scheme + host, for absolute BaseURLs)
+        # Build base URL prefix
         base_req = str(request.base_url).rstrip("/")
 
+        def _xml_url(path: str) -> str:
+            return html_lib.escape(path, quote=False)
+
         def _video_repr(r: dict) -> str:
+            url = _xml_url(f"{base_req}/api/stream/{video_id}?itag={r['itag']}")
             return (
                 f'      <Representation id="{r["itag"]}" mimeType="{r["mime"]}" '
                 f'codecs="{r["codecs"]}" bandwidth="{r["bandwidth"]}" '
                 f'width="{r["width"]}" height="{r["height"]}">\n'
-                f'        <BaseURL>{base_req}/api/stream/{video_id}?itag={r["itag"]}</BaseURL>\n'
+                f'        <BaseURL>{url}</BaseURL>\n'
                 f'        <SegmentBase>\n'
-                f'          <Initialization range="0-4095"/>\n'
+                f'          <Initialization range="0-65535"/>\n'
                 f'        </SegmentBase>\n'
                 f'      </Representation>'
             )
 
         def _audio_repr(r: dict) -> str:
+            url = _xml_url(f"{base_req}/api/stream/{video_id}/audio?itag={r['itag']}")
             return (
                 f'      <Representation id="{r["itag"]}" mimeType="{r["mime"]}" '
                 f'codecs="{r["codecs"]}" bandwidth="{r["bandwidth"]}">\n'
-                f'        <BaseURL>{base_req}/api/stream/{video_id}/audio?itag={r["itag"]}</BaseURL>\n'
+                f'        <BaseURL>{url}</BaseURL>\n'
                 f'        <SegmentBase>\n'
-                f'          <Initialization range="0-4095"/>\n'
+                f'          <Initialization range="0-65535"/>\n'
                 f'        </SegmentBase>\n'
                 f'      </Representation>'
             )
 
-        video_block = "\n".join(_video_repr(r) for r in video_reprs) if video_reprs else ""
-        audio_block = "\n".join(_audio_repr(r) for r in audio_reprs) if audio_reprs else ""
+        video_block = "\n".join(_video_repr(r) for r in video_reprs)
+        audio_block = "\n".join(_audio_repr(r) for r in audio_reprs)
 
         # Duration in ISO 8601 / DASH format
         h = int(duration // 3600)
@@ -1593,17 +1799,15 @@ async def get_dash_mpd(video_id: str, request: Request):
 
         mpd = f"""<?xml version="1.0" encoding="utf-8"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011"
-     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-     xsi:schemaLocation="urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd"
      type="static"
      mediaPresentationDuration="{dur_str}"
-     minBufferTime="PT3S"
-     profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">
-  <Period id="1" start="PT0S">
-    <AdaptationSet id="1" contentType="video" segmentAlignment="true" bitstreamSwitching="true">
+     minBufferTime="PT4S"
+     profiles="urn:mpeg:dash:profile:full:2011">
+  <Period id="1" start="PT0S" duration="{dur_str}">
+    <AdaptationSet id="1" mimeType="video/mp4" contentType="video" segmentAlignment="true" bitstreamSwitching="true">
 {video_block}
     </AdaptationSet>
-    <AdaptationSet id="2" contentType="audio" segmentAlignment="true">
+    <AdaptationSet id="2" mimeType="audio/mp4" contentType="audio" segmentAlignment="true">
 {audio_block}
     </AdaptationSet>
   </Period>
@@ -2504,66 +2708,245 @@ async def music_song(video_id: str):
         raise HTTPException(status_code=500, detail=f"Song error: {str(e)}")
 
 
-@app.get("/api/music/podcasts/search")
-async def music_podcasts_search(q: str = "", lang: str = "en"):
-    """Search podcasts on YouTube Music."""
-    loop = asyncio.get_event_loop()
+# ─── Podcast Index API ───────────────────────────────────────────────────────
+import hashlib
+
+PODCAST_INDEX_KEY    = os.getenv("PODCAST_INDEX_KEY", "")
+PODCAST_INDEX_SECRET = os.getenv("PODCAST_INDEX_SECRET", "")
+PODCAST_INDEX_BASE   = "https://api.podcastindex.org/api/1.0"
+PODCAST_CONFIG_FILE  = os.path.join(os.path.expanduser("~"), ".mytube", "podcast_config.json")
+
+# Runtime override (set via settings UI, persisted to disk)
+_pi_key_override: str = ""
+_pi_secret_override: str = ""
+
+def _podcast_config_load() -> dict:
     try:
-        def _get():
-            ytm = get_ytm(language=lang)
-            results = ytm.search(q if q.strip() else "podcast", filter="podcasts")
-            podcasts = []
-            for item in results[:20]:
-                podcasts.append({
-                    "browseId": item.get("browseId"),
-                    "playlistId": item.get("browseId"),
-                    "title": item.get("title"),
-                    "author": item.get("author") or (item.get("podcasters", [{}])[0].get("name") if item.get("podcasters") else None),
-                    "thumbnail": _thumb_url(item.get("thumbnails", [])),
-                    "episodes": item.get("episodes"),
-                })
-            return [p for p in podcasts if p["browseId"]]
-        result = await loop.run_in_executor(None, _get)
-        return result
+        with open(PODCAST_CONFIG_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _podcast_config_save():
+    try:
+        os.makedirs(os.path.dirname(PODCAST_CONFIG_FILE), exist_ok=True)
+        with open(PODCAST_CONFIG_FILE, "w") as f:
+            json.dump({"key": _pi_key_override, "secret": _pi_secret_override}, f)
+    except Exception:
+        pass
+
+# Restore saved keys on startup
+_pi_saved = _podcast_config_load()
+if _pi_saved.get("key"):
+    _pi_key_override = _pi_saved["key"]
+if _pi_saved.get("secret"):
+    _pi_secret_override = _pi_saved["secret"]
+
+def _pi_effective_key() -> str:
+    return _pi_key_override or PODCAST_INDEX_KEY
+
+def _pi_effective_secret() -> str:
+    return _pi_secret_override or PODCAST_INDEX_SECRET
+
+def _pi_headers() -> dict:
+    key = _pi_effective_key()
+    secret = _pi_effective_secret()
+    ts = str(int(_time()))
+    auth = hashlib.sha1(f"{key}{secret}{ts}".encode()).hexdigest()
+    return {
+        "X-Auth-Key": key,
+        "X-Auth-Date": ts,
+        "Authorization": auth,
+        "User-Agent": "MyTube/1.0",
+    }
+
+def _pi_configured() -> bool:
+    return bool(_pi_effective_key() and _pi_effective_secret())
+
+
+@app.get("/api/podcasts/config")
+async def get_podcast_config():
+    """Return current Podcast Index config (secret masked)."""
+    return {
+        "key": _pi_effective_key(),
+        "secret": "set" if _pi_effective_secret() else "",
+    }
+
+
+@app.post("/api/podcasts/config")
+async def set_podcast_config(body: dict):
+    """Update Podcast Index API key and secret at runtime (persisted to disk)."""
+    global _pi_key_override, _pi_secret_override
+    if key := body.get("key"):
+        _pi_key_override = key.strip()
+    if secret := body.get("secret"):
+        _pi_secret_override = secret.strip()
+    _podcast_config_save()
+    return {"ok": True}
+
+def _fmt_duration(secs: Optional[int]) -> Optional[str]:
+    if not secs:
+        return None
+    h, rem = divmod(int(secs), 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+def _fmt_date(ts: Optional[int]) -> Optional[str]:
+    if not ts:
+        return None
+    from datetime import datetime, timezone
+    return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%d %b %Y")
+
+
+@app.get("/api/podcasts/search")
+async def podcasts_search(q: str = "", lang: str = "en"):
+    """Search podcasts via Podcast Index."""
+    if not _pi_configured():
+        raise HTTPException(status_code=503, detail="Podcast Index API not configured. Set PODCAST_INDEX_KEY and PODCAST_INDEX_SECRET.")
+    try:
+        term = q.strip() or "technology"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(
+                f"{PODCAST_INDEX_BASE}/search/byterm",
+                params={"q": term, "max": 20, "clean": True},
+                headers=_pi_headers(),
+            )
+            r.raise_for_status()
+            feeds = r.json().get("feeds", [])
+        return [
+            {
+                "id": str(f["id"]),
+                "title": f.get("title", ""),
+                "author": f.get("author") or f.get("ownerName"),
+                "thumbnail": f.get("image") or f.get("artwork"),
+                "description": f.get("description"),
+                "episodeCount": f.get("episodeCount"),
+            }
+            for f in feeds if f.get("id")
+        ]
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Podcast search error: {str(e)}")
 
 
-@app.get("/api/music/podcast/{browse_id}")
-async def music_podcast(browse_id: str, lang: str = "en"):
-    """Get podcast details and episodes from YouTube Music."""
-    loop = asyncio.get_event_loop()
+@app.get("/api/podcasts/{podcast_id}")
+async def podcast_detail(podcast_id: str):
+    """Get podcast info + episodes from Podcast Index."""
+    if not _pi_configured():
+        raise HTTPException(status_code=503, detail="Podcast Index API not configured.")
     try:
-        def _get():
-            ytm = get_ytm(language=lang)
-            data = ytm.get_podcast(browse_id)
-            episodes = []
-            raw_eps = data.get("episodes") or []
-            if isinstance(raw_eps, dict):
-                raw_eps = raw_eps.get("results", []) or []
-            for ep in raw_eps[:50]:
-                episodes.append({
-                    "videoId": ep.get("videoId"),
-                    "title": ep.get("title"),
-                    "description": ep.get("description", {}).get("text") if isinstance(ep.get("description"), dict) else ep.get("description"),
-                    "thumbnail": _thumb_url(ep.get("thumbnails", [])),
-                    "duration": ep.get("duration"),
-                    "date": ep.get("date"),
-                    "index": ep.get("index"),
-                })
-            podcasters = data.get("author", {})
-            return {
-                "browseId": browse_id,
-                "title": data.get("title"),
-                "author": podcasters.get("name") if isinstance(podcasters, dict) else str(podcasters),
-                "description": data.get("description", {}).get("text") if isinstance(data.get("description"), dict) else data.get("description"),
-                "thumbnail": _thumb_url(data.get("thumbnails", [])),
-                "episodes": [e for e in episodes if e["videoId"]],
-            }
-        result = await loop.run_in_executor(None, _get)
-        return result
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            pod_r, eps_r = await asyncio.gather(
+                client.get(f"{PODCAST_INDEX_BASE}/podcasts/byfeedid",
+                           params={"id": podcast_id}, headers=_pi_headers()),
+                client.get(f"{PODCAST_INDEX_BASE}/episodes/byfeedid",
+                           params={"id": podcast_id, "max": 50, "fulltext": True}, headers=_pi_headers()),
+            )
+            pod_r.raise_for_status()
+            eps_r.raise_for_status()
+
+        feed = pod_r.json().get("feed", {})
+        episodes = []
+        for ep in eps_r.json().get("items", []):
+            episodes.append({
+                "id": str(ep["id"]),
+                "title": ep.get("title", ""),
+                "description": ep.get("description") or ep.get("subtitle"),
+                "thumbnail": ep.get("image") or feed.get("image") or feed.get("artwork"),
+                "duration": _fmt_duration(ep.get("duration")),
+                "date": _fmt_date(ep.get("datePublished")),
+                "enclosureUrl": ep.get("enclosureUrl"),
+                "enclosureType": ep.get("enclosureType", "audio/mpeg"),
+            })
+
+        return {
+            "id": str(feed.get("id", podcast_id)),
+            "title": feed.get("title", ""),
+            "author": feed.get("author") or feed.get("ownerName"),
+            "description": feed.get("description"),
+            "thumbnail": feed.get("image") or feed.get("artwork"),
+            "episodeCount": feed.get("episodeCount"),
+            "episodes": [e for e in episodes if e["enclosureUrl"]],
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Podcast error: {str(e)}")
+
+
+@app.get("/api/podcasts/audio/proxy")
+async def podcast_audio_proxy(url: str, request: Request):
+    """Proxy podcast episode audio to avoid CORS issues."""
+    range_header = request.headers.get("range")
+    req_headers: Dict[str, str] = {"User-Agent": "MyTube/1.0"}
+    if range_header:
+        req_headers["Range"] = range_header
+
+    # Use a queue so the background task keeps the httpx connection alive
+    # while StreamingResponse consumes it — avoids StreamClosed errors.
+    chunk_queue: asyncio.Queue[Optional[bytes]] = asyncio.Queue(maxsize=8)
+    header_event = asyncio.Event()
+    upstream_meta: Dict[str, str] = {}
+    upstream_status: list[int] = [200]
+
+    async def _fetch():
+        try:
+            async with httpx_client(timeout=None, follow_redirects=True) as client:
+                async with client.stream("GET", url, headers=req_headers) as resp:
+                    upstream_status[0] = resp.status_code
+                    upstream_meta["content_type"] = resp.headers.get("content-type", "audio/mpeg")
+                    if cl := resp.headers.get("content-length"):
+                        upstream_meta["content_length"] = cl
+                    if cr := resp.headers.get("content-range"):
+                        upstream_meta["content_range"] = cr
+                    header_event.set()
+                    async for chunk in resp.aiter_bytes(65536):
+                        await chunk_queue.put(chunk)
+        except Exception as exc:
+            logger.warning(f"Podcast audio proxy error: {exc}")
+        finally:
+            header_event.set()          # unblock waiter even on error
+            await chunk_queue.put(None)  # sentinel → end of stream
+
+    task = asyncio.create_task(_fetch())
+
+    try:
+        await asyncio.wait_for(header_event.wait(), timeout=15.0)
+    except asyncio.TimeoutError:
+        task.cancel()
+        raise HTTPException(status_code=504, detail="Upstream audio timeout")
+
+    resp_headers: Dict[str, str] = {
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "no-cache",
+        "Access-Control-Allow-Origin": "*",
+    }
+    if cl := upstream_meta.get("content_length"):
+        resp_headers["Content-Length"] = cl
+    if cr := upstream_meta.get("content_range"):
+        resp_headers["Content-Range"] = cr
+
+    status_code = upstream_status[0] if range_header else 200
+
+    async def generate():
+        try:
+            while True:
+                chunk = await chunk_queue.get()
+                if chunk is None:
+                    break
+                yield chunk
+        except Exception:
+            pass
+        finally:
+            task.cancel()
+
+    return StreamingResponse(
+        generate(),
+        status_code=status_code,
+        headers=resp_headers,
+        media_type=upstream_meta.get("content_type", "audio/mpeg"),
+    )
 
 
 @app.get("/api/music/home")
@@ -2659,6 +3042,73 @@ def _restore_active_conf():
             _wireproxy_conf_name = active
 
 _restore_active_conf()
+
+
+_vpn_last_activity: float = _time()  # updated on every proxied request
+_VPN_IDLE_RESTART_SECS = 300  # restart after 5 min idle to recover stale tunnels
+
+
+def vpn_record_activity():
+    global _vpn_last_activity
+    _vpn_last_activity = _time()
+
+
+async def _restart_wireproxy():
+    """Stop and restart wireproxy with the current conf."""
+    loop = asyncio.get_event_loop()
+    conf_path = _wireproxy_conf_path
+    await loop.run_in_executor(None, _stop_wireproxy_sync)
+    await asyncio.sleep(1)
+    await loop.run_in_executor(None, _start_wireproxy_sync, conf_path)
+
+
+async def _vpn_watchdog():
+    """Periodically check that the VPN tunnel is actually alive:
+    1. If the SOCKS5 port is unresponsive → restart immediately.
+    2. If idle for >5 min → restart proactively to recover stale WireGuard tunnels.
+    """
+    await asyncio.sleep(30)  # let the server fully start first
+    while True:
+        await asyncio.sleep(20)
+        try:
+            if not (_wireproxy_process and _wireproxy_process.poll() is None):
+                continue
+            if not _wireproxy_conf_path:
+                continue
+
+            # 1. Liveness check: try connecting to SOCKS5 port
+            port_alive = False
+            try:
+                _, writer = await asyncio.wait_for(
+                    asyncio.open_connection("127.0.0.1", _wireproxy_socks_port),
+                    timeout=3.0,
+                )
+                writer.close()
+                try:
+                    await writer.wait_closed()
+                except Exception:
+                    pass
+                port_alive = True
+            except Exception:
+                pass
+
+            if not port_alive:
+                await _restart_wireproxy()
+                continue
+
+            # 2. Idle check: tunnel may be alive but WireGuard handshake stale
+            idle_secs = _time() - _vpn_last_activity
+            if idle_secs > _VPN_IDLE_RESTART_SECS:
+                await _restart_wireproxy()
+                vpn_record_activity()  # reset timer after restart
+
+        except Exception:
+            pass
+
+
+@app.on_event("startup")
+async def start_vpn_watchdog():
+    asyncio.create_task(_vpn_watchdog())
 
 
 def _list_all_confs() -> List[str]:

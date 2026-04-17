@@ -5,28 +5,27 @@ import { useParams } from 'next/navigation'
 import { Mic2, Play, Pause, Clock, Bell, BellOff } from 'lucide-react'
 import { useMusic } from '@/lib/musicContext'
 import { useRegion } from '@/lib/regionContext'
-import {
-  isPodcastSubscribed, togglePodcastSubscription,
-} from '@/lib/podcastSubscriptions'
+import { isPodcastSubscribed, togglePodcastSubscription } from '@/lib/podcastSubscriptions'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 interface Episode {
-  videoId: string
+  id: string
   title: string
   description?: string
   thumbnail?: string
   duration?: string
   date?: string
-  index?: number
+  enclosureUrl: string
 }
 
 interface Podcast {
-  browseId: string
+  id: string
   title: string
   author?: string
   description?: string
   thumbnail?: string
+  episodeCount?: number
   episodes: Episode[]
 }
 
@@ -36,37 +35,38 @@ export default function PodcastPage() {
   const [loading, setLoading] = useState(true)
   const [subscribed, setSubscribed] = useState(false)
   const { playTrack, playPause, currentTrack, playing } = useMusic()
-  const { t, lang } = useRegion()
+  const { t } = useRegion()
 
   useEffect(() => {
     if (!id) return
     setSubscribed(isPodcastSubscribed(id))
-    fetch(`${API_BASE}/api/music/podcast/${id}?lang=${lang}`)
+    fetch(`${API_BASE}/api/podcasts/${id}`)
       .then((r) => r.json())
       .then((data) => setPodcast({ ...data, episodes: data?.episodes || [] }))
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [id, lang])
-
-  function handleToggleSubscription() {
-    if (!podcast) return
-    const nowSubscribed = togglePodcastSubscription({
-      browseId: podcast.browseId,
-      title: podcast.title,
-      author: podcast.author,
-      thumbnail: podcast.thumbnail,
-    })
-    setSubscribed(nowSubscribed)
-  }
+  }, [id])
 
   function episodeAsTrack(ep: Episode) {
     return {
-      videoId: ep.videoId,
+      videoId: ep.id,
+      directUrl: ep.enclosureUrl,
       title: ep.title,
       artists: podcast?.author ? [{ name: podcast.author }] : [],
       thumbnail: ep.thumbnail || podcast?.thumbnail || null,
       duration: ep.duration || null,
     }
+  }
+
+  function handleToggleSubscription() {
+    if (!podcast) return
+    const nowSubscribed = togglePodcastSubscription({
+      id: podcast.id,
+      title: podcast.title,
+      author: podcast.author,
+      thumbnail: podcast.thumbnail,
+    })
+    setSubscribed(nowSubscribed)
   }
 
   if (loading) {
@@ -165,60 +165,54 @@ export default function PodcastPage() {
         </div>
       ) : (
         <div className="space-y-1">
-          {podcast.episodes.map((ep, i) => {
-            const isThisPlaying = currentTrack?.videoId === ep.videoId && playing
-            const isThisActive = currentTrack?.videoId === ep.videoId
+          {podcast.episodes.map((ep) => {
+            const track = episodeAsTrack(ep)
+            const isActive = currentTrack?.videoId === track.videoId
+            const isPlaying = isActive && playing
             return (
-            <button
-              key={ep.videoId}
-              onClick={() => isThisActive ? playPause() : playTrack(episodeAsTrack(ep), allTracks)}
-              className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-colors group text-left ${isThisActive ? 'bg-yt-secondary' : 'hover:bg-yt-secondary'}`}
-            >
-              {/* Thumbnail */}
-              <div className="w-14 h-14 rounded-lg overflow-hidden bg-yt-secondary flex-shrink-0">
-                {ep.thumbnail || podcast.thumbnail ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={ep.thumbnail || podcast.thumbnail!}
-                    alt={ep.title}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Mic2 className="w-6 h-6 text-yt-text-muted" />
-                  </div>
-                )}
-              </div>
-
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm font-medium truncate transition-colors ${isThisActive ? 'text-yt-red' : 'text-yt-text group-hover:text-yt-red'}`}>
-                  {ep.title}
-                </p>
-                {ep.description && (
-                  <p className="text-xs text-yt-text-muted truncate mt-0.5">{ep.description}</p>
-                )}
-                {ep.date && (
-                  <p className="text-xs text-yt-text-muted mt-0.5">{ep.date}</p>
-                )}
-              </div>
-
-              {/* Duration + play/pause */}
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {ep.duration && (
-                  <span className="flex items-center gap-1 text-xs text-yt-text-muted">
-                    <Clock className="w-3 h-3" />
-                    {ep.duration}
-                  </span>
-                )}
-                <div className={`w-8 h-8 rounded-full bg-yt-red flex items-center justify-center transition-opacity ${isThisActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                  {isThisPlaying
-                    ? <Pause className="w-3.5 h-3.5 fill-white text-white" />
-                    : <Play className="w-3.5 h-3.5 fill-white text-white" />
-                  }
+              <button
+                key={ep.id}
+                onClick={() => isActive ? playPause() : playTrack(track, allTracks)}
+                className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-colors group text-left ${isActive ? 'bg-yt-secondary' : 'hover:bg-yt-secondary'}`}
+              >
+                <div className="w-14 h-14 rounded-lg overflow-hidden bg-yt-secondary flex-shrink-0">
+                  {ep.thumbnail || podcast.thumbnail ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={ep.thumbnail || podcast.thumbnail!} alt={ep.title} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Mic2 className="w-6 h-6 text-yt-text-muted" />
+                    </div>
+                  )}
                 </div>
-              </div>
-            </button>
+
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium truncate transition-colors ${isActive ? 'text-yt-red' : 'text-yt-text group-hover:text-yt-red'}`}>
+                    {ep.title}
+                  </p>
+                  {ep.description && (
+                    <p className="text-xs text-yt-text-muted truncate mt-0.5">{ep.description}</p>
+                  )}
+                  {ep.date && (
+                    <p className="text-xs text-yt-text-muted mt-0.5">{ep.date}</p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {ep.duration && (
+                    <span className="flex items-center gap-1 text-xs text-yt-text-muted">
+                      <Clock className="w-3 h-3" />
+                      {ep.duration}
+                    </span>
+                  )}
+                  <div className={`w-8 h-8 rounded-full bg-yt-red flex items-center justify-center transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                    {isPlaying
+                      ? <Pause className="w-3.5 h-3.5 fill-white text-white" />
+                      : <Play className="w-3.5 h-3.5 fill-white text-white" />
+                    }
+                  </div>
+                </div>
+              </button>
             )
           })}
         </div>

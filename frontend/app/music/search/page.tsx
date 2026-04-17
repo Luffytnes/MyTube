@@ -58,7 +58,7 @@ export default function MusicSearchPage() {
     setResults([])
     try {
       const url = f === 'podcasts'
-        ? `${API_BASE}/api/music/podcasts/search?q=${encodeURIComponent(q)}&lang=${lang}`
+        ? `${API_BASE}/api/podcasts/search?q=${encodeURIComponent(q)}`
         : `${API_BASE}/api/music/search?q=${encodeURIComponent(q)}&filter=${f}`
       const res = await fetch(url)
       const data = await res.json()
@@ -165,24 +165,28 @@ export default function MusicSearchPage() {
           {/* Podcasts */}
           {filter === 'podcasts' && (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {results.map((r) => r.browseId && (
-                <Link key={r.browseId} href={`/music/podcasts/${r.browseId}`} className="flex flex-col gap-2 group">
-                  <div className="aspect-square rounded-xl overflow-hidden bg-yt-secondary shadow">
-                    {r.thumbnail ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={r.thumbnail} alt={r.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Mic2 className="w-10 h-10 text-yt-text-muted" />
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-yt-text truncate group-hover:text-yt-red transition-colors">{r.title}</p>
-                    {r.author && <p className="text-xs text-yt-text-muted truncate">{r.author}</p>}
-                  </div>
-                </Link>
-              ))}
+              {results.map((r) => {
+                const podcastId = (r as unknown as { id?: string }).id || r.browseId
+                if (!podcastId) return null
+                return (
+                  <Link key={podcastId} href={`/music/podcasts/${podcastId}`} className="flex flex-col gap-2 group">
+                    <div className="aspect-square rounded-xl overflow-hidden bg-yt-secondary shadow">
+                      {r.thumbnail ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={r.thumbnail} alt={r.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Mic2 className="w-10 h-10 text-yt-text-muted" />
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-yt-text truncate group-hover:text-yt-red transition-colors">{r.title}</p>
+                      {r.author && <p className="text-xs text-yt-text-muted truncate">{r.author}</p>}
+                    </div>
+                  </Link>
+                )
+              })}
             </div>
           )}
 

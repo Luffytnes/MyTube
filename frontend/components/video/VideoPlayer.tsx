@@ -38,6 +38,7 @@ interface VideoPlayerProps {
   formats: VideoFormat[]
   title: string
   isLive?: boolean
+  knownDuration?: number
   onEnded?: () => void
   onNext?: () => void
   onPrev?: () => void
@@ -77,7 +78,7 @@ function getBestFormat(formats: VideoFormat[]): VideoFormat | null {
   return formats[0]
 }
 
-export default function VideoPlayer({ videoId, formats, title, isLive, onEnded, onNext, onPrev, hasNext, hasPrev, chapters = [] }: VideoPlayerProps) {
+export default function VideoPlayer({ videoId, formats, title, isLive, knownDuration, onEnded, onNext, onPrev, hasNext, hasPrev, chapters = [] }: VideoPlayerProps) {
   const { t } = useRegion()
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -85,6 +86,10 @@ export default function VideoPlayer({ videoId, formats, title, isLive, onEnded, 
   const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const hlsRef = useRef<any>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const hdHlsRef = useRef<any>(null)
+  const effectiveDurationRef = useRef<number>(0)
+  const hlsStartOffsetRef = useRef<number>(0)
 
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -125,6 +130,11 @@ export default function VideoPlayer({ videoId, formats, title, isLive, onEnded, 
       .map(([, f]) => f)
   })()
 
+  // Keep effectiveDurationRef in sync with duration state
+  useEffect(() => {
+    if (duration > 0) effectiveDurationRef.current = duration
+  }, [duration])
+
   // Load subtitles when videoId changes
   useEffect(() => {
     setSubtitleTracks([])
@@ -156,8 +166,10 @@ export default function VideoPlayer({ videoId, formats, title, isLive, onEnded, 
     if (settings.resumePlayback) {
       savePositionTimer.current = setInterval(() => {
         const v = videoRef.current
-        if (v && !v.paused && v.duration > 0) {
-          savePosition(videoId, v.currentTime, v.duration)
+        const dur = effectiveDurationRef.current || v?.duration || 0
+        if (v && !v.paused && dur > 0) {
+          const absTime = hlsStartOffsetRef.current + v.currentTime
+          savePosition(videoId, absTime, dur)
         }
       }, 5000)
     }
@@ -222,6 +234,76 @@ export default function VideoPlayer({ videoId, formats, title, isLive, onEnded, 
     ? getStreamUrl(videoId, String(selectedFormat.itag))
     : getStreamUrl(videoId)
   const audioSrc = isVideoOnly ? getAudioUrl(videoId) : null
+
+  // Initialise hls.js HD session from a given start offset (seconds)
+  const startHdHls = useCallback((startOffset: number, autoplay: boolean) => {
+    const video = videoRef.current
+    if (!video || !selectedFormat) return
+
+    if (hdHlsRef.current) {
+      hdHlsRef.current.destroy()
+      hdHlsRef.current = null
+    }
+
+    hlsStartOffsetRef.current = startOffset
+    const itag = String(selectedFormat.itag)
+    const hlsUrl = `${API_BASE}/api/hls/${videoId}/${itag}/stream.m3u8?start=${Math.floor(startOffset)}`
+    setLoading(true)
+
+    import('hls.js').then(({ default: Hls }) => {
+      if (!videoRef.current) return
+
+
+      if (!Hls.isSupported()) {
+        setError('Lecture HD non supportée dans ce navigateur.')
+        return
+      }
+
+      const hls = new Hls({
+        enableWorker: false,
+        maxBufferLength: 30,
+        manifestLoadingMaxRetry: 3,
+        manifestLoadingRetryDelay: 1000,
+      })
+      hdHlsRef.current = hls
+      hls.loadSource(hlsUrl)
+      hls.attachMedia(video)
+
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        setLoading(false)
+        if (knownDuration) setDuration(knownDuration)
+        if (autoplay) safePlay(video)
+      })
+
+      hls.on(Hls.Events.ERROR, (_: unknown, data: { fatal: boolean; details: string }) => {
+        if (data.fatal) setError(`Erreur HD : ${data.details}`)
+      })
+    })
+  }, [videoId, selectedFormat, knownDuration]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // HLS transcode for HD (video-only) formats
+  useEffect(() => {
+    if (isLive) return
+    if (hdHlsRef.current) {
+      hdHlsRef.current.destroy()
+      hdHlsRef.current = null
+    }
+    if (!isVideoOnly || !selectedFormat) return
+
+    const itag = String(selectedFormat.itag)
+    fetch(`${API_BASE}/api/hls/${videoId}/${itag}`, { method: 'DELETE' }).catch(() => {})
+    const settings = getPlaybackSettings()
+    const resumePos = settings.resumePlayback ? (getPosition(videoId) ?? 0) : 0
+    startHdHls(resumePos, settings.autoplay)
+
+    return () => {
+      if (hdHlsRef.current) {
+        hdHlsRef.current.destroy()
+        hdHlsRef.current = null
+      }
+      fetch(`${API_BASE}/api/hls/${videoId}/${itag}`, { method: 'DELETE' }).catch(() => {})
+    }
+  }, [isVideoOnly, selectedFormat?.itag, videoId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const resetHideTimer = useCallback(() => {
     if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current)
@@ -299,8 +381,10 @@ export default function VideoPlayer({ videoId, formats, title, isLive, onEnded, 
   function handleTimeUpdate() {
     const video = videoRef.current
     if (!video) return
-    setCurrentTime(video.currentTime)
-    if (video.buffered.length > 0) setBuffered(video.buffered.end(video.buffered.length - 1))
+    // For HD HLS, currentTime is relative to the session start offset
+    const absoluteTime = hlsStartOffsetRef.current + video.currentTime
+    setCurrentTime(absoluteTime)
+    if (video.buffered.length > 0) setBuffered(hlsStartOffsetRef.current + video.buffered.end(video.buffered.length - 1))
     const audio = audioRef.current
     if (audio && !audio.paused && Math.abs(audio.currentTime - video.currentTime) > 0.3) {
       audio.currentTime = video.currentTime
@@ -311,15 +395,19 @@ export default function VideoPlayer({ videoId, formats, title, isLive, onEnded, 
     const video = videoRef.current
     if (!video) return
     const settings = getPlaybackSettings()
-    setDuration(video.duration)
+    const dur = (isVideoOnly && knownDuration)
+      ? knownDuration
+      : (isFinite(video.duration) && video.duration > 0 ? video.duration : (knownDuration ?? 0))
+    setDuration(dur)
     setLoading(false)
     video.volume = settings.defaultVolume
     video.playbackRate = settings.defaultSpeed
     setVolume(settings.defaultVolume)
     setSpeed(settings.defaultSpeed)
-    if (settings.resumePlayback) {
+    if (settings.resumePlayback && !isVideoOnly) {
       const pos = getPosition(videoId)
-      if (pos && pos > 0 && pos < video.duration * 0.95) {
+      const dur = effectiveDurationRef.current || video.duration || 0
+      if (pos && pos > 0 && dur > 0 && pos < dur * 0.95) {
         video.currentTime = pos
         if (audioRef.current) audioRef.current.currentTime = pos
       }
@@ -329,9 +417,17 @@ export default function VideoPlayer({ videoId, formats, title, isLive, onEnded, 
   function handleSeek(e: ChangeEvent<HTMLInputElement>) {
     const video = videoRef.current
     if (!video) return
-    const time = (parseFloat(e.target.value) / 100) * video.duration
-    video.currentTime = time
+    const dur = effectiveDurationRef.current || video.duration
+    const time = (parseFloat(e.target.value) / 100) * dur
     setCurrentTime(time)
+    if (isVideoOnly) {
+      // Restart ffmpeg from the sought position
+      const wasPlaying = !video.paused
+      startHdHls(time, wasPlaying)
+    } else {
+      video.currentTime = time
+      if (audioRef.current) audioRef.current.currentTime = time
+    }
   }
 
   function handleVolumeChange(e: ChangeEvent<HTMLInputElement>) {
@@ -394,8 +490,8 @@ export default function VideoPlayer({ videoId, formats, title, isLive, onEnded, 
       onMouseLeave={() => { if (playing) setShowControls(false) }}
       onClick={togglePlay}
     >
-      {/* Hidden audio element for video-only (high quality) formats */}
-      {audioSrc && (
+      {/* Hidden audio element — only for video-only formats without HD HLS */}
+      {audioSrc && !isVideoOnly && (
         <audio
           ref={audioRef}
           src={audioSrc}
@@ -407,7 +503,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, onEnded, 
 
       <video
         ref={videoRef}
-        src={isLive ? undefined : streamUrl}
+        src={isLive || isVideoOnly ? undefined : streamUrl}
         className="w-full h-full object-contain"
         title={title}
         autoPlay={getPlaybackSettings().autoplay}
@@ -426,6 +522,16 @@ export default function VideoPlayer({ videoId, formats, title, isLive, onEnded, 
           }
         }}
         onTimeUpdate={handleTimeUpdate}
+        onDurationChange={() => {
+          const v = videoRef.current
+          if (!v) return
+          if (isVideoOnly && knownDuration) {
+            // HLS transcode: ignore hls.js partial duration, always use known total
+            setDuration(knownDuration)
+          } else if (isFinite(v.duration) && v.duration > 0) {
+            setDuration(v.duration)
+          }
+        }}
         onLoadedMetadata={handleLoadedMetadata}
         onWaiting={() => {
           setLoading(true)
