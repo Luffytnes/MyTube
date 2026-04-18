@@ -11,7 +11,7 @@ import { Bell, BellOff } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 import { useSubscriptions } from '@/lib/subscriptionsContext'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 type TabKey = 'videos' | 'playlists' | 'about'
 const TABS: { key: TabKey; labelKey: 'tab_videos' | 'tab_playlists' | 'tab_about' }[] = [

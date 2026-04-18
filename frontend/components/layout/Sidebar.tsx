@@ -9,7 +9,7 @@ import { useRegion } from '@/lib/regionContext'
 import { useSubscriptions } from '@/lib/subscriptionsContext'
 import type { Translations } from '@/lib/translations'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 const NAV_ITEMS: { icon: typeof Home; labelKey: keyof Translations; href: string }[] = [
   { icon: Home, labelKey: 'nav_home', href: '/' },

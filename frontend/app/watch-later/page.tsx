@@ -6,7 +6,7 @@ import { Clock, X, Trash2 } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 import { getWatchLater, removeFromWatchLater, clearWatchLater, type WatchLaterEntry } from '@/lib/watchLater'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 export default function WatchLaterPage() {
   const { t } = useRegion()

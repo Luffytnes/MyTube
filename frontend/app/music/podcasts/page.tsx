@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Mic2, ChevronRight, Search, AlertCircle } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 interface Podcast {
   id: string

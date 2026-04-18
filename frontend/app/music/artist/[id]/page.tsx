@@ -8,7 +8,7 @@ import AlbumCard from '@/components/music/AlbumCard'
 import { useMusic, type MusicTrack } from '@/lib/musicContext'
 import { useRegion } from '@/lib/regionContext'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 interface Artist {
   browseId: string

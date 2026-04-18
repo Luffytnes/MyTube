@@ -6,7 +6,7 @@ import { ThumbsUp, X, Trash2, ExternalLink } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 import { getLikes, removeLike, clearLikes, type LikeEntry } from '@/lib/likes'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 export default function LikesPage() {
   const { t } = useRegion()

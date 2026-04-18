@@ -6,7 +6,7 @@ import { useTheme, type ThemeMode } from '@/lib/themeContext'
 import { useRegion, REGIONS } from '@/lib/regionContext'
 import { getPlaybackSettings, setPlaybackSettings, type PlaybackSettings } from '@/lib/playbackSettings'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 type VpnStatus = 'disconnected' | 'connecting' | 'connected' | 'disconnecting' | 'error'
 type Tab = 'general' | 'playback' | 'data' | 'wireproxy' | 'podcast'

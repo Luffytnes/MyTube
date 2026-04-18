@@ -33,7 +33,7 @@ import { isLiked, toggleLike, removeLike } from '@/lib/likes'
 import { useSubscriptions } from '@/lib/subscriptionsContext'
 import { BellOff, Copy, Check, ExternalLink } from 'lucide-react'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 function ChannelAvatar({
   name,

@@ -8,7 +8,7 @@ import { saveMusicSearchQuery } from '@/lib/musicSearchHistory'
 import SettingsPanel from '@/components/layout/SettingsPanel'
 import { useRegion } from '@/lib/regionContext'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 export default function MusicHeader() {
   const router = useRouter()

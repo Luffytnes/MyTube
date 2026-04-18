@@ -10,7 +10,7 @@ import type { MusicTrack } from '@/lib/musicContext'
 import { cn } from '@/lib/utils'
 import { useRegion } from '@/lib/regionContext'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 import type { Translations } from '@/lib/translations'
 

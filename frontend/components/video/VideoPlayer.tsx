@@ -26,7 +26,7 @@ import { useRegion } from '@/lib/regionContext'
 import { getPlaybackSettings, setPlaybackSettings } from '@/lib/playbackSettings'
 import { savePosition, getPosition } from '@/lib/resumePosition'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 export interface Chapter {
   time: number  // seconds

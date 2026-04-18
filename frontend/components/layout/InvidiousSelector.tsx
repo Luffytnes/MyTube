@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Server, ChevronDown, Check, RefreshCw } from 'lucide-react'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 interface Instance {
   url: string

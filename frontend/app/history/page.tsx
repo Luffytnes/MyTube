@@ -6,7 +6,7 @@ import { Trash2, History, X } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 import { getHistory, clearHistory, removeFromHistory, type HistoryEntry } from '@/lib/history'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 function timeAgo(ts: number): string {
   const diff = (Date.now() - ts) / 1000
