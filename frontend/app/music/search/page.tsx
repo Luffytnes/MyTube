@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Music2, Disc3, User, ListMusic, Mic2 } from 'lucide-react'
 import Link from 'next/link'
@@ -43,7 +43,7 @@ const FILTERS: { key: FilterType; labelKey: keyof Translations; icon: typeof Mus
   { key: 'podcasts', labelKey: 'podcast_nav', icon: Mic2 },
 ]
 
-export default function MusicSearchPage() {
+function MusicSearchContent() {
   const params = useSearchParams()
   const { t, lang } = useRegion()
   const initialQ = params.get('q') || ''
@@ -220,5 +220,13 @@ export default function MusicSearchPage() {
         </>
       )}
     </div>
+  )
+}
+
+export default function MusicSearchPage() {
+  return (
+    <Suspense>
+      <MusicSearchContent />
+    </Suspense>
   )
 }

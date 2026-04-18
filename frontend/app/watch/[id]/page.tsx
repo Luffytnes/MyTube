@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getVideo, getPlaylist, type PlaylistDetail, type PlaylistVideo } from '@/lib/api'
@@ -109,7 +109,7 @@ interface WatchPageProps {
   params: { id: string }
 }
 
-export default function WatchPage({ params }: WatchPageProps) {
+function WatchContent({ params }: WatchPageProps) {
   const { id } = params
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -693,5 +693,13 @@ export default function WatchPage({ params }: WatchPageProps) {
         />
       )}
     </div>
+  )
+}
+
+export default function WatchPage({ params }: WatchPageProps) {
+  return (
+    <Suspense>
+      <WatchContent params={params} />
+    </Suspense>
   )
 }
