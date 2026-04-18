@@ -25,7 +25,7 @@ const DEFAULTS: PlaybackSettings = {
   loop: false,
   defaultSpeed: 1,
   defaultVolume: 1,
-  resumePlayback: false,
+  resumePlayback: true,
   subtitleLang: 'off',
   gridDensity: 'normal',
   hideWatched: false,
