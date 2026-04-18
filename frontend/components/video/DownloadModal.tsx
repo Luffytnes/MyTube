@@ -18,11 +18,10 @@ type FormatGroupKey = 'videoAudio' | 'videoOnly' | 'audioOnly'
 
 function buildFormatGroups(formats: VideoFormat[]): { key: FormatGroupKey; icon: typeof FileVideo; formats: VideoFormat[] }[] {
   const groups = []
-  const videoAudio = formats.filter((f) => f.hasVideo && f.hasAudio)
-  const videoOnly = formats.filter((f) => f.hasVideo && !f.hasAudio)
+  // Video-only streams (1080p, 720p…) are merged with audio by ffmpeg server-side on download
+  const videoAudio = formats.filter((f) => f.hasVideo)
   const audioOnly = formats.filter((f) => !f.hasVideo && f.hasAudio)
   if (videoAudio.length > 0) groups.push({ key: 'videoAudio' as const, icon: FileVideo, formats: videoAudio })
-  if (videoOnly.length > 0) groups.push({ key: 'videoOnly' as const, icon: FileVideo, formats: videoOnly })
   if (audioOnly.length > 0) groups.push({ key: 'audioOnly' as const, icon: Music, formats: audioOnly })
   return groups
 }
