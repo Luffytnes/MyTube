@@ -127,12 +127,61 @@ MyTube is a **self-hosted YouTube frontend** that lets you browse, search, and w
 
 ## 🚀 Quick Start
 
-### Prerequisites
+Two installation methods are available: **local** (development) or **Docker** (recommended for home server / LAN access).
+
+---
+
+### 🐳 Docker (recommended)
+
+The Docker setup runs MyTube on your local network — accessible from any device at `http://192.168.1.X` without any configuration.
+
+#### Prerequisites
+- [Docker](https://docs.docker.com/get-docker/) + [Docker Compose](https://docs.docker.com/compose/install/)
+
+#### Install & run
+
+```bash
+git clone https://github.com/Luffytnes/MyTube.git
+cd MyTube
+docker compose up --build
+```
+
+The first build takes a few minutes (downloads ffmpeg, yt-dlp, wireproxy, builds Next.js).
+
+Once started, open **http://\<your-local-ip\>** from any device on your network — phone, tablet, TV, etc.
+
+> **Find your local IP:** `ip route get 1` (Linux) or `ipconfig getifaddr en0` (macOS)
+
+#### Useful commands
+
+```bash
+# Run in background
+docker compose up --build -d
+
+# Stop
+docker compose down
+
+# View logs
+docker compose logs -f
+
+# Update (after a git pull)
+docker compose up --build -d
+```
+
+#### Data persistence
+
+VPN configs, Podcast Index keys and other settings are stored in a Docker volume (`mytube-data`) — they survive restarts and updates.
+
+---
+
+### 💻 Local (development)
+
+#### Prerequisites
 - **Python** 3.9+
 - **Node.js** 18+
 - **npm**
 
-### One command
+#### One command
 
 ```bash
 git clone https://github.com/Luffytnes/MyTube.git
@@ -143,9 +192,7 @@ chmod +x start.sh
 
 Open **http://localhost:3000** 🎉
 
----
-
-### Manual setup
+#### Manual setup
 
 **Backend**
 ```bash
