@@ -2121,18 +2121,7 @@ async def download_video(
     quality: str = "best",
 ):
     try:
-        if itag:
-            fmt_selector = itag
-        elif format == "mp3":
-            fmt_selector = "bestaudio[ext=m4a]/bestaudio"
-        elif quality == "best":
-            fmt_selector = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
-        else:
-            height_map = {"1080p": 1080, "720p": 720, "480p": 480, "360p": 360}
-            h = height_map.get(quality, 720)
-            fmt_selector = f"bestvideo[height<={h}][ext=mp4]+bestaudio[ext=m4a]/best[height<={h}][ext=mp4]/best"
-
-        opts = get_ydl_opts(**{"format": fmt_selector})
+        opts = get_ydl_opts(**{"format": "bestvideo+bestaudio/best"})
         loop = asyncio.get_event_loop()
 
         def _get_info():
@@ -2141,16 +2130,44 @@ async def download_video(
                     f"https://www.youtube.com/watch?v={video_id}", download=False
                 )
                 if not info:
-                    return None, None, None
+                    return None, None, None, None, None
+                title = info.get("title", video_id)
                 if itag:
-                    for fmt in info.get("formats", []):
-                        if str(fmt.get("format_id")) == str(itag):
-                            return fmt.get("url"), info.get("title", video_id), fmt.get("ext", "mp4")
-                return info.get("url"), info.get("title", video_id), info.get("ext", "mp4")
+                    # Find the requested video format
+                    video_fmt = next(
+                        (f for f in info.get("formats", []) if str(f.get("format_id")) == str(itag)),
+                        None
+                    )
+                    if not video_fmt:
+                        return None, title, "mp4", None, None
+                    has_video = video_fmt.get("vcodec", "none") != "none"
+                    has_audio = video_fmt.get("acodec", "none") != "none"
+                    video_url = video_fmt.get("url")
+                    ext = video_fmt.get("ext", "mp4")
+                    if has_video and not has_audio:
+                        # Video-only: find best audio to merge with ffmpeg
+                        audio_fmt = next(
+                            (f for f in sorted(info.get("formats", []), key=lambda f: -(f.get("abr") or 0))
+                             if f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"),
+                            None
+                        )
+                        audio_url = audio_fmt.get("url") if audio_fmt else None
+                        return video_url, title, "mp4", audio_url, True
+                    else:
+                        return video_url, title, ext, None, False
+                elif format == "mp3":
+                    audio_fmt = next(
+                        (f for f in sorted(info.get("formats", []), key=lambda f: -(f.get("abr") or 0))
+                         if f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"),
+                        None
+                    )
+                    return audio_fmt.get("url") if audio_fmt else None, title, "m4a", None, False
+                else:
+                    return info.get("url"), title, info.get("ext", "mp4"), None, False
 
-        direct_url, title, ext = await loop.run_in_executor(None, _get_info)
+        video_url, title, ext, audio_url, needs_merge = await loop.run_in_executor(None, _get_info)
 
-        if not direct_url:
+        if not video_url:
             raise HTTPException(status_code=404, detail="Download URL not found")
 
         # Sanitize filename
@@ -2158,27 +2175,66 @@ async def download_video(
         safe_title = re.sub(r'[-\s]+', '-', safe_title)[:100]
         filename = f"{safe_title}.{ext}"
 
-        async def download_generator():
-            async with httpx_client(timeout=None, follow_redirects=True) as client:
-                async with client.stream(
-                    "GET",
-                    direct_url,
-                    headers={
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                        "Referer": "https://www.youtube.com/",
-                    },
-                ) as response:
-                    async for chunk in response.aiter_bytes(chunk_size=65536):
-                        yield chunk
+        yt_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": "https://www.youtube.com/",
+        }
 
-        return StreamingResponse(
-            download_generator(),
-            media_type="application/octet-stream",
-            headers={
-                "Content-Disposition": f'attachment; filename="{filename}"',
-                "Cache-Control": "no-cache",
-            },
-        )
+        if needs_merge and audio_url:
+            # Use ffmpeg to merge video-only + audio-only streams on the fly
+            async def ffmpeg_merge_generator():
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-headers", "".join(f"{k}: {v}\r\n" for k, v in yt_headers.items()),
+                    "-i", video_url,
+                    "-headers", "".join(f"{k}: {v}\r\n" for k, v in yt_headers.items()),
+                    "-i", audio_url,
+                    "-c:v", "copy",
+                    "-c:a", "aac",
+                    "-movflags", "frag_keyframe+empty_moov",
+                    "-f", "mp4",
+                    "pipe:1",
+                ]
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                try:
+                    while True:
+                        chunk = await proc.stdout.read(65536)
+                        if not chunk:
+                            break
+                        yield chunk
+                finally:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+
+            return StreamingResponse(
+                ffmpeg_merge_generator(),
+                media_type="application/octet-stream",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "Cache-Control": "no-cache",
+                },
+            )
+        else:
+            async def download_generator():
+                async with httpx_client(timeout=None, follow_redirects=True) as client:
+                    async with client.stream("GET", video_url, headers=yt_headers) as response:
+                        async for chunk in response.aiter_bytes(chunk_size=65536):
+                            yield chunk
+
+            return StreamingResponse(
+                download_generator(),
+                media_type="application/octet-stream",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "Cache-Control": "no-cache",
+                },
+            )
     except HTTPException:
         raise
     except Exception as e:
