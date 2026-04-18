@@ -4,3 +4,4 @@ yt-dlp
 httpx[socks]
 python-dotenv
 python-multipart
+ytmusicapi

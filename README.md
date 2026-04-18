@@ -133,7 +133,7 @@ Two installation methods are available: **local** (development) or **Docker** (r
 
 ### 🐳 Docker (recommended)
 
-The Docker setup runs MyTube on your local network — accessible from any device at `http://192.168.1.X` without any configuration.
+The Docker setup runs MyTube on your local network — accessible from any device at `http://192.168.1.X:8080` without any configuration.
 
 #### Prerequisites
 - [Docker](https://docs.docker.com/get-docker/) + [Docker Compose](https://docs.docker.com/compose/install/)
@@ -148,7 +148,7 @@ docker compose up --build
 
 The first build takes a few minutes (downloads ffmpeg, yt-dlp, wireproxy, builds Next.js).
 
-Once started, open **http://\<your-local-ip\>** from any device on your network — phone, tablet, TV, etc.
+Once started, open **http://\<your-local-ip\>:8080** from any device on your network — phone, tablet, TV, etc.
 
 > **Find your local IP:** `ip route get 1` (Linux) or `ipconfig getifaddr en0` (macOS)
 
