@@ -12,7 +12,9 @@ const CATEGORIES = [
 
 type Category = typeof CATEGORIES[number]
 
-function timeAgo(pubDate: string, t: (k: string) => string): string {
+import type { Translations } from '@/lib/translations'
+
+function timeAgo(pubDate: string, t: (k: keyof Translations) => string): string {
   if (!pubDate) return ''
   try {
     const date = new Date(pubDate)
@@ -26,7 +28,7 @@ function timeAgo(pubDate: string, t: (k: string) => string): string {
   }
 }
 
-function ArticleCard({ article, t }: { article: NewsArticle; t: (k: string) => string }) {
+function ArticleCard({ article, t }: { article: NewsArticle; t: (k: keyof Translations) => string }) {
   const [imgError, setImgError] = useState(false)
 
   return (
