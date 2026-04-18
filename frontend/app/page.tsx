@@ -30,31 +30,32 @@ export default function HomePage() {
   const [resumeVideos, setResumeVideos] = useState<ResumeVideo[]>([])
   const [showAllResume, setShowAllResume] = useState(false)
 
-  useEffect(() => {
-    const ids = getResumeVideoIds().slice(0, 10)
-    if (ids.length === 0) return
-    const history = getHistory()
-    const histMap = new Map(history.map((h) => [h.id, h]))
-    const items: ResumeVideo[] = []
-    for (const id of ids) {
-      const h = histMap.get(id)
-      if (!h) continue
-      const pos = getPosition(id)
-      if (pos === null) continue
-      // We don't have duration stored in history, so we'll approximate progress from resumePosition
-      // We stored position/duration in resumePosition
-      const raw = localStorage.getItem('mytube-resume-positions')
-      const posData = raw ? JSON.parse(raw) : {}
-      const entry = posData[id]
-      const progress = entry?.duration > 0 ? Math.round((entry.position / entry.duration) * 100) : 0
-      items.push({ id, title: h.title, channel: h.channel, channelId: h.channelId, progress, position: pos })
-    }
-    setResumeVideos(items)
-  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
+
+    // Re-read resume positions on every load so it works after coming back from a video
+    const resumeIds = getResumeVideoIds().slice(0, 10)
+    if (resumeIds.length > 0) {
+      const history = getHistory()
+      const histMap = new Map(history.map((h) => [h.id, h]))
+      const raw = localStorage.getItem('mytube-resume-positions')
+      const posData = raw ? JSON.parse(raw) : {}
+      const items: ResumeVideo[] = []
+      for (const id of resumeIds) {
+        const h = histMap.get(id)
+        if (!h) continue
+        const pos = getPosition(id)
+        if (pos === null) continue
+        const entry = posData[id]
+        const progress = entry?.duration > 0 ? Math.round((entry.position / entry.duration) * 100) : 0
+        items.push({ id, title: h.title, channel: h.channel, channelId: h.channelId, progress, position: pos })
+      }
+      setResumeVideos(items)
+    } else {
+      setResumeVideos([])
+    }
 
     const recentSearches = getSearchHistory().slice(0, 4).map((h) => h.query)
     const hasSearches = recentSearches.length > 0
