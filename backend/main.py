@@ -3048,25 +3048,57 @@ async def radio_stations(
     q: str = "",
     limit: int = 30,
 ):
-    """Fetch radio stations from Radio Browser, filtered by country and optional genre/search."""
-    params: Dict[str, str] = {
-        "countrycode": country.upper(),
-        "limit": str(limit),
-        "order": "clickcount",
-        "reverse": "true",
-        "hidebroken": "true",
-    }
-    if tag:
-        params["tag"] = tag
-    if q:
-        params["name"] = q
+    """Fetch radio stations from Radio Browser.
+
+    Without a search query: uses /stations/topclick for the country to return
+    the most popular (= most reliable) national stations.
+    With a query: falls back to name search so users can still find anything.
+    """
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            r = await client.get(
-                f"{RADIO_BROWSER_BASE}/stations/search",
-                params=params,
-                headers={"User-Agent": "MyTube/1.0"},
-            )
+            if q:
+                # Name search — user typed something specific
+                params: Dict[str, str] = {
+                    "name": q,
+                    "countrycode": country.upper(),
+                    "limit": str(limit),
+                    "order": "clickcount",
+                    "reverse": "true",
+                    "hidebroken": "true",
+                    "bitrateMin": "64",
+                }
+                if tag:
+                    params["tag"] = tag
+                r = await client.get(
+                    f"{RADIO_BROWSER_BASE}/stations/search",
+                    params=params,
+                    headers={"User-Agent": "MyTube/1.0"},
+                )
+            else:
+                # No query — return top stations by click count for the country
+                # topclick gives the most popular, most reliable stations
+                params = {
+                    "countrycode": country.upper(),
+                    "limit": str(limit),
+                    "hidebroken": "true",
+                    "bitrateMin": "96",
+                }
+                if tag:
+                    # Genre filter: fall back to search endpoint
+                    params["tag"] = tag
+                    params["order"] = "clickcount"
+                    params["reverse"] = "true"
+                    r = await client.get(
+                        f"{RADIO_BROWSER_BASE}/stations/search",
+                        params=params,
+                        headers={"User-Agent": "MyTube/1.0"},
+                    )
+                else:
+                    r = await client.get(
+                        f"{RADIO_BROWSER_BASE}/stations/topclick/{limit}",
+                        params=params,
+                        headers={"User-Agent": "MyTube/1.0"},
+                    )
             r.raise_for_status()
             stations = r.json()
     except Exception as e:
