@@ -82,10 +82,20 @@ MyTube is a **self-hosted YouTube frontend** that lets you browse, search, and w
 ### 🎵 MyTube Music
 - Dedicated music section powered by YouTube Music
 - Browse trending **albums, artists, playlists**
-- Full **search** with filters (songs, albums, artists, playlists, podcasts)
-- Inline **audio player** with queue
+- Full **search** with filters (songs, albums, artists, playlists, podcasts, **radio**)
+- Inline **audio player** with queue, shuffle, repeat
+- **Full-screen player** — blurred album art background, queue panel, next track preview
 - **Podcasts** — browse & play episodes, personalised by language and search history
 - Follow/unfollow podcasts — stored locally in **My Podcasts**
+- Personalised suggestions on the home page (tracks, albums, artists, podcasts, radio)
+
+### 📻 Radio
+- Dedicated **Radio page** (`/music/radio`) — live stations filtered by your country
+- **Genre filter** — Pop, Rock, Jazz, Classical, Electronic, Hip-Hop, News, Sport, Country, Soul, Metal
+- **Search** for any station worldwide by name in the music search page
+- **Radio suggestions** on the Music home page based on your region
+- Stations stream through your server (no direct connection to third-party CDNs)
+- Powered by the [Radio Browser API](https://www.radio-browser.info/) — free, no key required
 
 ### 🌍 Multilingual
 - **9 languages**: 🇬🇧 English · 🇫🇷 French · 🇪🇸 Spanish · 🇩🇪 German · 🇧🇷 Portuguese · 🇮🇹 Italian · 🇯🇵 Japanese · 🇰🇷 Korean · 🇷🇺 Russian
@@ -94,11 +104,11 @@ MyTube is a **self-hosted YouTube frontend** that lets you browse, search, and w
 ### ⚙️ Settings
 - **Theme** — Light / Dark / Auto
 - **Language & Region** picker
-- **Playback** — default quality, speed, volume, loop, autoplay next, resume position, hide watched videos
+- **Playback** — default quality, speed, volume, loop, autoplay next, resume position (enabled by default), hide watched videos
 - **Grid density** — Compact / Normal / Comfortable
 - **Default subtitles** — choose a language applied automatically on every video
 - **History TTL** — keep watch history for 7, 30, 90 days, or forever
-- **Data tab** — export all local data as JSON, import a backup, or clear individual sections (history, search, watch later, likes, queue, resume positions)
+- **Data tab** — export all local data as JSON (including Music playlists, search history, podcast subscriptions), import a backup, or clear individual sections
 - **WireGuard VPN** — route all backend traffic through a personal VPN (e.g. ProtonVPN), no system impact
 
 ### ⌨️ Keyboard Shortcuts
@@ -118,7 +128,8 @@ MyTube is a **self-hosted YouTube frontend** that lets you browse, search, and w
 |-------|-----------|
 | Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS |
 | Backend | Python, FastAPI, yt-dlp, httpx |
-| Music & Podcasts | ytmusicapi |
+| Music & Podcasts | ytmusicapi, Podcast Index API |
+| Radio | Radio Browser API (free, no key required) |
 | VPN tunnel | wireproxy (WireGuard userspace) |
 | Icons | Lucide React |
 | Data | YouTube internal API + yt-dlp fallback |
@@ -291,6 +302,8 @@ Every request your browser makes goes through **your own backend**, never direct
 | Subtitles / CC | Proxied through your server |
 | Search & trending | YouTube internal API via your server |
 | Music & Podcasts | ytmusicapi via your server |
+| Podcast artwork | Proxied through your server |
+| Radio streams & favicons | Proxied through your server |
 | Channel avatars & banners | Fetched server-side |
 | Watch history | `localStorage` only — never leaves your browser |
 | Subscriptions | `localStorage` only — never leaves your browser |
@@ -318,8 +331,11 @@ Every request your browser makes goes through **your own backend**, never direct
 | `GET /api/channel_thumbnail/{id}` | Channel avatar |
 | `GET /api/channel_banner/{id}` | Channel banner |
 | `GET /api/music/search?q=...&lang=fr` | Music search |
-| `GET /api/music/podcasts/search?q=...&lang=fr` | Podcast search |
-| `GET /api/music/podcast/{id}?lang=fr` | Podcast detail + episodes |
+| `GET /api/podcasts/search?q=...` | Podcast search |
+| `GET /api/podcasts/{id}` | Podcast detail + episodes |
+| `GET /api/podcasts/image/proxy?url=...` | Proxy podcast/radio artwork |
+| `GET /api/radio/stations?country=FR&tag=pop` | Radio stations by country/genre |
+| `GET /api/radio/stream/proxy?url=...` | Proxy radio stream |
 | `GET /api/news?region=FR&category=technology` | News articles (Google News RSS) |
 | `GET /api/vpn/status` | VPN status |
 | `POST /api/vpn/upload` | Upload WireGuard .conf |
