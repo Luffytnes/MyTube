@@ -2857,10 +2857,18 @@ def _fmt_date(ts: Optional[int]) -> Optional[str]:
 
 @app.get("/api/podcasts/image/proxy")
 async def podcast_image_proxy(url: str):
-    """Proxy podcast artwork to avoid third-party tracker exposure."""
+    """Proxy podcast/radio artwork to avoid third-party tracker exposure."""
+    # Transparent 1×1 GIF returned on any error so clients don't log 404s
+    _EMPTY_GIF = b"GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x00\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
+    if not url or url == "null" or not url.startswith("http"):
+        return Response(content=_EMPTY_GIF, media_type="image/gif",
+                        headers={"Cache-Control": "public, max-age=3600"})
     try:
-        async with httpx_client(timeout=10.0, follow_redirects=True) as client:
-            resp = await client.get(url)
+        async with httpx_client(timeout=8.0, follow_redirects=True) as client:
+            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            if resp.status_code >= 400:
+                return Response(content=_EMPTY_GIF, media_type="image/gif",
+                                headers={"Cache-Control": "public, max-age=3600"})
             ct = resp.headers.get("content-type", "image/jpeg")
             return Response(
                 content=resp.content,
@@ -2868,7 +2876,8 @@ async def podcast_image_proxy(url: str):
                 headers={"Cache-Control": "public, max-age=86400"},
             )
     except Exception:
-        raise HTTPException(status_code=404, detail="Image not found")
+        return Response(content=_EMPTY_GIF, media_type="image/gif",
+                        headers={"Cache-Control": "public, max-age=3600"})
 
 
 def _proxy_podcast_thumb(url: str | None) -> str | None:
@@ -3069,6 +3078,9 @@ async def radio_stations(
         if not stream_url:
             continue
         favicon = s.get("favicon") or ""
+        # Radio Browser sometimes sends the string "null" — treat it as empty
+        if favicon in ("null", "undefined") or not favicon.startswith("http"):
+            favicon = ""
         result.append({
             "id": s.get("stationuuid", ""),
             "name": (s.get("name") or "").strip(),
