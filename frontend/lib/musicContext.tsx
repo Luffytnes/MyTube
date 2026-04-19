@@ -15,7 +15,9 @@ export interface MusicTrack {
   thumbnail?: string | null
   duration?: string | null
   durationMs?: number
-  directUrl?: string  // for podcast episodes with a direct enclosure URL
+  directUrl?: string       // for podcast episodes with a direct enclosure URL
+  radioStreamUrl?: string  // for live radio — stream proxied through backend
+  isRadio?: boolean
 }
 
 type RepeatMode = 'none' | 'one' | 'all'
@@ -32,6 +34,7 @@ interface MusicContextType {
   shuffle: boolean
   repeat: RepeatMode
   playTrack: (track: MusicTrack, queue?: MusicTrack[]) => void
+  playRadio: (track: MusicTrack) => void
   playPause: () => void
   next: () => void
   prev: () => void
@@ -118,7 +121,9 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     const audio = audioRef.current
     const track = currentIndex >= 0 && currentIndex < queue.length ? queue[currentIndex] : null
     if (!audio || !track) return
-    if (track.directUrl) {
+    if (track.radioStreamUrl) {
+      audio.src = track.radioStreamUrl
+    } else if (track.directUrl) {
       audio.src = `${API_BASE}/api/podcasts/audio/proxy?url=${encodeURIComponent(track.directUrl)}`
     } else if (track.videoId) {
       audio.src = `${API_BASE}/api/stream/${track.videoId}/audio`
@@ -133,6 +138,12 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     const idx = q.findIndex((t) => t.videoId === track.videoId)
     setQueue(q)
     setCurrentIndex(idx >= 0 ? idx : 0)
+  }, [])
+
+  // Play a radio station — replaces queue with single live track
+  const playRadio = useCallback((track: MusicTrack) => {
+    setQueue([track])
+    setCurrentIndex(0)
   }, [])
 
   const playPause = useCallback(() => {
@@ -200,7 +211,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     <MusicContext.Provider value={{
       queue, currentIndex, currentTrack,
       playing, currentTime, duration, volume, muted, shuffle, repeat,
-      playTrack, playPause, next, prev, seek, setVolume,
+      playTrack, playRadio, playPause, next, prev, seek, setVolume,
       toggleMute, toggleShuffle, toggleRepeat, addToQueue,
     }}>
       {children}

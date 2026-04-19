@@ -100,17 +100,29 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
 
           {/* Progress */}
           <div className="flex-shrink-0 mb-6">
-            <input
-              type="range" min="0" max="100" step="0.1"
-              value={progress}
-              onChange={handleSeek}
-              className="w-full h-1.5 cursor-pointer accent-white rounded-full"
-              style={{ background: `linear-gradient(to right, #ffffff ${progress}%, rgba(255,255,255,0.2) ${progress}%)` }}
-            />
-            <div className="flex justify-between mt-1.5">
-              <span className="text-white/50 text-xs tabular-nums">{formatTime(currentTime)}</span>
-              <span className="text-white/50 text-xs tabular-nums">{formatTime(duration)}</span>
-            </div>
+            {currentTrack.isRadio ? (
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-1.5 rounded-full bg-white/10" />
+                <span className="flex items-center gap-1.5 text-yt-red text-xs font-bold">
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  LIVE
+                </span>
+              </div>
+            ) : (
+              <>
+                <input
+                  type="range" min="0" max="100" step="0.1"
+                  value={progress}
+                  onChange={handleSeek}
+                  className="w-full h-1.5 cursor-pointer accent-white rounded-full"
+                  style={{ background: `linear-gradient(to right, #ffffff ${progress}%, rgba(255,255,255,0.2) ${progress}%)` }}
+                />
+                <div className="flex justify-between mt-1.5">
+                  <span className="text-white/50 text-xs tabular-nums">{formatTime(currentTime)}</span>
+                  <span className="text-white/50 text-xs tabular-nums">{formatTime(duration)}</span>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Controls */}
@@ -299,19 +311,29 @@ export default function MusicPlayer() {
           </div>
 
           {/* Progress bar */}
-          <div className="flex items-center gap-2 w-full">
-            <span className="text-yt-text-muted text-xs tabular-nums w-8 text-right">{formatTime(currentTime)}</span>
-            <input
-              ref={progressRef}
-              type="range" min="0" max="100" step="0.1"
-              value={progress}
-              onChange={handleSeek}
-              className="flex-1 h-1 cursor-pointer accent-yt-red"
-              style={{ background: `linear-gradient(to right, #ff0000 ${progress}%, #3f3f3f ${progress}%)` }}
-              aria-label="Progress"
-            />
-            <span className="text-yt-text-muted text-xs tabular-nums w-8">{formatTime(duration)}</span>
-          </div>
+          {currentTrack?.isRadio ? (
+            <div className="flex items-center gap-2 w-full">
+              <div className="flex-1 h-1 rounded-full bg-yt-secondary" />
+              <span className="flex items-center gap-1 text-yt-red text-xs font-bold tabular-nums">
+                <span className="w-1.5 h-1.5 rounded-full bg-yt-red animate-pulse" />
+                LIVE
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 w-full">
+              <span className="text-yt-text-muted text-xs tabular-nums w-8 text-right">{formatTime(currentTime)}</span>
+              <input
+                ref={progressRef}
+                type="range" min="0" max="100" step="0.1"
+                value={progress}
+                onChange={handleSeek}
+                className="flex-1 h-1 cursor-pointer accent-yt-red"
+                style={{ background: `linear-gradient(to right, #ff0000 ${progress}%, #3f3f3f ${progress}%)` }}
+                aria-label="Progress"
+              />
+              <span className="text-yt-text-muted text-xs tabular-nums w-8">{formatTime(duration)}</span>
+            </div>
+          )}
         </div>
 
         {/* Volume */}

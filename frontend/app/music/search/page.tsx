@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Music2, Disc3, User, ListMusic, Mic2 } from 'lucide-react'
+import { Music2, Disc3, User, ListMusic, Mic2, Radio, Play, Pause } from 'lucide-react'
 import Link from 'next/link'
 import TrackRow from '@/components/music/TrackRow'
 import AlbumCard from '@/components/music/AlbumCard'
+import { useMusic } from '@/lib/musicContext'
 import type { MusicTrack } from '@/lib/musicContext'
 import { cn } from '@/lib/utils'
 import { useRegion } from '@/lib/regionContext'
@@ -14,7 +15,17 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 import type { Translations } from '@/lib/translations'
 
-type FilterType = 'songs' | 'albums' | 'artists' | 'playlists' | 'podcasts'
+type FilterType = 'songs' | 'albums' | 'artists' | 'playlists' | 'podcasts' | 'radio'
+
+interface RadioStation {
+  id: string
+  name: string
+  url: string       // proxied relative URL
+  favicon: string | null
+  tags: string[]
+  bitrate: number
+  country: string
+}
 
 interface Result {
   type: string
@@ -41,29 +52,40 @@ const FILTERS: { key: FilterType; labelKey: keyof Translations; icon: typeof Mus
   { key: 'artists', labelKey: 'music_artists_label', icon: User },
   { key: 'playlists', labelKey: 'music_playlists_label', icon: ListMusic },
   { key: 'podcasts', labelKey: 'podcast_nav', icon: Mic2 },
+  { key: 'radio', labelKey: 'music_radio', icon: Radio },
 ]
 
 function MusicSearchContent() {
   const params = useSearchParams()
   const { t, lang } = useRegion()
+  const { currentTrack, playing, playPause, playRadio } = useMusic()
   const initialQ = params.get('q') || ''
   const initialFilter = (params.get('filter') as FilterType) || 'songs'
   const [filter, setFilter] = useState<FilterType>(initialFilter)
   const [results, setResults] = useState<Result[]>([])
+  const [radioResults, setRadioResults] = useState<RadioStation[]>([])
   const [loading, setLoading] = useState(false)
 
   const doSearch = useCallback(async (q: string, f: FilterType) => {
     if (!q.trim()) return
     setLoading(true)
     setResults([])
+    setRadioResults([])
     try {
-      const url = f === 'podcasts'
-        ? `${API_BASE}/api/podcasts/search?q=${encodeURIComponent(q)}`
-        : `${API_BASE}/api/music/search?q=${encodeURIComponent(q)}&filter=${f}`
-      const res = await fetch(url)
-      const data = await res.json()
-      setResults(Array.isArray(data) ? data : [])
-    } catch { setResults([]) }
+      if (f === 'radio') {
+        const res = await fetch(`${API_BASE}/api/radio/stations?q=${encodeURIComponent(q)}&limit=48`)
+        const data = await res.json()
+        setRadioResults(Array.isArray(data) ? data : [])
+      } else if (f === 'podcasts') {
+        const res = await fetch(`${API_BASE}/api/podcasts/search?q=${encodeURIComponent(q)}`)
+        const data = await res.json()
+        setResults(Array.isArray(data) ? data : [])
+      } else {
+        const res = await fetch(`${API_BASE}/api/music/search?q=${encodeURIComponent(q)}&filter=${f}`)
+        const data = await res.json()
+        setResults(Array.isArray(data) ? data : [])
+      }
+    } catch { setResults([]); setRadioResults([]) }
     finally { setLoading(false) }
   }, [lang])
 
@@ -107,10 +129,10 @@ function MusicSearchContent() {
             <div key={i} className="h-14 bg-yt-secondary rounded-xl animate-pulse" />
           ))}
         </div>
-      ) : results.length === 0 && initialQ ? (
+      ) : (filter === 'radio' ? radioResults.length === 0 : results.length === 0) && initialQ ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <Music2 className="w-12 h-12 text-yt-text-muted mb-3" />
-          <p className="text-yt-text-muted">{t('music_no_results_music')} « {initialQ} »</p>
+          <p className="text-yt-text-muted">{filter === 'radio' ? t('radio_no_results') : `${t('music_no_results_music')} « ${initialQ} »`}</p>
         </div>
       ) : (
         <>
@@ -185,6 +207,60 @@ function MusicSearchContent() {
                       {r.author && <p className="text-xs text-yt-text-muted truncate">{r.author}</p>}
                     </div>
                   </Link>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Radio */}
+          {filter === 'radio' && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {radioResults.map((station) => {
+                const stationTrackId = `radio-${station.id}`
+                const isActive = currentTrack?.videoId === stationTrackId && playing
+                return (
+                  <button
+                    key={station.id}
+                    onClick={() => {
+                      if (currentTrack?.videoId === stationTrackId) {
+                        playPause()
+                      } else {
+                        playRadio({
+                          videoId: stationTrackId,
+                          title: station.name,
+                          artists: [{ name: t('music_radio_live') }],
+                          thumbnail: station.favicon || undefined,
+                          isRadio: true,
+                          radioStreamUrl: `${API_BASE}${station.url}`,
+                        })
+                      }
+                    }}
+                    className="group flex flex-col gap-2 text-left"
+                  >
+                    <div className={cn('aspect-square rounded-xl overflow-hidden bg-yt-secondary relative', isActive ? 'ring-2 ring-yt-red' : '')}>
+                      {station.favicon ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={station.favicon} alt={station.name} className="w-full h-full object-contain p-3" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Radio className="w-10 h-10 text-yt-text-muted" />
+                        </div>
+                      )}
+                      <div className={cn('absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity', isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}>
+                        <div className="w-12 h-12 rounded-full bg-yt-red flex items-center justify-center shadow-lg">
+                          {isActive ? <Pause className="w-5 h-5 text-white fill-white" /> : <Play className="w-5 h-5 text-white fill-white ml-0.5" />}
+                        </div>
+                      </div>
+                      <div className="absolute top-2 left-2 flex items-center gap-1 bg-yt-red text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                        LIVE
+                      </div>
+                    </div>
+                    <div className="px-0.5">
+                      <p className={cn('text-xs font-medium truncate', isActive ? 'text-yt-red' : 'text-yt-text group-hover:text-yt-red transition-colors')}>{station.name}</p>
+                      {station.country && <p className="text-xs text-yt-text-muted truncate">{station.country}</p>}
+                    </div>
+                  </button>
                 )
               })}
             </div>

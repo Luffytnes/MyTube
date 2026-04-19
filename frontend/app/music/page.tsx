@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { TrendingUp, Music2, ListMusic, Sparkles, Plus, ChevronRight, User, Disc3, Mic2 } from 'lucide-react'
+import { TrendingUp, Music2, ListMusic, Sparkles, Plus, ChevronRight, User, Disc3, Mic2, Radio, Play, Pause } from 'lucide-react'
 import TrackRow from '@/components/music/TrackRow'
 import AlbumCard from '@/components/music/AlbumCard'
 import type { MusicTrack } from '@/lib/musicContext'
@@ -10,6 +10,8 @@ import { getMusicPlaylists, type MusicPlaylist } from '@/lib/musicPlaylists'
 import { getMusicSearchHistory } from '@/lib/musicSearchHistory'
 import { getPodcastSubscriptions } from '@/lib/podcastSubscriptions'
 import { useRegion } from '@/lib/regionContext'
+import { useMusic } from '@/lib/musicContext'
+import { cn } from '@/lib/utils'
 
 interface ArtistSuggestion {
   browseId: string
@@ -19,10 +21,20 @@ interface ArtistSuggestion {
 }
 
 interface PodcastSuggestion {
-  browseId: string
+  id?: string
+  browseId?: string
   title: string
   author?: string
   thumbnail?: string
+}
+
+interface RadioStation {
+  id: string
+  name: string
+  url: string       // proxied relative URL
+  favicon: string | null
+  tags: string[]
+  country: string
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
@@ -49,7 +61,8 @@ interface SearchResult {
 }
 
 export default function MusicHomePage() {
-  const { t, lang } = useRegion()
+  const { t, lang, region } = useRegion()
+  const { currentTrack, playing, playPause, playRadio } = useMusic()
   const [data, setData] = useState<HomeData | null>(null)
   const [loading, setLoading] = useState(true)
   const [forYouTracks, setForYouTracks] = useState<MusicTrack[]>([])
@@ -57,6 +70,7 @@ export default function MusicHomePage() {
   const [suggestedAlbums, setSuggestedAlbums] = useState<SearchResult[]>([])
   const [suggestedArtists, setSuggestedArtists] = useState<ArtistSuggestion[]>([])
   const [suggestedPodcasts, setSuggestedPodcasts] = useState<PodcastSuggestion[]>([])
+  const [suggestedRadio, setSuggestedRadio] = useState<RadioStation[]>([])
   const [playlists, setPlaylists] = useState<MusicPlaylist[]>([])
 
   // Load home charts
@@ -73,6 +87,15 @@ export default function MusicHomePage() {
     setPlaylists(getMusicPlaylists())
   }, [])
 
+  // Load radio suggestions for current country
+  useEffect(() => {
+    const params = new URLSearchParams({ country: region.code.toUpperCase(), limit: '6' })
+    fetch(`${API_BASE}/api/radio/stations?${params}`)
+      .then((r) => r.json())
+      .then((data: RadioStation[]) => setSuggestedRadio(Array.isArray(data) ? data.slice(0, 6) : []))
+      .catch(() => {})
+  }, [region.code])
+
   // Personalized — based on music search history
   useEffect(() => {
     const history = getMusicSearchHistory().slice(0, 3).map((h) => h.query)
@@ -85,8 +108,8 @@ export default function MusicHomePage() {
       const max = Math.max(...buckets.map((b) => b.length))
       for (let i = 0; i < max; i++) {
         for (const b of buckets) {
-          const item = b[i] as T & { videoId?: string; browseId?: string }
-          const key = item?.videoId || item?.browseId
+          const item = b[i] as T & { videoId?: string; browseId?: string; id?: string }
+          const key = item?.videoId || item?.browseId || item?.id
           if (item && key && !seen.has(key)) {
             seen.add(key)
             merged.push(item)
@@ -155,7 +178,7 @@ export default function MusicHomePage() {
             fetch(`${API_BASE}/api/podcasts/search?q=${encodeURIComponent(q)}`)
               .then((r) => r.json())
               .then((results: PodcastSuggestion[]) =>
-                Array.isArray(results) ? results.filter((r) => r.browseId).slice(0, 4) : []
+                Array.isArray(results) ? results.filter((r) => r.id || r.browseId).slice(0, 4) : []
               )
               .catch(() => [] as PodcastSuggestion[])
           )
@@ -319,24 +342,85 @@ export default function MusicHomePage() {
               <span className="text-yt-text-muted text-xs">{t('music_based_on_searches')}</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {suggestedPodcasts.map((p) => (
-                <Link key={p.browseId} href={`/music/podcasts/${p.browseId}`} className="flex flex-col gap-2 group">
-                  <div className="aspect-square rounded-xl overflow-hidden bg-yt-secondary shadow">
-                    {p.thumbnail ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.thumbnail} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Mic2 className="w-8 h-8 text-yt-text-muted" />
+              {suggestedPodcasts.map((p) => {
+                const podcastId = p.id || p.browseId
+                return (
+                  <Link key={podcastId} href={`/music/podcasts/${podcastId}`} className="flex flex-col gap-2 group">
+                    <div className="aspect-square rounded-xl overflow-hidden bg-yt-secondary shadow">
+                      {p.thumbnail ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.thumbnail} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Mic2 className="w-8 h-8 text-yt-text-muted" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-yt-text truncate group-hover:text-yt-red transition-colors">{p.title}</p>
+                      {p.author && <p className="text-xs text-yt-text-muted truncate mt-0.5">{p.author}</p>}
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Suggested Radio */}
+        {suggestedRadio.length > 0 && (
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Radio className="w-5 h-5 text-yt-red" />
+                <h2 className="text-yt-text text-lg font-semibold">{t('music_radio_suggested')}</h2>
+              </div>
+              <Link href="/music/radio" className="flex items-center gap-1 text-xs text-yt-text-muted hover:text-yt-text transition-colors">
+                {t('music_see_all')} <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+              {suggestedRadio.map((station) => {
+                const stationTrackId = `radio-${station.id}`
+                const isActive = currentTrack?.videoId === stationTrackId && playing
+                return (
+                  <button
+                    key={station.id}
+                    onClick={() => {
+                      if (currentTrack?.videoId === stationTrackId) {
+                        playPause()
+                      } else {
+                        playRadio({
+                          videoId: stationTrackId,
+                          title: station.name,
+                          artists: [{ name: t('music_radio_live') }],
+                          thumbnail: station.favicon || undefined,
+                          isRadio: true,
+                          radioStreamUrl: `${API_BASE}${station.url}`,
+                        })
+                      }
+                    }}
+                    className="group flex flex-col gap-2 text-left"
+                  >
+                    <div className={cn('aspect-square rounded-xl overflow-hidden bg-yt-secondary relative', isActive ? 'ring-2 ring-yt-red' : '')}>
+                      {station.favicon ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={station.favicon} alt={station.name} className="w-full h-full object-contain p-2" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Radio className="w-8 h-8 text-yt-text-muted" />
+                        </div>
+                      )}
+                      <div className={cn('absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity', isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}>
+                        <div className="w-10 h-10 rounded-full bg-yt-red flex items-center justify-center">
+                          {isActive ? <Pause className="w-4 h-4 text-white fill-white" /> : <Play className="w-4 h-4 text-white fill-white ml-0.5" />}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-yt-text truncate group-hover:text-yt-red transition-colors">{p.title}</p>
-                    {p.author && <p className="text-xs text-yt-text-muted truncate mt-0.5">{p.author}</p>}
-                  </div>
-                </Link>
-              ))}
+                    </div>
+                    <p className={cn('text-xs font-medium truncate', isActive ? 'text-yt-red' : 'text-yt-text group-hover:text-yt-red transition-colors')}>{station.name}</p>
+                  </button>
+                )
+              })}
             </div>
           </section>
         )}

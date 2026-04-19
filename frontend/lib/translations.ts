@@ -96,6 +96,12 @@ export interface Translations {
   news_cat_health: string; news_cat_world: string; news_cat_nation: string; news_cat_politics: string
   news_ago_just_now: string; news_ago_minutes: string; news_ago_hours: string; news_ago_days: string
   news_read_more: string
+  // Radio
+  music_radio: string; music_radio_suggested: string; music_radio_live: string
+  radio_genre_all: string; radio_genre_pop: string; radio_genre_rock: string; radio_genre_jazz: string
+  radio_genre_classical: string; radio_genre_electronic: string; radio_genre_hiphop: string
+  radio_genre_news: string; radio_genre_sport: string; radio_genre_country: string; radio_genre_soul: string; radio_genre_metal: string
+  radio_no_results: string; radio_playing: string
 }
 
 export const translations: Record<Lang, Translations> = {
@@ -198,6 +204,11 @@ export const translations: Record<Lang, Translations> = {
     nav_news: 'News', news_title: 'News', news_loading: 'Loading news…', news_error: 'Failed to load news.', news_empty: 'No articles found.',
     news_cat_general: 'General', news_cat_technology: 'Tech', news_cat_business: 'Business', news_cat_entertainment: 'Entertainment', news_cat_sports: 'Sports', news_cat_science: 'Science', news_cat_health: 'Health', news_cat_world: 'World', news_cat_nation: 'Nation', news_cat_politics: 'Politics',
     news_ago_just_now: 'Just now', news_ago_minutes: 'min ago', news_ago_hours: 'h ago', news_ago_days: 'd ago', news_read_more: 'Read',
+    music_radio: 'Radio', music_radio_suggested: 'Radio for you', music_radio_live: 'Live',
+    radio_genre_all: 'All', radio_genre_pop: 'Pop', radio_genre_rock: 'Rock', radio_genre_jazz: 'Jazz',
+    radio_genre_classical: 'Classical', radio_genre_electronic: 'Electronic', radio_genre_hiphop: 'Hip-Hop',
+    radio_genre_news: 'News', radio_genre_sport: 'Sport', radio_genre_country: 'Country', radio_genre_soul: 'Soul', radio_genre_metal: 'Metal',
+    radio_no_results: 'No radio stations found.', radio_playing: 'Now playing',
   },
   fr: {
     nav_home: 'Accueil', nav_trending: 'Tendances', nav_history: 'Historique', nav_back: 'Retour',
@@ -298,6 +309,9 @@ export const translations: Record<Lang, Translations> = {
     nav_news: 'Actualité', news_title: 'Actualité', news_loading: 'Chargement des actualités…', news_error: 'Impossible de charger les actualités.', news_empty: 'Aucun article trouvé.',
     news_cat_general: 'Général', news_cat_technology: 'Tech', news_cat_business: 'Business', news_cat_entertainment: 'Divertissement', news_cat_sports: 'Sport', news_cat_science: 'Science', news_cat_health: 'Santé', news_cat_world: 'Monde', news_cat_nation: 'Nation', news_cat_politics: 'Politique',
     news_ago_just_now: 'À l\'instant', news_ago_minutes: 'min', news_ago_hours: 'h', news_ago_days: 'j', news_read_more: 'Lire',
+    music_radio: 'Radio', music_radio_suggested: 'Radios suggérées', music_radio_live: 'En direct',
+    radio_genre_all: 'Tous', radio_genre_pop: 'Pop', radio_genre_rock: 'Rock', radio_genre_jazz: 'Jazz', radio_genre_classical: 'Classique', radio_genre_electronic: 'Électronique', radio_genre_hiphop: 'Hip-Hop', radio_genre_news: 'Actualités', radio_genre_sport: 'Sport', radio_genre_country: 'Country', radio_genre_soul: 'Soul', radio_genre_metal: 'Metal',
+    radio_no_results: 'Aucune station trouvée.', radio_playing: 'Radio en direct',
   },
   es: {
     nav_home: 'Inicio', nav_trending: 'Tendencias', nav_history: 'Historial', nav_back: 'Volver',
@@ -398,6 +412,9 @@ export const translations: Record<Lang, Translations> = {
     nav_news: 'Noticias', news_title: 'Noticias', news_loading: 'Cargando noticias…', news_error: 'Error al cargar las noticias.', news_empty: 'No se encontraron artículos.',
     news_cat_general: 'General', news_cat_technology: 'Tecnología', news_cat_business: 'Negocios', news_cat_entertainment: 'Entretenimiento', news_cat_sports: 'Deportes', news_cat_science: 'Ciencia', news_cat_health: 'Salud', news_cat_world: 'Mundo', news_cat_nation: 'Nacional', news_cat_politics: 'Política',
     news_ago_just_now: 'Ahora', news_ago_minutes: 'min', news_ago_hours: 'h', news_ago_days: 'd', news_read_more: 'Leer',
+    music_radio: 'Radio', music_radio_suggested: 'Radios sugeridas', music_radio_live: 'En vivo',
+    radio_genre_all: 'Todo', radio_genre_pop: 'Pop', radio_genre_rock: 'Rock', radio_genre_jazz: 'Jazz', radio_genre_classical: 'Clásica', radio_genre_electronic: 'Electrónica', radio_genre_hiphop: 'Hip-Hop', radio_genre_news: 'Noticias', radio_genre_sport: 'Deportes', radio_genre_country: 'Country', radio_genre_soul: 'Soul', radio_genre_metal: 'Metal',
+    radio_no_results: 'No se encontraron estaciones.', radio_playing: 'Radio en vivo',
   },
   de: {
     nav_home: 'Startseite', nav_trending: 'Trends', nav_history: 'Verlauf', nav_back: 'Zurück',
@@ -498,6 +515,9 @@ export const translations: Record<Lang, Translations> = {
     nav_news: 'Nachrichten', news_title: 'Nachrichten', news_loading: 'Nachrichten werden geladen…', news_error: 'Nachrichten konnten nicht geladen werden.', news_empty: 'Keine Artikel gefunden.',
     news_cat_general: 'Allgemein', news_cat_technology: 'Technik', news_cat_business: 'Wirtschaft', news_cat_entertainment: 'Unterhaltung', news_cat_sports: 'Sport', news_cat_science: 'Wissenschaft', news_cat_health: 'Gesundheit', news_cat_world: 'Welt', news_cat_nation: 'National', news_cat_politics: 'Politik',
     news_ago_just_now: 'Jetzt', news_ago_minutes: 'Min.', news_ago_hours: 'Std.', news_ago_days: 'T.', news_read_more: 'Lesen',
+    music_radio: 'Radio', music_radio_suggested: 'Vorgeschlagene Sender', music_radio_live: 'Live',
+    radio_genre_all: 'Alle', radio_genre_pop: 'Pop', radio_genre_rock: 'Rock', radio_genre_jazz: 'Jazz', radio_genre_classical: 'Klassik', radio_genre_electronic: 'Elektronik', radio_genre_hiphop: 'Hip-Hop', radio_genre_news: 'Nachrichten', radio_genre_sport: 'Sport', radio_genre_country: 'Country', radio_genre_soul: 'Soul', radio_genre_metal: 'Metal',
+    radio_no_results: 'Keine Sender gefunden.', radio_playing: 'Live-Radio',
   },
   pt: {
     nav_home: 'Início', nav_trending: 'Em Alta', nav_history: 'Histórico', nav_back: 'Voltar',
@@ -598,6 +618,9 @@ export const translations: Record<Lang, Translations> = {
     nav_news: 'Notícias', news_title: 'Notícias', news_loading: 'Carregando notícias…', news_error: 'Erro ao carregar notícias.', news_empty: 'Nenhum artigo encontrado.',
     news_cat_general: 'Geral', news_cat_technology: 'Tecnologia', news_cat_business: 'Negócios', news_cat_entertainment: 'Entretenimento', news_cat_sports: 'Esportes', news_cat_science: 'Ciência', news_cat_health: 'Saúde', news_cat_world: 'Mundo', news_cat_nation: 'Nacional', news_cat_politics: 'Política',
     news_ago_just_now: 'Agora', news_ago_minutes: 'min', news_ago_hours: 'h', news_ago_days: 'd', news_read_more: 'Ler',
+    music_radio: 'Rádio', music_radio_suggested: 'Rádios sugeridas', music_radio_live: 'Ao vivo',
+    radio_genre_all: 'Todos', radio_genre_pop: 'Pop', radio_genre_rock: 'Rock', radio_genre_jazz: 'Jazz', radio_genre_classical: 'Clássico', radio_genre_electronic: 'Eletrônico', radio_genre_hiphop: 'Hip-Hop', radio_genre_news: 'Notícias', radio_genre_sport: 'Esportes', radio_genre_country: 'Country', radio_genre_soul: 'Soul', radio_genre_metal: 'Metal',
+    radio_no_results: 'Nenhuma estação encontrada.', radio_playing: 'Rádio ao vivo',
   },
   it: {
     nav_home: 'Home', nav_trending: 'Di tendenza', nav_history: 'Cronologia', nav_back: 'Indietro',
@@ -698,6 +721,9 @@ export const translations: Record<Lang, Translations> = {
     nav_news: 'Notizie', news_title: 'Notizie', news_loading: 'Caricamento notizie…', news_error: 'Impossibile caricare le notizie.', news_empty: 'Nessun articolo trovato.',
     news_cat_general: 'Generale', news_cat_technology: 'Tecnologia', news_cat_business: 'Economia', news_cat_entertainment: 'Intrattenimento', news_cat_sports: 'Sport', news_cat_science: 'Scienza', news_cat_health: 'Salute', news_cat_world: 'Mondo', news_cat_nation: 'Nazionale', news_cat_politics: 'Politica',
     news_ago_just_now: 'Ora', news_ago_minutes: 'min fa', news_ago_hours: 'ore fa', news_ago_days: 'gg fa', news_read_more: 'Leggi',
+    music_radio: 'Radio', music_radio_suggested: 'Radio suggerite', music_radio_live: 'In diretta',
+    radio_genre_all: 'Tutti', radio_genre_pop: 'Pop', radio_genre_rock: 'Rock', radio_genre_jazz: 'Jazz', radio_genre_classical: 'Classica', radio_genre_electronic: 'Elettronica', radio_genre_hiphop: 'Hip-Hop', radio_genre_news: 'Notizie', radio_genre_sport: 'Sport', radio_genre_country: 'Country', radio_genre_soul: 'Soul', radio_genre_metal: 'Metal',
+    radio_no_results: 'Nessuna stazione trovata.', radio_playing: 'Radio in diretta',
   },
   ja: {
     nav_home: 'ホーム', nav_trending: 'トレンド', nav_history: '履歴', nav_back: '戻る',
@@ -798,6 +824,9 @@ export const translations: Record<Lang, Translations> = {
     nav_news: 'ニュース', news_title: 'ニュース', news_loading: 'ニュースを読み込み中…', news_error: 'ニュースを読み込めませんでした。', news_empty: '記事が見つかりません。',
     news_cat_general: '総合', news_cat_technology: 'テクノロジー', news_cat_business: 'ビジネス', news_cat_entertainment: 'エンタメ', news_cat_sports: 'スポーツ', news_cat_science: 'サイエンス', news_cat_health: '健康', news_cat_world: '国際', news_cat_nation: '国内', news_cat_politics: '政治',
     news_ago_just_now: 'たった今', news_ago_minutes: '分前', news_ago_hours: '時間前', news_ago_days: '日前', news_read_more: '読む',
+    music_radio: 'ラジオ', music_radio_suggested: 'おすすめラジオ', music_radio_live: 'ライブ',
+    radio_genre_all: 'すべて', radio_genre_pop: 'ポップ', radio_genre_rock: 'ロック', radio_genre_jazz: 'ジャズ', radio_genre_classical: 'クラシック', radio_genre_electronic: 'エレクトロニック', radio_genre_hiphop: 'ヒップホップ', radio_genre_news: 'ニュース', radio_genre_sport: 'スポーツ', radio_genre_country: 'カントリー', radio_genre_soul: 'ソウル', radio_genre_metal: 'メタル',
+    radio_no_results: 'ステーションが見つかりません。', radio_playing: 'ライブラジオ',
   },
   ko: {
     nav_home: '홈', nav_trending: '인기', nav_history: '시청 기록', nav_back: '뒤로',
@@ -898,6 +927,9 @@ export const translations: Record<Lang, Translations> = {
     nav_news: '뉴스', news_title: '뉴스', news_loading: '뉴스 로딩 중…', news_error: '뉴스를 불러올 수 없습니다.', news_empty: '기사를 찾을 수 없습니다.',
     news_cat_general: '전체', news_cat_technology: '기술', news_cat_business: '비즈니스', news_cat_entertainment: '엔터테인먼트', news_cat_sports: '스포츠', news_cat_science: '과학', news_cat_health: '건강', news_cat_world: '세계', news_cat_nation: '국내', news_cat_politics: '정치',
     news_ago_just_now: '방금', news_ago_minutes: '분 전', news_ago_hours: '시간 전', news_ago_days: '일 전', news_read_more: '읽기',
+    music_radio: '라디오', music_radio_suggested: '추천 라디오', music_radio_live: '라이브',
+    radio_genre_all: '전체', radio_genre_pop: '팝', radio_genre_rock: '록', radio_genre_jazz: '재즈', radio_genre_classical: '클래식', radio_genre_electronic: '일렉트로닉', radio_genre_hiphop: '힙합', radio_genre_news: '뉴스', radio_genre_sport: '스포츠', radio_genre_country: '컨트리', radio_genre_soul: '소울', radio_genre_metal: '메탈',
+    radio_no_results: '스테이션을 찾을 수 없습니다.', radio_playing: '라이브 라디오',
   },
   ru: {
     nav_home: 'Главная', nav_trending: 'В тренде', nav_history: 'История', nav_back: 'Назад',
@@ -998,5 +1030,8 @@ export const translations: Record<Lang, Translations> = {
     nav_news: 'Новости', news_title: 'Новости', news_loading: 'Загрузка новостей…', news_error: 'Не удалось загрузить новости.', news_empty: 'Статьи не найдены.',
     news_cat_general: 'Главное', news_cat_technology: 'Технологии', news_cat_business: 'Бизнес', news_cat_entertainment: 'Развлечения', news_cat_sports: 'Спорт', news_cat_science: 'Наука', news_cat_health: 'Здоровье', news_cat_world: 'Мир', news_cat_nation: 'Страна', news_cat_politics: 'Политика',
     news_ago_just_now: 'Только что', news_ago_minutes: 'мин назад', news_ago_hours: 'ч назад', news_ago_days: 'д назад', news_read_more: 'Читать',
+    music_radio: 'Радио', music_radio_suggested: 'Рекомендуемые радиостанции', music_radio_live: 'Прямой эфир',
+    radio_genre_all: 'Все', radio_genre_pop: 'Поп', radio_genre_rock: 'Рок', radio_genre_jazz: 'Джаз', radio_genre_classical: 'Классика', radio_genre_electronic: 'Электронная', radio_genre_hiphop: 'Хип-хоп', radio_genre_news: 'Новости', radio_genre_sport: 'Спорт', radio_genre_country: 'Кантри', radio_genre_soul: 'Соул', radio_genre_metal: 'Метал',
+    radio_no_results: 'Станции не найдены.', radio_playing: 'Прямой эфир радио',
   },
 }
