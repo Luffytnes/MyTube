@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Mic2, ChevronRight, Search, AlertCircle } from 'lucide-react'
+import { Mic2, ChevronRight, AlertCircle } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
@@ -64,15 +64,11 @@ function PodcastGrid({ podcasts, loading }: { podcasts: Podcast[]; loading: bool
 
 export default function PodcastsPage() {
   const { t } = useRegion()
-  const [searchQ, setSearchQ] = useState('')
-  const [searchResults, setSearchResults] = useState<Podcast[]>([])
-  const [searchLoading, setSearchLoading] = useState(false)
   const [notConfigured, setNotConfigured] = useState(false)
   const [sections, setSections] = useState<{ labelKey: string; query: string; podcasts: Podcast[]; loading: boolean }[]>(
     CATEGORIES.map((c) => ({ ...c, podcasts: [], loading: true }))
   )
 
-  // Load thematic sections on mount
   useEffect(() => {
     CATEGORIES.forEach((cat, idx) => {
       fetch(`${API_BASE}/api/podcasts/search?q=${encodeURIComponent(cat.query)}`)
@@ -87,20 +83,6 @@ export default function PodcastsPage() {
         })
     })
   }, [])
-
-  // Search
-  useEffect(() => {
-    if (!searchQ.trim()) { setSearchResults([]); return }
-    const timer = setTimeout(() => {
-      setSearchLoading(true)
-      fetch(`${API_BASE}/api/podcasts/search?q=${encodeURIComponent(searchQ)}`)
-        .then((r) => r.json())
-        .then((d) => Array.isArray(d) ? d : [])
-        .catch((): Podcast[] => [])
-        .then((r) => { setSearchResults(r); setSearchLoading(false) })
-    }, 400)
-    return () => clearTimeout(timer)
-  }, [searchQ])
 
   return (
     <div className="px-4 py-6 max-w-5xl mx-auto min-h-screen space-y-8">
@@ -121,40 +103,17 @@ export default function PodcastsPage() {
         </div>
       )}
 
-      {/* Search bar */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-yt-text-muted" />
-        <input
-          type="text"
-          value={searchQ}
-          onChange={(e) => setSearchQ(e.target.value)}
-          placeholder={t('podcast_search_placeholder')}
-          className="w-full pl-10 pr-4 py-2.5 bg-yt-secondary border border-yt-border rounded-xl text-sm text-yt-text placeholder-yt-text-muted focus:outline-none focus:border-yt-red transition-colors"
-        />
-      </div>
-
-      {/* Search results */}
-      {searchQ.trim() && (
-        <section>
-          <h2 className="text-yt-text text-lg font-semibold mb-3">{t('podcast_results')}</h2>
-          <PodcastGrid podcasts={searchResults} loading={searchLoading} />
-          {!searchLoading && searchResults.length === 0 && (
-            <p className="text-yt-text-muted text-sm">{t('podcast_no_results')}</p>
-          )}
-        </section>
-      )}
-
       {/* Thematic sections */}
-      {!searchQ.trim() && sections.map((section) => (
+      {sections.map((section) => (
         <section key={section.query}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-yt-text text-lg font-semibold">{t(section.labelKey as Parameters<typeof t>[0])}</h2>
-            <button
-              onClick={() => setSearchQ(section.query)}
+            <Link
+              href={`/music/search?filter=podcasts&q=${encodeURIComponent(section.query)}`}
               className="flex items-center gap-1 text-xs text-yt-text-muted hover:text-yt-text transition-colors"
             >
               {t('music_see_all')} <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+            </Link>
           </div>
           <PodcastGrid podcasts={section.podcasts} loading={section.loading} />
         </section>

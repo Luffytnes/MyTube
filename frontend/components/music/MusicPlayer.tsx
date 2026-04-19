@@ -1,10 +1,10 @@
 'use client'
 
-import { useRef, ChangeEvent } from 'react'
-import Link from 'next/link'
+import { useRef, ChangeEvent, useState } from 'react'
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, Repeat, Repeat1, ListMusic,
+  ChevronDown, ListOrdered,
 } from 'lucide-react'
 import { useMusic } from '@/lib/musicContext'
 import { cn } from '@/lib/utils'
@@ -16,6 +16,200 @@ function formatTime(s: number): string {
   return `${m}:${sec.toString().padStart(2, '0')}`
 }
 
+function FullScreenPlayer({ onClose }: { onClose: () => void }) {
+  const {
+    currentTrack, queue, currentIndex, playing, currentTime, duration,
+    volume, muted, shuffle, repeat,
+    playPause, next, prev, seek, setVolume, toggleMute,
+    toggleShuffle, toggleRepeat,
+  } = useMusic()
+
+  const [showQueue, setShowQueue] = useState(false)
+
+  if (!currentTrack) return null
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0
+  const artistNames = currentTrack.artists.map((a) => a.name).join(', ')
+  const nextTrack = queue[currentIndex + 1] || null
+
+  function handleSeek(e: ChangeEvent<HTMLInputElement>) {
+    seek((parseFloat(e.target.value) / 100) * duration)
+  }
+
+  function handleVolume(e: ChangeEvent<HTMLInputElement>) {
+    setVolume(parseFloat(e.target.value))
+  }
+
+  return (
+    <div className="fixed inset-0 z-[200] flex flex-col bg-yt-bg" style={{ backgroundImage: currentTrack.thumbnail ? `radial-gradient(ellipse at top, rgba(0,0,0,0.6) 0%, transparent 70%)` : undefined }}>
+      {/* Blurred background */}
+      {currentTrack.thumbnail && (
+        <div
+          className="absolute inset-0 bg-cover bg-center scale-110"
+          style={{ backgroundImage: `url(${currentTrack.thumbnail})`, filter: 'blur(40px) brightness(0.3)', zIndex: -1 }}
+        />
+      )}
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 pt-6 pb-2 flex-shrink-0">
+        <button
+          onClick={onClose}
+          className="p-2 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition-colors"
+          aria-label="Réduire"
+        >
+          <ChevronDown className="w-6 h-6" />
+        </button>
+        <p className="text-white/60 text-sm font-medium uppercase tracking-widest">
+          {currentTrack.album || 'En écoute'}
+        </p>
+        <button
+          onClick={() => setShowQueue((v) => !v)}
+          className={cn('p-2 rounded-full transition-colors', showQueue ? 'text-white bg-white/20' : 'text-white/60 hover:text-white hover:bg-white/10')}
+          aria-label="File d'attente"
+        >
+          <ListOrdered className="w-5 h-5" />
+        </button>
+      </div>
+
+      <div className="flex flex-1 min-h-0 gap-6 px-6 pb-6">
+        {/* Main content */}
+        <div className="flex flex-col flex-1 min-w-0">
+          {/* Album art */}
+          <div className="flex justify-center items-center flex-1 py-4">
+            <div className="w-full max-w-xs aspect-square rounded-2xl overflow-hidden shadow-2xl">
+              {currentTrack.thumbnail ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={currentTrack.thumbnail}
+                  alt={currentTrack.title}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-white/10 flex items-center justify-center">
+                  <ListMusic className="w-20 h-20 text-white/30" />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Track info */}
+          <div className="flex-shrink-0 mb-6">
+            <p className="text-white text-2xl font-bold truncate">{currentTrack.title}</p>
+            <p className="text-white/60 text-base truncate mt-1">{artistNames}</p>
+          </div>
+
+          {/* Progress */}
+          <div className="flex-shrink-0 mb-6">
+            <input
+              type="range" min="0" max="100" step="0.1"
+              value={progress}
+              onChange={handleSeek}
+              className="w-full h-1.5 cursor-pointer accent-white rounded-full"
+              style={{ background: `linear-gradient(to right, #ffffff ${progress}%, rgba(255,255,255,0.2) ${progress}%)` }}
+            />
+            <div className="flex justify-between mt-1.5">
+              <span className="text-white/50 text-xs tabular-nums">{formatTime(currentTime)}</span>
+              <span className="text-white/50 text-xs tabular-nums">{formatTime(duration)}</span>
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div className="flex-shrink-0 flex items-center justify-between mb-6">
+            <button
+              onClick={toggleShuffle}
+              className={cn('p-2 rounded-full transition-colors', shuffle ? 'text-white' : 'text-white/40 hover:text-white/80')}
+            >
+              <Shuffle className="w-5 h-5" />
+            </button>
+            <button onClick={prev} className="text-white/80 hover:text-white p-2 transition-colors">
+              <SkipBack className="w-7 h-7" />
+            </button>
+            <button
+              onClick={playPause}
+              className="w-16 h-16 rounded-full bg-white flex items-center justify-center hover:scale-105 transition-transform shadow-xl"
+            >
+              {playing
+                ? <Pause className="w-7 h-7 text-black fill-black" />
+                : <Play className="w-7 h-7 text-black fill-black ml-1" />}
+            </button>
+            <button onClick={next} className="text-white/80 hover:text-white p-2 transition-colors">
+              <SkipForward className="w-7 h-7" />
+            </button>
+            <button
+              onClick={toggleRepeat}
+              className={cn('p-2 rounded-full transition-colors', repeat !== 'none' ? 'text-white' : 'text-white/40 hover:text-white/80')}
+            >
+              {repeat === 'one' ? <Repeat1 className="w-5 h-5" /> : <Repeat className="w-5 h-5" />}
+            </button>
+          </div>
+
+          {/* Volume */}
+          <div className="flex-shrink-0 flex items-center gap-3">
+            <button onClick={toggleMute} className="text-white/50 hover:text-white transition-colors">
+              {muted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+            </button>
+            <input
+              type="range" min="0" max="1" step="0.02"
+              value={muted ? 0 : volume}
+              onChange={handleVolume}
+              className="flex-1 h-1 cursor-pointer accent-white"
+              style={{ background: `linear-gradient(to right, rgba(255,255,255,0.9) ${(muted ? 0 : volume) * 100}%, rgba(255,255,255,0.2) ${(muted ? 0 : volume) * 100}%)` }}
+            />
+          </div>
+        </div>
+
+        {/* Queue panel */}
+        {showQueue && (
+          <div className="w-72 flex-shrink-0 flex flex-col bg-black/30 rounded-2xl overflow-hidden backdrop-blur-sm">
+            <div className="px-4 py-3 border-b border-white/10 flex-shrink-0">
+              <p className="text-white font-semibold text-sm">File d&apos;attente</p>
+            </div>
+            <div className="overflow-y-auto flex-1 py-2">
+              {queue.map((track, i) => (
+                <div
+                  key={track.videoId}
+                  className={cn(
+                    'flex items-center gap-3 px-4 py-2 rounded-xl mx-2 transition-colors',
+                    i === currentIndex ? 'bg-white/20' : 'hover:bg-white/10'
+                  )}
+                >
+                  {track.thumbnail ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={track.thumbnail} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
+                      <ListMusic className="w-4 h-4 text-white/40" />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className={cn('text-xs font-medium truncate', i === currentIndex ? 'text-white' : 'text-white/70')}>{track.title}</p>
+                    <p className="text-xs text-white/40 truncate">{track.artists.map((a) => a.name).join(', ')}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {nextTrack && (
+              <div className="px-4 py-3 border-t border-white/10 flex-shrink-0">
+                <p className="text-white/40 text-xs mb-1.5">Suivant</p>
+                <div className="flex items-center gap-2">
+                  {nextTrack.thumbnail && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={nextTrack.thumbnail} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-white text-xs font-medium truncate">{nextTrack.title}</p>
+                    <p className="text-white/50 text-xs truncate">{nextTrack.artists.map((a) => a.name).join(', ')}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function MusicPlayer() {
   const {
     currentTrack, playing, currentTime, duration,
@@ -24,6 +218,7 @@ export default function MusicPlayer() {
     toggleShuffle, toggleRepeat,
   } = useMusic()
 
+  const [showFullPlayer, setShowFullPlayer] = useState(false)
   const progressRef = useRef<HTMLInputElement>(null)
 
   if (!currentTrack) return null
@@ -41,92 +236,99 @@ export default function MusicPlayer() {
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 h-20 bg-yt-bg border-t border-yt-border/60 flex items-center px-4 gap-4 shadow-2xl">
-      {/* Track info */}
-      <div className="flex items-center gap-3 w-64 flex-shrink-0 min-w-0">
-        {currentTrack.thumbnail ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={currentTrack.thumbnail}
-            alt={currentTrack.title}
-            className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
-          />
-        ) : (
-          <div className="w-12 h-12 rounded-lg bg-yt-secondary flex-shrink-0 flex items-center justify-center">
-            <ListMusic className="w-5 h-5 text-yt-text-muted" />
+    <>
+      {showFullPlayer && <FullScreenPlayer onClose={() => setShowFullPlayer(false)} />}
+
+      <div className="fixed bottom-0 left-0 right-0 z-50 h-20 bg-yt-bg border-t border-yt-border/60 flex items-center px-4 gap-4 shadow-2xl">
+        {/* Track info — clickable to open full player */}
+        <button
+          onClick={() => setShowFullPlayer(true)}
+          className="flex items-center gap-3 w-64 flex-shrink-0 min-w-0 text-left group hover:opacity-80 transition-opacity"
+        >
+          {currentTrack.thumbnail ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={currentTrack.thumbnail}
+              alt={currentTrack.title}
+              className="w-12 h-12 rounded-lg object-cover flex-shrink-0 group-hover:scale-105 transition-transform"
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-lg bg-yt-secondary flex-shrink-0 flex items-center justify-center">
+              <ListMusic className="w-5 h-5 text-yt-text-muted" />
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="text-yt-text text-sm font-medium truncate group-hover:text-yt-red transition-colors">{currentTrack.title}</p>
+            <p className="text-yt-text-muted text-xs truncate">{artistNames}</p>
           </div>
-        )}
-        <div className="min-w-0">
-          <p className="text-yt-text text-sm font-medium truncate">{currentTrack.title}</p>
-          <p className="text-yt-text-muted text-xs truncate">{artistNames}</p>
-        </div>
-      </div>
-
-      {/* Controls + progress */}
-      <div className="flex-1 flex flex-col items-center gap-1 max-w-2xl mx-auto">
-        {/* Buttons */}
-        <div className="flex items-center gap-4">
-          <button
-            onClick={toggleShuffle}
-            className={cn('p-1.5 rounded-full transition-colors', shuffle ? 'text-yt-red' : 'text-yt-text-muted hover:text-yt-text')}
-            aria-label="Shuffle"
-          >
-            <Shuffle className="w-4 h-4" />
-          </button>
-          <button onClick={prev} className="text-yt-text-secondary hover:text-yt-text p-1.5 transition-colors" aria-label="Previous">
-            <SkipBack className="w-5 h-5" />
-          </button>
-          <button
-            onClick={playPause}
-            className="w-9 h-9 rounded-full bg-yt-text flex items-center justify-center hover:scale-105 transition-transform"
-            aria-label={playing ? 'Pause' : 'Play'}
-          >
-            {playing
-              ? <Pause className="w-4 h-4 text-yt-bg fill-yt-bg" />
-              : <Play className="w-4 h-4 text-yt-bg fill-yt-bg ml-0.5" />}
-          </button>
-          <button onClick={next} className="text-yt-text-secondary hover:text-yt-text p-1.5 transition-colors" aria-label="Next">
-            <SkipForward className="w-5 h-5" />
-          </button>
-          <button
-            onClick={toggleRepeat}
-            className={cn('p-1.5 rounded-full transition-colors', repeat !== 'none' ? 'text-yt-red' : 'text-yt-text-muted hover:text-yt-text')}
-            aria-label="Repeat"
-          >
-            {repeat === 'one' ? <Repeat1 className="w-4 h-4" /> : <Repeat className="w-4 h-4" />}
-          </button>
-        </div>
-
-        {/* Progress bar */}
-        <div className="flex items-center gap-2 w-full">
-          <span className="text-yt-text-muted text-xs tabular-nums w-8 text-right">{formatTime(currentTime)}</span>
-          <input
-            ref={progressRef}
-            type="range" min="0" max="100" step="0.1"
-            value={progress}
-            onChange={handleSeek}
-            className="flex-1 h-1 cursor-pointer accent-yt-red"
-            style={{ background: `linear-gradient(to right, #ff0000 ${progress}%, #3f3f3f ${progress}%)` }}
-            aria-label="Progress"
-          />
-          <span className="text-yt-text-muted text-xs tabular-nums w-8">{formatTime(duration)}</span>
-        </div>
-      </div>
-
-      {/* Volume */}
-      <div className="flex items-center gap-2 w-36 flex-shrink-0 justify-end">
-        <button onClick={toggleMute} className="text-yt-text-muted hover:text-yt-text transition-colors" aria-label="Mute">
-          {muted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
         </button>
-        <input
-          type="range" min="0" max="1" step="0.02"
-          value={muted ? 0 : volume}
-          onChange={handleVolume}
-          className="w-24 h-1 cursor-pointer accent-yt-red"
-          style={{ background: `linear-gradient(to right, #f1f1f1 ${(muted ? 0 : volume) * 100}%, #3f3f3f ${(muted ? 0 : volume) * 100}%)` }}
-          aria-label="Volume"
-        />
+
+        {/* Controls + progress */}
+        <div className="flex-1 flex flex-col items-center gap-1 max-w-2xl mx-auto">
+          {/* Buttons */}
+          <div className="flex items-center gap-4">
+            <button
+              onClick={toggleShuffle}
+              className={cn('p-1.5 rounded-full transition-colors', shuffle ? 'text-yt-red' : 'text-yt-text-muted hover:text-yt-text')}
+              aria-label="Shuffle"
+            >
+              <Shuffle className="w-4 h-4" />
+            </button>
+            <button onClick={prev} className="text-yt-text-secondary hover:text-yt-text p-1.5 transition-colors" aria-label="Previous">
+              <SkipBack className="w-5 h-5" />
+            </button>
+            <button
+              onClick={playPause}
+              className="w-9 h-9 rounded-full bg-yt-text flex items-center justify-center hover:scale-105 transition-transform"
+              aria-label={playing ? 'Pause' : 'Play'}
+            >
+              {playing
+                ? <Pause className="w-4 h-4 text-yt-bg fill-yt-bg" />
+                : <Play className="w-4 h-4 text-yt-bg fill-yt-bg ml-0.5" />}
+            </button>
+            <button onClick={next} className="text-yt-text-secondary hover:text-yt-text p-1.5 transition-colors" aria-label="Next">
+              <SkipForward className="w-5 h-5" />
+            </button>
+            <button
+              onClick={toggleRepeat}
+              className={cn('p-1.5 rounded-full transition-colors', repeat !== 'none' ? 'text-yt-red' : 'text-yt-text-muted hover:text-yt-text')}
+              aria-label="Repeat"
+            >
+              {repeat === 'one' ? <Repeat1 className="w-4 h-4" /> : <Repeat className="w-4 h-4" />}
+            </button>
+          </div>
+
+          {/* Progress bar */}
+          <div className="flex items-center gap-2 w-full">
+            <span className="text-yt-text-muted text-xs tabular-nums w-8 text-right">{formatTime(currentTime)}</span>
+            <input
+              ref={progressRef}
+              type="range" min="0" max="100" step="0.1"
+              value={progress}
+              onChange={handleSeek}
+              className="flex-1 h-1 cursor-pointer accent-yt-red"
+              style={{ background: `linear-gradient(to right, #ff0000 ${progress}%, #3f3f3f ${progress}%)` }}
+              aria-label="Progress"
+            />
+            <span className="text-yt-text-muted text-xs tabular-nums w-8">{formatTime(duration)}</span>
+          </div>
+        </div>
+
+        {/* Volume */}
+        <div className="flex items-center gap-2 w-36 flex-shrink-0 justify-end">
+          <button onClick={toggleMute} className="text-yt-text-muted hover:text-yt-text transition-colors" aria-label="Mute">
+            {muted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+          </button>
+          <input
+            type="range" min="0" max="1" step="0.02"
+            value={muted ? 0 : volume}
+            onChange={handleVolume}
+            className="w-24 h-1 cursor-pointer accent-yt-red"
+            style={{ background: `linear-gradient(to right, #f1f1f1 ${(muted ? 0 : volume) * 100}%, #3f3f3f ${(muted ? 0 : volume) * 100}%)` }}
+            aria-label="Volume"
+          />
+        </div>
       </div>
-    </div>
+    </>
   )
 }

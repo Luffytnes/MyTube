@@ -8,6 +8,7 @@ import AlbumCard from '@/components/music/AlbumCard'
 import type { MusicTrack } from '@/lib/musicContext'
 import { getMusicPlaylists, type MusicPlaylist } from '@/lib/musicPlaylists'
 import { getMusicSearchHistory } from '@/lib/musicSearchHistory'
+import { getPodcastSubscriptions } from '@/lib/podcastSubscriptions'
 import { useRegion } from '@/lib/regionContext'
 
 interface ArtistSuggestion {
@@ -143,17 +144,23 @@ export default function MusicHomePage() {
             .catch(() => [] as ArtistSuggestion[])
         )
       ),
-      // Podcasts
-      Promise.all(
-        history.map((q) =>
-          fetch(`${API_BASE}/api/music/podcasts/search?q=${encodeURIComponent(q)}&lang=${lang}`)
-            .then((r) => r.json())
-            .then((results: PodcastSuggestion[]) =>
-              Array.isArray(results) ? results.filter((r) => r.browseId).slice(0, 4) : []
-            )
-            .catch(() => [] as PodcastSuggestion[])
+      // Podcasts — based on subscriptions first, then search history
+      (() => {
+        const subs = getPodcastSubscriptions().slice(0, 3)
+        const podcastQueries = subs.length > 0
+          ? subs.map((s) => s.title)
+          : history
+        return Promise.all(
+          podcastQueries.map((q) =>
+            fetch(`${API_BASE}/api/podcasts/search?q=${encodeURIComponent(q)}`)
+              .then((r) => r.json())
+              .then((results: PodcastSuggestion[]) =>
+                Array.isArray(results) ? results.filter((r) => r.browseId).slice(0, 4) : []
+              )
+              .catch(() => [] as PodcastSuggestion[])
+          )
         )
-      ),
+      })(),
     ]).then(([songBuckets, albumBuckets, artistBuckets, podcastBuckets]) => {
       setForYouTracks(interleave(songBuckets).slice(0, 20))
       setSuggestedAlbums(interleave(albumBuckets).slice(0, 10))
