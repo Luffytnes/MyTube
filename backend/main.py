@@ -7,6 +7,7 @@ import re
 from time import time as _time
 from typing import Optional, List, Dict, Any
 from urllib.parse import urlparse
+import urllib.parse
 from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, Response
@@ -2854,6 +2855,28 @@ def _fmt_date(ts: Optional[int]) -> Optional[str]:
     return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%d %b %Y")
 
 
+@app.get("/api/podcasts/image/proxy")
+async def podcast_image_proxy(url: str):
+    """Proxy podcast artwork to avoid third-party tracker exposure."""
+    try:
+        async with httpx_client(timeout=10.0, follow_redirects=True) as client:
+            resp = await client.get(url)
+            ct = resp.headers.get("content-type", "image/jpeg")
+            return Response(
+                content=resp.content,
+                media_type=ct,
+                headers={"Cache-Control": "public, max-age=86400"},
+            )
+    except Exception:
+        raise HTTPException(status_code=404, detail="Image not found")
+
+
+def _proxy_podcast_thumb(url: str | None) -> str | None:
+    if not url:
+        return None
+    return f"/api/podcasts/image/proxy?url={urllib.parse.quote(url, safe='')}"
+
+
 @app.get("/api/podcasts/search")
 async def podcasts_search(q: str = "", lang: str = "en"):
     """Search podcasts via Podcast Index."""
@@ -2874,7 +2897,7 @@ async def podcasts_search(q: str = "", lang: str = "en"):
                 "id": str(f["id"]),
                 "title": f.get("title", ""),
                 "author": f.get("author") or f.get("ownerName"),
-                "thumbnail": f.get("image") or f.get("artwork"),
+                "thumbnail": _proxy_podcast_thumb(f.get("image") or f.get("artwork")),
                 "description": f.get("description"),
                 "episodeCount": f.get("episodeCount"),
             }
@@ -2904,12 +2927,13 @@ async def podcast_detail(podcast_id: str):
 
         feed = pod_r.json().get("feed", {})
         episodes = []
+        feed_thumb = _proxy_podcast_thumb(feed.get("image") or feed.get("artwork"))
         for ep in eps_r.json().get("items", []):
             episodes.append({
                 "id": str(ep["id"]),
                 "title": ep.get("title", ""),
                 "description": ep.get("description") or ep.get("subtitle"),
-                "thumbnail": ep.get("image") or feed.get("image") or feed.get("artwork"),
+                "thumbnail": _proxy_podcast_thumb(ep.get("image")) or feed_thumb,
                 "duration": _fmt_duration(ep.get("duration")),
                 "date": _fmt_date(ep.get("datePublished")),
                 "enclosureUrl": ep.get("enclosureUrl"),
@@ -2921,7 +2945,7 @@ async def podcast_detail(podcast_id: str):
             "title": feed.get("title", ""),
             "author": feed.get("author") or feed.get("ownerName"),
             "description": feed.get("description"),
-            "thumbnail": feed.get("image") or feed.get("artwork"),
+            "thumbnail": feed_thumb,
             "episodeCount": feed.get("episodeCount"),
             "episodes": [e for e in episodes if e["enclosureUrl"]],
         }
