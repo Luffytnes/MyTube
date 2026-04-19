@@ -3029,6 +3029,114 @@ async def podcast_audio_proxy(url: str, request: Request):
     )
 
 
+RADIO_BROWSER_BASE = "https://de1.api.radio-browser.info/json"
+
+
+@app.get("/api/radio/stations")
+async def radio_stations(
+    country: str = "US",
+    tag: str = "",
+    q: str = "",
+    limit: int = 30,
+):
+    """Fetch radio stations from Radio Browser, filtered by country and optional genre/search."""
+    params: Dict[str, str] = {
+        "countrycode": country.upper(),
+        "limit": str(limit),
+        "order": "clickcount",
+        "reverse": "true",
+        "hidebroken": "true",
+    }
+    if tag:
+        params["tag"] = tag
+    if q:
+        params["name"] = q
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(
+                f"{RADIO_BROWSER_BASE}/stations/search",
+                params=params,
+                headers={"User-Agent": "MyTube/1.0"},
+            )
+            r.raise_for_status()
+            stations = r.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Radio Browser error: {str(e)}")
+
+    result = []
+    for s in stations:
+        stream_url = s.get("url_resolved") or s.get("url", "")
+        if not stream_url:
+            continue
+        favicon = s.get("favicon") or ""
+        result.append({
+            "id": s.get("stationuuid", ""),
+            "name": (s.get("name") or "").strip(),
+            "url": f"/api/radio/stream/proxy?url={urllib.parse.quote(stream_url, safe='')}",
+            "favicon": _proxy_podcast_thumb(favicon) if favicon else None,
+            "tags": [t.strip() for t in (s.get("tags") or "").split(",") if t.strip()][:3],
+            "country": s.get("country", ""),
+            "bitrate": s.get("bitrate", 0),
+            "codec": s.get("codec", ""),
+        })
+    return result
+
+
+@app.get("/api/radio/stream/proxy")
+async def radio_stream_proxy(url: str, request: Request):
+    """Proxy radio stream through backend to preserve privacy."""
+    range_header = request.headers.get("range")
+    req_headers: Dict[str, str] = {"User-Agent": "MyTube/1.0", "Icy-MetaData": "0"}
+    if range_header:
+        req_headers["Range"] = range_header
+
+    chunk_queue: asyncio.Queue[Optional[bytes]] = asyncio.Queue(maxsize=16)
+    header_event = asyncio.Event()
+    upstream_meta: Dict[str, str] = {}
+    upstream_status: list[int] = [200]
+
+    async def _fetch():
+        try:
+            async with httpx_client(timeout=None, follow_redirects=True) as client:
+                async with client.stream("GET", url, headers=req_headers) as resp:
+                    upstream_status[0] = resp.status_code
+                    upstream_meta["content_type"] = resp.headers.get("content-type", "audio/mpeg")
+                    header_event.set()
+                    async for chunk in resp.aiter_bytes(65536):
+                        await chunk_queue.put(chunk)
+        except Exception as exc:
+            logger.warning(f"Radio stream proxy error: {exc}")
+        finally:
+            header_event.set()
+            await chunk_queue.put(None)
+
+    task = asyncio.create_task(_fetch())
+    try:
+        await asyncio.wait_for(header_event.wait(), timeout=15.0)
+    except asyncio.TimeoutError:
+        task.cancel()
+        raise HTTPException(status_code=504, detail="Radio stream timeout")
+
+    async def generate():
+        try:
+            while True:
+                chunk = await chunk_queue.get()
+                if chunk is None:
+                    break
+                yield chunk
+        except Exception:
+            pass
+        finally:
+            task.cancel()
+
+    return StreamingResponse(
+        generate(),
+        status_code=upstream_status[0],
+        headers={"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"},
+        media_type=upstream_meta.get("content_type", "audio/mpeg"),
+    )
+
+
 @app.get("/api/music/home")
 async def music_home():
     """YouTube Music home — mix of charts + new releases."""
