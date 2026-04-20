@@ -323,6 +323,16 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
     return () => document.removeEventListener('fullscreenchange', onFsChange)
   }, [])
 
+  // Lock body scroll when CSS fullscreen is active on mobile to prevent
+  // the page scrolling behind the video.
+  useEffect(() => {
+    const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
+    if (isTouchDevice) {
+      document.body.style.overflow = fullscreen ? 'hidden' : ''
+    }
+    return () => { if (isTouchDevice) document.body.style.overflow = '' }
+  }, [fullscreen])
+
   useEffect(() => {
     function handleKey(e: globalThis.KeyboardEvent) {
       const tag = (e.target as HTMLElement)?.tagName
@@ -371,6 +381,17 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   function toggleFullscreen() {
     const container = containerRef.current
     if (!container) return
+
+    // On touch devices (mobile), use CSS-based fullscreen so the user can
+    // toggle back to inline — native requestFullscreen on mobile hands control
+    // to the browser and removes the ability to exit programmatically.
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    if (isTouchDevice) {
+      setFullscreen((prev) => !prev)
+      return
+    }
+
+    // Desktop: use the native Fullscreen API
     if (!document.fullscreenElement) {
       container.requestFullscreen()
     } else {
@@ -488,6 +509,14 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
       onMouseMove={resetHideTimer}
       onMouseEnter={() => setShowControls(true)}
       onMouseLeave={() => { if (playing) setShowControls(false) }}
+      onTouchStart={(e) => {
+        // On mobile: first tap reveals controls without toggling play.
+        // Subsequent taps (with controls visible) fire onClick → togglePlay.
+        if (!showControls) {
+          e.preventDefault()
+          resetHideTimer()
+        }
+      }}
       onClick={togglePlay}
     >
       {/* Hidden audio element — only for video-only formats without HD HLS */}
@@ -507,6 +536,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
         className="w-full h-full object-contain"
         title={title}
         autoPlay={getPlaybackSettings().autoplay}
+        playsInline
         preload="auto"
         onPlay={() => {
           setPlaying(true)
@@ -528,8 +558,13 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
           if (isVideoOnly && knownDuration) {
             // HLS transcode: ignore hls.js partial duration, always use known total
             setDuration(knownDuration)
+          } else if (knownDuration && knownDuration > 0) {
+            // Prefer known duration when provided — prevents HLS partial-segment flickering
+            setDuration(knownDuration)
           } else if (isFinite(v.duration) && v.duration > 0) {
-            setDuration(v.duration)
+            // Only allow duration to grow: HLS can report decreasing partial values
+            // during buffering which causes the displayed duration to flicker.
+            setDuration((prev) => Math.max(prev, v.duration))
           }
         }}
         onLoadedMetadata={handleLoadedMetadata}

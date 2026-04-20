@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Search, ListMusic, ChevronLeft, Mic2, Bell, Radio, Plus, ChevronDown, ChevronUp } from 'lucide-react'
+import { Home, Search, ListMusic, ChevronLeft, Mic2, Bell, Radio, Plus, ChevronDown, ChevronUp, MoreHorizontal, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useRegion } from '@/lib/regionContext'
 import { useMusic } from '@/lib/musicContext'
@@ -27,6 +27,7 @@ export default function MusicSidebar() {
   const { currentTrack } = useMusic()
   const [playlists, setPlaylists] = useState<MusicPlaylist[]>([])
   const [showAllPlaylists, setShowAllPlaylists] = useState(false)
+  const [showMoreDrawer, setShowMoreDrawer] = useState(false)
 
   useEffect(() => {
     setPlaylists(getMusicPlaylists())
@@ -35,6 +36,11 @@ export default function MusicSidebar() {
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [])
+
+  // Close drawer on navigation
+  useEffect(() => {
+    setShowMoreDrawer(false)
+  }, [pathname])
 
   function isActive(href: string) {
     if (href === '/music') return pathname === '/music'
@@ -142,7 +148,7 @@ export default function MusicSidebar() {
 
       {/* ── Mobile bottom nav ────────────────────────────────── */}
       <nav className={cn('fixed left-0 right-0 z-40 md:hidden flex items-center justify-around bg-yt-bg border-t border-yt-border/40 h-12 px-1', currentTrack ? 'bottom-16' : 'bottom-0')}>
-        {NAV_KEYS.slice(0, 5).map(({ icon: Icon, labelKey, href }) => {
+        {NAV_KEYS.slice(0, 4).map(({ icon: Icon, labelKey, href }) => {
           const active = isActive(href)
           return (
             <Link
@@ -158,14 +164,106 @@ export default function MusicSidebar() {
             </Link>
           )
         })}
-        <Link
-          href="/"
-          className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl text-[10px] text-yt-text-muted hover:text-yt-text transition-colors flex-1"
+        {/* "Plus" button — opens drawer with playlists + remaining nav items */}
+        <button
+          onClick={() => setShowMoreDrawer((v) => !v)}
+          className={cn(
+            'flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl text-[10px] transition-colors flex-1',
+            showMoreDrawer ? 'text-yt-red' : 'text-yt-text-muted hover:text-yt-text'
+          )}
         >
-          <ChevronLeft className="w-5 h-5" />
-          <span>MyTube</span>
-        </Link>
+          <MoreHorizontal className="w-5 h-5" />
+          <span>Plus</span>
+        </button>
       </nav>
+
+      {/* ── Mobile "Plus" drawer ─────────────────────────────── */}
+      {showMoreDrawer && (
+        <>
+          {/* Backdrop */}
+          <div
+            className={cn('fixed inset-0 z-[45] md:hidden', currentTrack ? 'bottom-32' : 'bottom-12')}
+            onClick={() => setShowMoreDrawer(false)}
+          />
+          {/* Drawer */}
+          <div className={cn(
+            'fixed left-0 right-0 z-[46] md:hidden bg-yt-bg border-t border-yt-border/40 rounded-t-2xl shadow-2xl max-h-[70vh] overflow-y-auto pb-safe',
+            currentTrack ? 'bottom-32' : 'bottom-12'
+          )}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-yt-border/40">
+              <p className="text-sm font-semibold text-yt-text">Plus</p>
+              <button onClick={() => setShowMoreDrawer(false)} className="text-yt-text-muted hover:text-yt-text">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="py-2">
+              {/* Remaining nav items (Subscriptions + Playlists link) */}
+              {NAV_KEYS.slice(4).map(({ icon: Icon, labelKey, href }) => {
+                const active = isActive(href)
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    className={cn(
+                      'flex items-center gap-4 px-4 py-3 text-sm transition-colors',
+                      active ? 'text-yt-text font-medium' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
+                    )}
+                  >
+                    <Icon className={cn('w-5 h-5 flex-shrink-0', active ? 'text-yt-red' : 'text-yt-text-secondary')} />
+                    {t(labelKey)}
+                  </Link>
+                )
+              })}
+
+              {/* Playlists */}
+              {playlists.length > 0 && (
+                <>
+                  <div className="border-t border-yt-border/40 my-2 mx-4" />
+                  <p className="px-4 pb-1 text-xs font-semibold text-yt-text-muted uppercase tracking-wider">
+                    {t('music_my_playlists')}
+                  </p>
+                  {playlists.map((p) => {
+                    const active = pathname === `/music/playlists/${p.id}`
+                    const thumb = p.tracks[0]?.thumbnail
+                    return (
+                      <Link
+                        key={p.id}
+                        href={`/music/playlists/${p.id}`}
+                        className={cn(
+                          'flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
+                          active ? 'text-yt-text font-medium' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
+                        )}
+                      >
+                        <div className="w-7 h-7 rounded flex-shrink-0 overflow-hidden bg-yt-secondary flex items-center justify-center">
+                          {thumb ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={thumb} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <ListMusic className="w-4 h-4 text-yt-text-muted" />
+                          )}
+                        </div>
+                        <span className="truncate">{p.name}</span>
+                      </Link>
+                    )
+                  })}
+                </>
+              )}
+
+              {/* Back to MyTube */}
+              <div className="border-t border-yt-border/40 my-2 mx-4" />
+              <Link
+                href="/"
+                className="flex items-center gap-4 px-4 py-3 text-sm text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text transition-colors"
+              >
+                <ChevronLeft className="w-5 h-5 flex-shrink-0" />
+                {t('music_back')}
+              </Link>
+            </div>
+          </div>
+        </>
+      )}
+
     </>
   )
 }
