@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { Home, Search, ListMusic, ChevronLeft, Mic2, Bell, Radio, Plus, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useRegion } from '@/lib/regionContext'
+import { useMusic } from '@/lib/musicContext'
 import type { Translations } from '@/lib/translations'
 import { getMusicPlaylists, type MusicPlaylist } from '@/lib/musicPlaylists'
 
@@ -23,6 +24,7 @@ const PLAYLIST_PREVIEW = 5
 export default function MusicSidebar() {
   const pathname = usePathname()
   const { t } = useRegion()
+  const { currentTrack } = useMusic()
   const [playlists, setPlaylists] = useState<MusicPlaylist[]>([])
   const [showAllPlaylists, setShowAllPlaylists] = useState(false)
 
@@ -139,7 +141,7 @@ export default function MusicSidebar() {
       </aside>
 
       {/* ── Mobile bottom nav ────────────────────────────────── */}
-      <nav className="fixed bottom-20 left-0 right-0 z-40 md:hidden flex items-center justify-around bg-yt-bg border-t border-yt-border/40 h-12 px-1">
+      <nav className={cn('fixed left-0 right-0 z-40 md:hidden flex items-center justify-around bg-yt-bg border-t border-yt-border/40 h-12 px-1', currentTrack ? 'bottom-16' : 'bottom-0')}>
         {NAV_KEYS.slice(0, 5).map(({ icon: Icon, labelKey, href }) => {
           const active = isActive(href)
           return (
