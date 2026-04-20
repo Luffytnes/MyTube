@@ -326,7 +326,6 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
 
   useEffect(() => {
     function onFsChange() {
-      // Handle both standard and webkit (iOS Safari) fullscreen
       const isFs = !!(
         document.fullscreenElement ||
         (document as { webkitFullscreenElement?: Element }).webkitFullscreenElement
@@ -335,11 +334,21 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
     }
     document.addEventListener('fullscreenchange', onFsChange)
     document.addEventListener('webkitfullscreenchange', onFsChange)
+
+    // iOS fires these events on the <video> element when using webkitEnterFullscreen()
+    const video = videoRef.current
+    function onIosBegin() { setFullscreen(true) }
+    function onIosEnd() { setFullscreen(false) }
+    video?.addEventListener('webkitbeginfullscreen', onIosBegin)
+    video?.addEventListener('webkitendfullscreen', onIosEnd)
+
     return () => {
       document.removeEventListener('fullscreenchange', onFsChange)
       document.removeEventListener('webkitfullscreenchange', onFsChange)
+      video?.removeEventListener('webkitbeginfullscreen', onIosBegin)
+      video?.removeEventListener('webkitendfullscreen', onIosEnd)
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lock body scroll when in fullscreen on mobile (CSS-based fallback path)
   useEffect(() => {
@@ -394,43 +403,47 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
 
   async function toggleFullscreen() {
     const container = containerRef.current
+    const video = videoRef.current
     if (!container) return
 
-    const doc = document as Document & {
-      webkitFullscreenElement?: Element
-      webkitExitFullscreen?: () => void
-    }
-    const el = container as HTMLDivElement & {
-      webkitRequestFullscreen?: () => Promise<void>
-    }
+    type DocExt = Document & { webkitFullscreenElement?: Element; webkitExitFullscreen?: () => void }
+    type VidExt = HTMLVideoElement & { webkitEnterFullscreen?: () => void; webkitExitFullscreen?: () => void }
+    const doc = document as DocExt
+    const vid = video as VidExt | null
 
     const isCurrentlyFullscreen = !!(document.fullscreenElement || doc.webkitFullscreenElement || fullscreen)
 
     if (isCurrentlyFullscreen) {
-      // Exit — try standard then webkit, then clear CSS state
       setFullscreen(false)
-      if (document.exitFullscreen && document.fullscreenElement) {
+      if (document.fullscreenElement && document.exitFullscreen) {
         await document.exitFullscreen().catch(() => {})
-      } else if (doc.webkitExitFullscreen && doc.webkitFullscreenElement) {
+      } else if (doc.webkitFullscreenElement && doc.webkitExitFullscreen) {
         doc.webkitExitFullscreen()
+      } else {
+        // iOS native video fullscreen — exit via video element
+        vid?.webkitExitFullscreen?.()
       }
       return
     }
 
-    // Enter — try standard API, then webkit, then CSS-based fallback
-    if (el.requestFullscreen) {
+    // Desktop / Android Chrome: fullscreen on the container div so custom controls stay
+    if (container.requestFullscreen && document.fullscreenEnabled) {
       try {
-        await el.requestFullscreen()
-        return // fullscreenchange event will update state
+        await container.requestFullscreen()
+        return // fullscreenchange updates state
       } catch { /* fall through */ }
     }
-    if (el.webkitRequestFullscreen) {
-      try {
-        await el.webkitRequestFullscreen()
-        return // webkitfullscreenchange event will update state
-      } catch { /* fall through */ }
+
+    // iOS Safari: webkitEnterFullscreen() on the <video> element.
+    // This is the only API that triggers a real native fullscreen on iOS
+    // (div-level fullscreen is not supported). iOS hides the browser chrome
+    // and rotates to landscape. State is updated via webkitbeginfullscreen event.
+    if (vid?.webkitEnterFullscreen) {
+      vid.webkitEnterFullscreen()
+      return
     }
-    // CSS-based fallback (older iOS Safari that blocks the Fullscreen API)
+
+    // Last resort: CSS-based overlay (fixed inset-0)
     setFullscreen(true)
   }
 
