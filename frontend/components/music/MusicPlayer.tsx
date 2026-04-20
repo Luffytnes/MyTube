@@ -21,7 +21,7 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
     currentTrack, queue, currentIndex, playing, currentTime, duration,
     volume, muted, shuffle, repeat,
     playPause, next, prev, seek, setVolume, toggleMute,
-    toggleShuffle, toggleRepeat,
+    toggleShuffle, toggleRepeat, playAtIndex,
   } = useMusic()
 
   const [showQueue, setShowQueue] = useState(false)
@@ -178,12 +178,14 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
             </div>
             <div className="overflow-y-auto flex-1 py-2">
               {queue.map((track, i) => (
-                <div
+                <button
                   key={track.videoId}
+                  onClick={() => playAtIndex(i)}
                   className={cn(
-                    'flex items-center gap-3 px-4 py-2 rounded-xl mx-2 transition-colors',
+                    'w-full flex items-center gap-3 px-4 py-2 rounded-xl mx-2 transition-colors text-left',
                     i === currentIndex ? 'bg-white/20' : 'hover:bg-white/10'
                   )}
+                  style={{ width: 'calc(100% - 16px)' }}
                 >
                   {track.thumbnail ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -197,7 +199,7 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
                     <p className={cn('text-xs font-medium truncate', i === currentIndex ? 'text-white' : 'text-white/70')}>{track.title}</p>
                     <p className="text-xs text-white/40 truncate">{track.artists.map((a) => a.name).join(', ')}</p>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
             {nextTrack && (
@@ -229,12 +231,14 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
             </div>
             <div className="overflow-y-auto flex-1 py-2">
               {queue.map((track, i) => (
-                <div
+                <button
                   key={track.videoId}
+                  onClick={() => { playAtIndex(i); setShowQueue(false) }}
                   className={cn(
-                    'flex items-center gap-3 px-4 py-2.5 rounded-xl mx-2 transition-colors',
+                    'w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mx-2 transition-colors text-left',
                     i === currentIndex ? 'bg-white/20' : 'hover:bg-white/10'
                   )}
+                  style={{ width: 'calc(100% - 16px)' }}
                 >
                   {track.thumbnail ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -248,7 +252,7 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
                     <p className={cn('text-sm font-medium truncate', i === currentIndex ? 'text-white' : 'text-white/70')}>{track.title}</p>
                     <p className="text-xs text-white/40 truncate">{track.artists.map((a) => a.name).join(', ')}</p>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </div>
@@ -384,7 +388,7 @@ export default function MusicPlayer() {
             )}
           </div>
 
-          {/* Mobile controls — just prev/play/next */}
+          {/* Mobile controls — prev/play/next, centered between track info and spacer */}
           <div className="flex md:hidden items-center gap-1 flex-shrink-0">
             <button onClick={prev} className="text-yt-text-secondary p-2" aria-label="Previous">
               <SkipBack className="w-5 h-5" />
@@ -402,6 +406,9 @@ export default function MusicPlayer() {
               <SkipForward className="w-5 h-5" />
             </button>
           </div>
+
+          {/* Right spacer — balances the track info flex-1 so controls sit centered */}
+          <div className="flex-1 md:hidden" />
 
           {/* Volume — desktop only */}
           <div className="hidden md:flex items-center gap-2 w-36 flex-shrink-0 justify-end">

@@ -44,12 +44,16 @@ interface MusicContextType {
   toggleShuffle: () => void
   toggleRepeat: () => void
   addToQueue: (track: MusicTrack) => void
+  playAtIndex: (index: number) => void
 }
 
 const MusicContext = createContext<MusicContextType | null>(null)
 
 export function MusicProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  // Tracks when playTrack/playRadio already set the src synchronously (mobile gesture context).
+  // The useEffect skips re-setting src for that track to avoid resetting playback.
+  const pendingTrackIdRef = useRef<string | null>(null)
   const [queue, setQueue] = useState<MusicTrack[]>([])
   const [currentIndex, setCurrentIndex] = useState(-1)
   const [playing, setPlaying] = useState(false)
@@ -116,11 +120,36 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     return () => audio.removeEventListener('ended', handleEnded)
   }, [handleEnded])
 
-  // Load new track when currentIndex changes
+  // Set audio src for a track and attempt playback.
+  // Call this synchronously inside click handlers to stay within the mobile
+  // user-gesture context (iOS Safari blocks audio.play() from useEffect).
+  const loadAndPlay = useCallback((track: MusicTrack) => {
+    const audio = audioRef.current
+    if (!audio) return
+    pendingTrackIdRef.current = track.videoId
+    if (track.radioStreamUrl) {
+      audio.src = track.radioStreamUrl
+    } else if (track.directUrl) {
+      audio.src = `${API_BASE}/api/podcasts/audio/proxy?url=${encodeURIComponent(track.directUrl)}`
+    } else if (track.videoId) {
+      audio.src = `${API_BASE}/api/stream/${track.videoId}/audio`
+    } else {
+      return
+    }
+    audio.play().catch(() => {})
+  }, [])
+
+  // Load new track when currentIndex changes (handles next/prev/queue navigation).
+  // Skips tracks already loaded synchronously by loadAndPlay to avoid resetting playback.
   useEffect(() => {
     const audio = audioRef.current
     const track = currentIndex >= 0 && currentIndex < queue.length ? queue[currentIndex] : null
     if (!audio || !track) return
+    if (pendingTrackIdRef.current === track.videoId) {
+      pendingTrackIdRef.current = null
+      return // src already set synchronously, don't reset
+    }
+    pendingTrackIdRef.current = null
     if (track.radioStreamUrl) {
       audio.src = track.radioStreamUrl
     } else if (track.directUrl) {
@@ -136,15 +165,19 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const playTrack = useCallback((track: MusicTrack, newQueue?: MusicTrack[]) => {
     const q = newQueue || [track]
     const idx = q.findIndex((t) => t.videoId === track.videoId)
+    // Load synchronously while still in the user-gesture context so iOS Safari
+    // does not block audio.play() (it rejects calls made from async paths).
+    loadAndPlay(track)
     setQueue(q)
     setCurrentIndex(idx >= 0 ? idx : 0)
-  }, [])
+  }, [loadAndPlay])
 
   // Play a radio station — replaces queue with single live track
   const playRadio = useCallback((track: MusicTrack) => {
+    loadAndPlay(track)
     setQueue([track])
     setCurrentIndex(0)
-  }, [])
+  }, [loadAndPlay])
 
   const playPause = useCallback(() => {
     const audio = audioRef.current
@@ -207,12 +240,16 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  const playAtIndex = useCallback((index: number) => {
+    setCurrentIndex(index)
+  }, [])
+
   return (
     <MusicContext.Provider value={{
       queue, currentIndex, currentTrack,
       playing, currentTime, duration, volume, muted, shuffle, repeat,
       playTrack, playRadio, playPause, next, prev, seek, setVolume,
-      toggleMute, toggleShuffle, toggleRepeat, addToQueue,
+      toggleMute, toggleShuffle, toggleRepeat, addToQueue, playAtIndex,
     }}>
       {children}
     </MusicContext.Provider>

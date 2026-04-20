@@ -90,6 +90,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   const hdHlsRef = useRef<any>(null)
   const effectiveDurationRef = useRef<number>(0)
   const hlsStartOffsetRef = useRef<number>(0)
+  const justShowedControlsRef = useRef(false)
 
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -509,15 +510,22 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
       onMouseMove={resetHideTimer}
       onMouseEnter={() => setShowControls(true)}
       onMouseLeave={() => { if (playing) setShowControls(false) }}
-      onTouchStart={(e) => {
-        // On mobile: first tap reveals controls without toggling play.
-        // Subsequent taps (with controls visible) fire onClick → togglePlay.
+      onTouchStart={() => {
+        // First tap reveals controls; subsequent taps on the video area toggle play.
+        // We do NOT call preventDefault so control buttons (fullscreen, etc.) still
+        // receive their own click events even when controls were previously hidden.
         if (!showControls) {
-          e.preventDefault()
+          justShowedControlsRef.current = true
           resetHideTimer()
         }
       }}
-      onClick={togglePlay}
+      onClick={() => {
+        if (justShowedControlsRef.current) {
+          justShowedControlsRef.current = false
+          return // controls just appeared — don't toggle play
+        }
+        togglePlay()
+      }}
     >
       {/* Hidden audio element — only for video-only formats without HD HLS */}
       {audioSrc && !isVideoOnly && (
