@@ -92,7 +92,13 @@ export default function MusicHomePage() {
     const params = new URLSearchParams({ country: region.code.toUpperCase(), limit: '6' })
     fetch(`${API_BASE}/api/radio/stations?${params}`)
       .then((r) => r.json())
-      .then((data: RadioStation[]) => setSuggestedRadio(Array.isArray(data) ? data.slice(0, 6) : []))
+      .then((data: RadioStation[]) => {
+        const stations = Array.isArray(data) ? data.slice(0, 6).map((s) => ({
+          ...s,
+          favicon: s.favicon ? `${API_BASE}${s.favicon}` : null,
+        })) : []
+        setSuggestedRadio(stations)
+      })
       .catch(() => {})
   }, [region.code])
 

@@ -75,7 +75,10 @@ function MusicSearchContent() {
       if (f === 'radio') {
         const res = await fetch(`${API_BASE}/api/radio/stations?q=${encodeURIComponent(q)}&limit=48`)
         const data = await res.json()
-        setRadioResults(Array.isArray(data) ? data : [])
+        setRadioResults(Array.isArray(data) ? data.map((s: RadioStation) => ({
+          ...s,
+          favicon: s.favicon ? `${API_BASE}${s.favicon}` : null,
+        })) : [])
       } else if (f === 'podcasts') {
         const res = await fetch(`${API_BASE}/api/podcasts/search?q=${encodeURIComponent(q)}`)
         const data = await res.json()

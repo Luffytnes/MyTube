@@ -122,7 +122,12 @@ export default function RadioPage() {
       const res = await fetch(`${API_BASE}/api/radio/stations?${params}`)
       if (!res.ok) throw new Error()
       const data: RadioStation[] = await res.json()
-      setStations(Array.isArray(data) ? data : [])
+      // favicon is a relative /api/... URL from backend — prefix with API_BASE for local dev
+      const stations = Array.isArray(data) ? data.map((s) => ({
+        ...s,
+        favicon: s.favicon ? `${API_BASE}${s.favicon}` : null,
+      })) : []
+      setStations(stations)
     } catch {
       setError(true)
     } finally {
