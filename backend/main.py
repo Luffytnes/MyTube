@@ -2864,8 +2864,8 @@ async def podcast_image_proxy(url: str):
         return Response(content=_EMPTY_GIF, media_type="image/gif",
                         headers={"Cache-Control": "public, max-age=3600"})
     try:
-        async with httpx_client(timeout=8.0, follow_redirects=True) as client:
-            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+        async with httpx_client(timeout=8.0) as client:
+            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"}, follow_redirects=True)
             if resp.status_code >= 400:
                 return Response(content=_EMPTY_GIF, media_type="image/gif",
                                 headers={"Cache-Control": "public, max-age=3600"})
