@@ -1,13 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, TrendingUp, History, Clock, Music2, ThumbsUp, ListVideo, ListOrdered, Newspaper } from 'lucide-react'
+import {
+  Home, TrendingUp, History, Clock, Music2, ThumbsUp,
+  ListVideo, ListOrdered, Newspaper, Settings, MoreHorizontal, X,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useRegion } from '@/lib/regionContext'
 import { useSubscriptions } from '@/lib/subscriptionsContext'
 import type { Translations } from '@/lib/translations'
+import SettingsPanel from './SettingsPanel'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -21,6 +25,9 @@ const NAV_ITEMS: { icon: typeof Home; labelKey: keyof Translations; href: string
   { icon: ListOrdered, labelKey: 'nav_queue', href: '/queue' },
 ]
 
+// Items shown in mobile bottom bar
+const MOBILE_PRIMARY: (keyof Translations)[] = ['nav_home', 'nav_trending', 'nav_music', 'nav_history']
+
 const SUB_PREVIEW = 4
 
 export default function Sidebar() {
@@ -28,15 +35,37 @@ export default function Sidebar() {
   const { t } = useRegion()
   const { subscriptions } = useSubscriptions()
   const [showAllSubs, setShowAllSubs] = useState(false)
+  const [showDrawer, setShowDrawer] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const drawerRef = useRef<HTMLDivElement>(null)
 
   function isActive(href: string) {
     if (href === '/') return pathname === '/'
     return pathname === href || pathname.startsWith(href.split('?')[0] + '/')
   }
 
+  // Close drawer on outside tap
+  useEffect(() => {
+    if (!showDrawer) return
+    function onTap(e: MouseEvent | TouchEvent) {
+      if (drawerRef.current && !drawerRef.current.contains(e.target as Node)) {
+        setShowDrawer(false)
+      }
+    }
+    document.addEventListener('mousedown', onTap)
+    document.addEventListener('touchstart', onTap)
+    return () => {
+      document.removeEventListener('mousedown', onTap)
+      document.removeEventListener('touchstart', onTap)
+    }
+  }, [showDrawer])
+
+  // Close drawer on navigation
+  useEffect(() => { setShowDrawer(false) }, [pathname])
+
   return (
     <>
-      {/* Desktop sidebar */}
+      {/* ── Desktop sidebar ─────────────────────────────────── */}
       <aside className="fixed left-0 top-14 bottom-0 z-40 hidden md:flex flex-col w-20 xl:w-56 bg-yt-bg border-r border-yt-border/40 pt-3 pb-4 overflow-y-auto overflow-x-hidden transition-all">
         <nav className="flex flex-col gap-0.5 px-2">
           {NAV_ITEMS.map(({ icon: Icon, labelKey, href }) => {
@@ -144,7 +173,6 @@ export default function Sidebar() {
         )}
 
         <div className="border-t border-yt-border/40 my-3 mx-3" />
-
         <div className="hidden xl:block px-5 text-xs text-yt-text-muted leading-relaxed">
           <p className="font-medium text-yt-text-secondary mb-1">{t('nav_privacyFirst')}</p>
           <p>{t('nav_noTracking')}</p>
@@ -152,25 +180,148 @@ export default function Sidebar() {
         </div>
       </aside>
 
-      {/* Mobile bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden flex items-center justify-around bg-yt-bg border-t border-yt-border/40 h-14 px-2">
-        {NAV_ITEMS.slice(0, 4).map(({ icon: Icon, labelKey, href }) => {
-          const active = isActive(href)
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                'flex flex-col items-center gap-1 py-2 px-3 rounded-xl text-xs transition-colors',
-                active ? 'text-yt-text' : 'text-yt-text-muted hover:text-yt-text'
-              )}
-            >
-              <Icon className={cn('w-5 h-5', active ? 'text-yt-red' : '')} />
-              <span>{t(labelKey)}</span>
-            </Link>
-          )
-        })}
+      {/* ── Mobile bottom nav ────────────────────────────────── */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden flex items-center justify-around bg-yt-bg border-t border-yt-border/40 h-14 px-1 safe-area-pb">
+        {/* Home */}
+        <Link href="/" className={cn('flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl text-xs transition-colors flex-1', isActive('/') ? 'text-yt-red' : 'text-yt-text-muted')}>
+          <Home className="w-5 h-5" />
+          <span className="text-[10px]">{t('nav_home')}</span>
+        </Link>
+        {/* Trending */}
+        <Link href="/trending" className={cn('flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl text-xs transition-colors flex-1', isActive('/trending') ? 'text-yt-red' : 'text-yt-text-muted')}>
+          <TrendingUp className="w-5 h-5" />
+          <span className="text-[10px]">{t('nav_trending')}</span>
+        </Link>
+        {/* Music */}
+        <Link href="/music" className={cn('flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl text-xs transition-colors flex-1', pathname.startsWith('/music') ? 'text-yt-red' : 'text-yt-text-muted')}>
+          <Music2 className="w-5 h-5" />
+          <span className="text-[10px]">{t('nav_music')}</span>
+        </Link>
+        {/* History */}
+        <Link href="/history" className={cn('flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl text-xs transition-colors flex-1', isActive('/history') ? 'text-yt-red' : 'text-yt-text-muted')}>
+          <History className="w-5 h-5" />
+          <span className="text-[10px]">{t('nav_history')}</span>
+        </Link>
+        {/* More */}
+        <button
+          onClick={() => setShowDrawer(true)}
+          className="flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl text-xs text-yt-text-muted flex-1"
+        >
+          <MoreHorizontal className="w-5 h-5" />
+          <span className="text-[10px]">Plus</span>
+        </button>
       </nav>
+
+      {/* ── Mobile drawer overlay ─────────────────────────────── */}
+      {showDrawer && (
+        <div className="fixed inset-0 z-[60] md:hidden">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/50" />
+          {/* Sheet */}
+          <div
+            ref={drawerRef}
+            className="absolute bottom-0 left-0 right-0 bg-yt-bg rounded-t-2xl pb-6 pt-2 max-h-[85vh] overflow-y-auto"
+          >
+            {/* Handle */}
+            <div className="w-10 h-1 rounded-full bg-yt-border mx-auto mb-4" />
+            {/* Close */}
+            <div className="flex items-center justify-between px-4 mb-3">
+              <span className="text-yt-text font-semibold">MyTube</span>
+              <button onClick={() => setShowDrawer(false)} className="p-2 rounded-full hover:bg-yt-hover text-yt-text-muted">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* All nav items */}
+            <div className="px-2 flex flex-col gap-0.5">
+              {NAV_ITEMS.map(({ icon: Icon, labelKey, href }) => {
+                const active = isActive(href)
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    className={cn(
+                      'flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-medium transition-colors',
+                      active ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
+                    )}
+                  >
+                    <Icon className={cn('w-5 h-5 flex-shrink-0', active ? 'text-yt-red' : 'text-yt-text-secondary')} />
+                    {t(labelKey)}
+                  </Link>
+                )
+              })}
+            </div>
+
+            <div className="border-t border-yt-border/40 my-3 mx-4" />
+
+            {/* Music & News */}
+            <div className="px-2 flex flex-col gap-0.5">
+              <Link
+                href="/music"
+                className={cn('flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-medium transition-colors', pathname.startsWith('/music') ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text')}
+              >
+                <Music2 className={cn('w-5 h-5 flex-shrink-0', pathname.startsWith('/music') ? 'text-yt-red' : 'text-yt-text-secondary')} />
+                {t('nav_music')}
+              </Link>
+              <Link
+                href="/news"
+                className={cn('flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-medium transition-colors', pathname.startsWith('/news') ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text')}
+              >
+                <Newspaper className={cn('w-5 h-5 flex-shrink-0', pathname.startsWith('/news') ? 'text-yt-red' : 'text-yt-text-secondary')} />
+                {t('nav_news')}
+              </Link>
+            </div>
+
+            {/* Subscriptions in drawer */}
+            {subscriptions.length > 0 && (
+              <>
+                <div className="border-t border-yt-border/40 my-3 mx-4" />
+                <p className="px-6 pb-2 text-xs font-semibold text-yt-text-muted uppercase tracking-wider">{t('nav_subscriptions')}</p>
+                <div className="px-2 flex flex-col gap-0.5">
+                  {subscriptions.map((sub) => (
+                    <Link
+                      key={sub.id}
+                      href={`/channel/${sub.id}`}
+                      className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text transition-colors"
+                    >
+                      <div className="w-7 h-7 rounded-full flex-shrink-0 relative">
+                        <div className="absolute inset-0 rounded-full flex items-center justify-center text-xs font-bold text-white bg-blue-600">
+                          {sub.name[0]?.toUpperCase()}
+                        </div>
+                        {sub.thumbnail && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={sub.thumbnail.startsWith('http') ? sub.thumbnail : `${API_BASE}${sub.thumbnail.startsWith('/') ? sub.thumbnail : '/' + sub.thumbnail}`}
+                            alt={sub.name}
+                            className="absolute inset-0 w-full h-full rounded-full object-cover"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                          />
+                        )}
+                      </div>
+                      <span className="truncate">{sub.name}</span>
+                    </Link>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="border-t border-yt-border/40 my-3 mx-4" />
+
+            {/* Settings */}
+            <div className="px-2">
+              <button
+                onClick={() => { setShowDrawer(false); setShowSettings(true) }}
+                className="w-full flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-medium text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text transition-colors"
+              >
+                <Settings className="w-5 h-5 flex-shrink-0" />
+                {t('settings_title')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <SettingsPanel open={showSettings} onClose={() => setShowSettings(false)} />
     </>
   )
 }
