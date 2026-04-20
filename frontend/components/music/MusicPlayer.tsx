@@ -388,7 +388,7 @@ export default function MusicPlayer() {
             )}
           </div>
 
-          {/* Mobile controls — prev/play/next, centered between track info and spacer */}
+          {/* Mobile controls — prev/play/next */}
           <div className="flex md:hidden items-center gap-1 flex-shrink-0">
             <button onClick={prev} className="text-yt-text-secondary p-2" aria-label="Previous">
               <SkipBack className="w-5 h-5" />
@@ -407,8 +407,14 @@ export default function MusicPlayer() {
             </button>
           </div>
 
-          {/* Right spacer — balances the track info flex-1 so controls sit centered */}
-          <div className="flex-1 md:hidden" />
+          {/* Repeat — far right on mobile */}
+          <button
+            onClick={toggleRepeat}
+            className={cn('md:hidden flex-shrink-0 p-2 rounded-full transition-colors', repeat !== 'none' ? 'text-yt-red' : 'text-yt-text-muted')}
+            aria-label="Repeat"
+          >
+            {repeat === 'one' ? <Repeat1 className="w-4 h-4" /> : <Repeat className="w-4 h-4" />}
+          </button>
 
           {/* Volume — desktop only */}
           <div className="hidden md:flex items-center gap-2 w-36 flex-shrink-0 justify-end">

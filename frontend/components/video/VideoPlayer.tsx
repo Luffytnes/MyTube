@@ -101,6 +101,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   const [speed, setSpeed] = useState(() => getPlaybackSettings().defaultSpeed)
   const [showSpeedMenu, setShowSpeedMenu] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const [showControls, setShowControls] = useState(true)
   const [showQualityMenu, setShowQualityMenu] = useState(false)
   const [selectedFormat, setSelectedFormat] = useState<VideoFormat | null>(null)
@@ -318,21 +319,33 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
     return () => { if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current) }
   }, [])
 
+  // Detect mobile once on mount
   useEffect(() => {
-    function onFsChange() { setFullscreen(!!document.fullscreenElement) }
-    document.addEventListener('fullscreenchange', onFsChange)
-    return () => document.removeEventListener('fullscreenchange', onFsChange)
+    setIsMobile('ontouchstart' in window || navigator.maxTouchPoints > 0)
   }, [])
 
-  // Lock body scroll when CSS fullscreen is active on mobile to prevent
-  // the page scrolling behind the video.
   useEffect(() => {
-    const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
-    if (isTouchDevice) {
-      document.body.style.overflow = fullscreen ? 'hidden' : ''
+    function onFsChange() {
+      // Handle both standard and webkit (iOS Safari) fullscreen
+      const isFs = !!(
+        document.fullscreenElement ||
+        (document as { webkitFullscreenElement?: Element }).webkitFullscreenElement
+      )
+      setFullscreen(isFs)
     }
-    return () => { if (isTouchDevice) document.body.style.overflow = '' }
-  }, [fullscreen])
+    document.addEventListener('fullscreenchange', onFsChange)
+    document.addEventListener('webkitfullscreenchange', onFsChange)
+    return () => {
+      document.removeEventListener('fullscreenchange', onFsChange)
+      document.removeEventListener('webkitfullscreenchange', onFsChange)
+    }
+  }, [])
+
+  // Lock body scroll when in fullscreen on mobile (CSS-based fallback path)
+  useEffect(() => {
+    if (isMobile) document.body.style.overflow = fullscreen ? 'hidden' : ''
+    return () => { if (isMobile) document.body.style.overflow = '' }
+  }, [fullscreen, isMobile])
 
   useEffect(() => {
     function handleKey(e: globalThis.KeyboardEvent) {
@@ -379,25 +392,46 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
     setMuted(video.muted)
   }
 
-  function toggleFullscreen() {
+  async function toggleFullscreen() {
     const container = containerRef.current
     if (!container) return
 
-    // On touch devices (mobile), use CSS-based fullscreen so the user can
-    // toggle back to inline — native requestFullscreen on mobile hands control
-    // to the browser and removes the ability to exit programmatically.
-    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0
-    if (isTouchDevice) {
-      setFullscreen((prev) => !prev)
+    const doc = document as Document & {
+      webkitFullscreenElement?: Element
+      webkitExitFullscreen?: () => void
+    }
+    const el = container as HTMLDivElement & {
+      webkitRequestFullscreen?: () => Promise<void>
+    }
+
+    const isCurrentlyFullscreen = !!(document.fullscreenElement || doc.webkitFullscreenElement || fullscreen)
+
+    if (isCurrentlyFullscreen) {
+      // Exit — try standard then webkit, then clear CSS state
+      setFullscreen(false)
+      if (document.exitFullscreen && document.fullscreenElement) {
+        await document.exitFullscreen().catch(() => {})
+      } else if (doc.webkitExitFullscreen && doc.webkitFullscreenElement) {
+        doc.webkitExitFullscreen()
+      }
       return
     }
 
-    // Desktop: use the native Fullscreen API
-    if (!document.fullscreenElement) {
-      container.requestFullscreen()
-    } else {
-      document.exitFullscreen()
+    // Enter — try standard API, then webkit, then CSS-based fallback
+    if (el.requestFullscreen) {
+      try {
+        await el.requestFullscreen()
+        return // fullscreenchange event will update state
+      } catch { /* fall through */ }
     }
+    if (el.webkitRequestFullscreen) {
+      try {
+        await el.webkitRequestFullscreen()
+        return // webkitfullscreenchange event will update state
+      } catch { /* fall through */ }
+    }
+    // CSS-based fallback (older iOS Safari that blocks the Fullscreen API)
+    setFullscreen(true)
   }
 
   function handleTimeUpdate() {
@@ -714,17 +748,22 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
               </button>
             )}
 
-            <button onClick={toggleMute} className="text-white hover:text-yt-text-secondary p-1 transition-colors" aria-label={muted ? 'Unmute' : 'Mute'}>
-              {muted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-            </button>
-            <input
-              type="range" min="0" max="1" step="0.05"
-              value={muted ? 0 : volume}
-              onChange={handleVolumeChange}
-              className="volume-slider w-20 h-1 cursor-pointer"
-              style={{ background: `linear-gradient(to right, #f1f1f1 ${(muted ? 0 : volume) * 100}%, #3f3f3f ${(muted ? 0 : volume) * 100}%)` }}
-              aria-label="Volume"
-            />
+            {/* Mute + volume — hidden on mobile outside fullscreen (use phone buttons) */}
+            {(!isMobile || fullscreen) && (
+              <>
+                <button onClick={toggleMute} className="text-white hover:text-yt-text-secondary p-1 transition-colors" aria-label={muted ? 'Unmute' : 'Mute'}>
+                  {muted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                </button>
+                <input
+                  type="range" min="0" max="1" step="0.05"
+                  value={muted ? 0 : volume}
+                  onChange={handleVolumeChange}
+                  className="volume-slider w-20 h-1 cursor-pointer"
+                  style={{ background: `linear-gradient(to right, #f1f1f1 ${(muted ? 0 : volume) * 100}%, #3f3f3f ${(muted ? 0 : volume) * 100}%)` }}
+                  aria-label="Volume"
+                />
+              </>
+            )}
 
             <span className="text-white text-xs ml-1 tabular-nums whitespace-nowrap">
               {isLive ? '🔴 LIVE' : `${formatDuration(currentTime)} / ${formatDuration(duration)}`}
@@ -732,8 +771,8 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
 
             <div className="flex-1" />
 
-            {/* Speed selector */}
-            {!isLive && (
+            {/* Speed selector — hidden on mobile outside fullscreen */}
+            {!isLive && (!isMobile || fullscreen) && (
               <div className="relative">
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowSpeedMenu((v) => !v); setShowQualityMenu(false) }}
@@ -768,8 +807,8 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
               </div>
             )}
 
-            {/* Quality selector */}
-            {!isLive && allVideoFormats.length > 0 && (
+            {/* Quality selector — hidden on mobile outside fullscreen */}
+            {!isLive && allVideoFormats.length > 0 && (!isMobile || fullscreen) && (
               <div className="relative">
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowQualityMenu((v) => !v); setShowSpeedMenu(false) }}
@@ -804,8 +843,8 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
               </div>
             )}
 
-            {/* Subtitles selector */}
-            {!isLive && (
+            {/* Subtitles selector — hidden on mobile outside fullscreen */}
+            {!isLive && (!isMobile || fullscreen) && (
               <div className="relative">
                 <button
                   onClick={(e) => {

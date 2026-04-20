@@ -72,12 +72,10 @@ export default function TrackRow({ track, queue, index, showThumbnail = false, s
           </div>
         ) : (
           <>
-            {/* Desktop: show index number, hide on hover */}
-            <span className={cn('text-xs tabular-nums hidden sm:inline group-hover:hidden', isCurrent ? 'text-yt-red' : 'text-yt-text-muted')}>
+            <span className={cn('text-xs tabular-nums group-hover:hidden', isCurrent ? 'text-yt-red' : 'text-yt-text-muted')}>
               {index !== undefined ? index + 1 : ''}
             </span>
-            {/* Mobile: always show play icon; Desktop: only on hover */}
-            <Play className={cn('w-3.5 h-3.5 mx-auto block sm:hidden sm:group-hover:block', isCurrent ? 'text-yt-red fill-yt-red' : 'text-yt-text fill-yt-text')} />
+            <Play className="w-3.5 h-3.5 text-yt-text hidden group-hover:block mx-auto fill-yt-text" />
           </>
         )}
       </div>
