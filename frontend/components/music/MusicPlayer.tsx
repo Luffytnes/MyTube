@@ -25,16 +25,15 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
   } = useMusic()
 
   const [showQueue, setShowQueue] = useState(false)
+  const [scrubValue, setScrubValue] = useState<number | null>(null)
+  const isScrubbing = scrubValue !== null
 
   if (!currentTrack) return null
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
+  const displayProgress = isScrubbing ? scrubValue! : progress
   const artistNames = currentTrack.artists.map((a) => a.name).join(', ')
   const nextTrack = queue[currentIndex + 1] || null
-
-  function handleSeek(e: ChangeEvent<HTMLInputElement>) {
-    seek((parseFloat(e.target.value) / 100) * duration)
-  }
 
   function handleVolume(e: ChangeEvent<HTMLInputElement>) {
     setVolume(parseFloat(e.target.value))
@@ -112,13 +111,21 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
               <>
                 <input
                   type="range" min="0" max="100" step="0.1"
-                  value={progress}
-                  onChange={handleSeek}
-                  className="w-full h-1.5 cursor-pointer accent-white rounded-full"
-                  style={{ background: `linear-gradient(to right, #ffffff ${progress}%, rgba(255,255,255,0.2) ${progress}%)` }}
+                  value={displayProgress}
+                  onChange={(e) => setScrubValue(parseFloat(e.target.value))}
+                  onPointerDown={() => setScrubValue(progress)}
+                  onPointerUp={(e) => {
+                    const val = parseFloat((e.target as HTMLInputElement).value)
+                    seek((val / 100) * duration)
+                    setScrubValue(null)
+                  }}
+                  className="w-full h-1.5 cursor-pointer accent-white rounded-full touch-none"
+                  style={{ background: `linear-gradient(to right, #ffffff ${displayProgress}%, rgba(255,255,255,0.2) ${displayProgress}%)` }}
                 />
                 <div className="flex justify-between mt-1.5">
-                  <span className="text-white/50 text-xs tabular-nums">{formatTime(currentTime)}</span>
+                  <span className="text-white/50 text-xs tabular-nums">
+                    {formatTime(isScrubbing ? (scrubValue! / 100) * duration : currentTime)}
+                  </span>
                   <span className="text-white/50 text-xs tabular-nums">{formatTime(duration)}</span>
                 </div>
               </>
@@ -296,18 +303,7 @@ export default function MusicPlayer() {
         className="fixed left-1/2 -translate-x-1/2 md:left-0 md:right-0 md:translate-x-0 md:bottom-0 z-50 rounded-2xl md:rounded-none bg-yt-bg/95 md:bg-yt-bg backdrop-blur-xl md:backdrop-blur-none border border-yt-border/30 md:border-0 md:border-t md:border-yt-border/60 shadow-[0_8px_32px_rgba(0,0,0,0.5)] md:shadow-2xl overflow-hidden w-[360px] max-w-[calc(100vw-24px)] md:w-auto"
         style={{ bottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}
       >
-        {/* Progress strip — top of mini player on mobile */}
-        {!currentTrack.isRadio && (
-          <input
-            ref={progressRef}
-            type="range" min="0" max="100" step="0.1"
-            value={progress}
-            onChange={handleSeek}
-            className="w-full h-1 cursor-pointer accent-yt-red block md:hidden"
-            style={{ background: `linear-gradient(to right, #ff0000 ${progress}%, #3f3f3f ${progress}%)` }}
-            aria-label="Progress"
-          />
-        )}
+        {/* No progress strip on mini player — only shown in fullscreen */}
 
         <div className="flex items-center px-3 sm:px-4 gap-2 sm:gap-4 h-16 sm:h-20">
           {/* Track info */}

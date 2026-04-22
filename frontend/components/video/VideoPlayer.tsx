@@ -111,6 +111,8 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   const [subtitleTracks, setSubtitleTracks] = useState<SubtitleTrack[]>([])
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>(() => getPlaybackSettings().subtitleLang)
   const [showSubtitleMenu, setShowSubtitleMenu] = useState(false)
+  const [scrubValue, setScrubValue] = useState<number | null>(null)
+  const isScrubbing = scrubValue !== null
 
   // One entry per resolution ≥240p, prefer combined (audio+video) at each height.
   const allVideoFormats = (() => {
@@ -546,6 +548,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   }
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
+  const displayProgress = isScrubbing ? scrubValue! : progress
   const bufferedProgress = duration > 0 ? (buffered / duration) * 100 : 0
 
   return (
@@ -725,10 +728,16 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                 ) : null
               })()}
               <input
-                type="range" min="0" max="100" step="0.1" value={progress}
-                onChange={handleSeek}
-                className="w-full relative z-10 h-1 accent-yt-red cursor-pointer"
-                style={{ background: `linear-gradient(to right, #ff0000 ${progress}%, #3f3f3f ${progress}%)` }}
+                type="range" min="0" max="100" step="0.1" value={displayProgress}
+                onChange={(e) => setScrubValue(parseFloat(e.target.value))}
+                onPointerDown={() => setScrubValue(progress)}
+                onPointerUp={(e) => {
+                  const val = parseFloat((e.target as HTMLInputElement).value)
+                  setScrubValue(null)
+                  handleSeek({ target: { value: String(val) } } as ChangeEvent<HTMLInputElement>)
+                }}
+                className="w-full relative z-10 h-1 accent-yt-red cursor-pointer touch-none"
+                style={{ background: `linear-gradient(to right, #ff0000 ${displayProgress}%, #3f3f3f ${displayProgress}%)` }}
                 aria-label="Video progress"
               />
             </div>
@@ -779,7 +788,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
             )}
 
             <span className="text-white text-xs ml-1 tabular-nums whitespace-nowrap">
-              {isLive ? '🔴 LIVE' : `${formatDuration(currentTime)} / ${formatDuration(duration)}`}
+              {isLive ? '🔴 LIVE' : `${formatDuration(isScrubbing ? (scrubValue! / 100) * duration : currentTime)} / ${formatDuration(duration)}`}
             </span>
 
             <div className="flex-1" />
