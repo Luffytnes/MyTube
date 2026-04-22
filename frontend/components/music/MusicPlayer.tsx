@@ -293,8 +293,8 @@ export default function MusicPlayer() {
 
       {/* Mini player — floating pill on mobile, full-width bar on desktop */}
       <div
-        className="fixed left-1 right-1 md:left-0 md:right-0 md:bottom-0 z-50 rounded-2xl md:rounded-none bg-yt-bg/95 md:bg-yt-bg backdrop-blur-xl md:backdrop-blur-none border border-yt-border/30 md:border-0 md:border-t md:border-yt-border/60 shadow-[0_8px_32px_rgba(0,0,0,0.5)] md:shadow-2xl overflow-hidden"
-        style={{ bottom: 'calc(env(safe-area-inset-bottom) + 20px)' }}
+        className="fixed left-0.5 right-0.5 md:left-0 md:right-0 md:bottom-0 z-50 rounded-2xl md:rounded-none bg-yt-bg/95 md:bg-yt-bg backdrop-blur-xl md:backdrop-blur-none border border-yt-border/30 md:border-0 md:border-t md:border-yt-border/60 shadow-[0_8px_32px_rgba(0,0,0,0.5)] md:shadow-2xl overflow-hidden"
+        style={{ bottom: 'calc(env(safe-area-inset-bottom) + 44px)' }}
       >
         {/* Progress strip — top of mini player on mobile */}
         {!currentTrack.isRadio && (
