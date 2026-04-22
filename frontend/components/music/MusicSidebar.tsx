@@ -146,8 +146,8 @@ export default function MusicSidebar() {
         </nav>
       </aside>
 
-      {/* ── Mobile bottom nav ────────────────────────────────── */}
-      <nav className={cn('fixed left-0 right-0 z-40 md:hidden flex items-center justify-around bg-yt-bg border-t border-yt-border/40 h-12 px-1', currentTrack ? 'bottom-16' : 'bottom-0')}>
+      {/* ── Mobile bottom nav — floating pill ───────────────── */}
+      <nav className={cn('fixed inset-x-3 z-40 md:hidden flex items-center justify-around h-14 px-1 rounded-2xl bg-yt-bg/95 backdrop-blur-xl border border-yt-border/30 shadow-[0_8px_32px_rgba(0,0,0,0.45)]', currentTrack ? 'bottom-[84px]' : 'bottom-3')}>
         {NAV_KEYS.slice(0, 4).map(({ icon: Icon, labelKey, href }) => {
           const active = isActive(href)
           return (
@@ -181,25 +181,22 @@ export default function MusicSidebar() {
       {showMoreDrawer && (
         <>
           {/* Backdrop */}
-          <div
-            className={cn('fixed inset-0 z-[45] md:hidden', currentTrack ? 'bottom-32' : 'bottom-12')}
-            onClick={() => setShowMoreDrawer(false)}
-          />
-          {/* Drawer */}
+          <div className="fixed inset-0 z-[45] md:hidden" onClick={() => setShowMoreDrawer(false)} />
+          {/* Drawer — sits just above the floating nav */}
           <div className={cn(
-            'fixed left-0 right-0 z-[46] md:hidden bg-yt-bg border-t border-yt-border/40 rounded-t-2xl shadow-2xl max-h-[70vh] overflow-y-auto pb-safe',
-            currentTrack ? 'bottom-32' : 'bottom-12'
+            'fixed left-0 right-0 z-[46] md:hidden bg-yt-bg rounded-t-2xl shadow-2xl max-h-[80vh] overflow-y-auto',
+            currentTrack ? 'bottom-[148px]' : 'bottom-[68px]'
           )}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-yt-border/40">
-              <p className="text-sm font-semibold text-yt-text">Plus</p>
+              <p className="text-sm font-semibold text-yt-text">MyTube Music</p>
               <button onClick={() => setShowMoreDrawer(false)} className="text-yt-text-muted hover:text-yt-text">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="py-2">
-              {/* Remaining nav items (Subscriptions + Playlists link) */}
-              {NAV_KEYS.slice(4).map(({ icon: Icon, labelKey, href }) => {
+              {/* ALL nav items */}
+              {NAV_KEYS.map(({ icon: Icon, labelKey, href }) => {
                 const active = isActive(href)
                 return (
                   <Link

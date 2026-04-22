@@ -6,6 +6,7 @@ import { Mic2, Play, Pause, Clock, Bell, BellOff } from 'lucide-react'
 import { useMusic } from '@/lib/musicContext'
 import { useRegion } from '@/lib/regionContext'
 import { isPodcastSubscribed, togglePodcastSubscription } from '@/lib/podcastSubscriptions'
+import { getPosition } from '@/lib/resumePosition'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -34,7 +35,7 @@ export default function PodcastPage() {
   const [podcast, setPodcast] = useState<Podcast | null>(null)
   const [loading, setLoading] = useState(true)
   const [subscribed, setSubscribed] = useState(false)
-  const { playTrack, playPause, currentTrack, playing } = useMusic()
+  const { playTrack, playPause, currentTrack, playing, preloadTrack } = useMusic()
   const { t } = useRegion()
 
   useEffect(() => {
@@ -46,6 +47,14 @@ export default function PodcastPage() {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [id])
+
+  function parseDurationSec(s?: string): number {
+    if (!s) return 0
+    const parts = s.split(':').map(Number)
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2]
+    if (parts.length === 2) return parts[0] * 60 + parts[1]
+    return parts[0] || 0
+  }
 
   function episodeAsTrack(ep: Episode) {
     return {
@@ -169,19 +178,31 @@ export default function PodcastPage() {
             const track = episodeAsTrack(ep)
             const isActive = currentTrack?.videoId === track.videoId
             const isPlaying = isActive && playing
+            const savedPos = getPosition(ep.id)
+            const durationSec = parseDurationSec(ep.duration)
+            const resumePct = savedPos && durationSec > 0 ? Math.min(100, (savedPos / durationSec) * 100) : 0
             return (
               <button
                 key={ep.id}
+                onMouseEnter={() => { if (!isActive) preloadTrack(track) }}
+                onTouchStart={() => { if (!isActive) preloadTrack(track) }}
                 onClick={() => isActive ? playPause() : playTrack(track, allTracks)}
                 className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-colors group text-left ${isActive ? 'bg-yt-secondary' : 'hover:bg-yt-secondary'}`}
               >
-                <div className="w-14 h-14 rounded-lg overflow-hidden bg-yt-secondary flex-shrink-0">
+                {/* Thumbnail with progress bar at bottom */}
+                <div className="w-14 h-14 rounded-lg overflow-hidden bg-yt-secondary flex-shrink-0 relative">
                   {ep.thumbnail || podcast.thumbnail ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={ep.thumbnail || podcast.thumbnail!} alt={ep.title} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <Mic2 className="w-6 h-6 text-yt-text-muted" />
+                    </div>
+                  )}
+                  {/* Resume progress bar */}
+                  {resumePct > 0 && !isActive && (
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/40">
+                      <div className="h-full bg-yt-red rounded-r-full" style={{ width: `${resumePct}%` }} />
                     </div>
                   )}
                 </div>

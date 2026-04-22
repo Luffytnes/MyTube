@@ -9,7 +9,8 @@ export default function MusicLayout({ children }: { children: ReactNode }) {
       <MusicHeader />
       <MusicSidebar />
       {/* pt-14 (header) + pb: mobile stacks player+music-nav+main-nav, desktop just player */}
-      <main className="pt-14 pb-44 md:pb-24 ml-0 md:ml-20 xl:ml-56 min-h-screen">
+      {/* mobile: pb covers mini-player (76px) + music-nav (56px) + gap (16px) + buffer = ~160px */}
+      <main className="pt-14 pb-40 md:pb-24 ml-0 md:ml-20 xl:ml-56 min-h-screen">
         {children}
       </main>
       <MusicPlayer />

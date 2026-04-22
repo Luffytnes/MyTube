@@ -4,6 +4,7 @@ import {
   createContext, useContext, useState, useRef,
   useEffect, useCallback, type ReactNode,
 } from 'react'
+import { savePosition, getPosition } from '@/lib/resumePosition'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -45,6 +46,7 @@ interface MusicContextType {
   toggleRepeat: () => void
   addToQueue: (track: MusicTrack) => void
   playAtIndex: (index: number) => void
+  preloadTrack: (track: MusicTrack) => void
 }
 
 const MusicContext = createContext<MusicContextType | null>(null)
@@ -54,6 +56,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   // Tracks when playTrack/playRadio already set the src synchronously (mobile gesture context).
   // The useEffect skips re-setting src for that track to avoid resetting playback.
   const pendingTrackIdRef = useRef<string | null>(null)
+  const savePositionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [queue, setQueue] = useState<MusicTrack[]>([])
   const [currentIndex, setCurrentIndex] = useState(-1)
   const [playing, setPlaying] = useState(false)
@@ -120,24 +123,49 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     return () => audio.removeEventListener('ended', handleEnded)
   }, [handleEnded])
 
+  // Build src URL for a track
+  function trackSrc(track: MusicTrack): string | null {
+    if (track.radioStreamUrl) return track.radioStreamUrl
+    if (track.directUrl) return `${API_BASE}/api/podcasts/audio/proxy?url=${encodeURIComponent(track.directUrl)}`
+    if (track.videoId) return `${API_BASE}/api/stream/${track.videoId}/audio`
+    return null
+  }
+
   // Set audio src for a track and attempt playback.
   // Call this synchronously inside click handlers to stay within the mobile
   // user-gesture context (iOS Safari blocks audio.play() from useEffect).
   const loadAndPlay = useCallback((track: MusicTrack) => {
     const audio = audioRef.current
     if (!audio) return
+    const src = trackSrc(track)
+    if (!src) return
+
+    // Clear previous save timer
+    if (savePositionTimerRef.current) clearInterval(savePositionTimerRef.current)
+
     pendingTrackIdRef.current = track.videoId
-    if (track.radioStreamUrl) {
-      audio.src = track.radioStreamUrl
-    } else if (track.directUrl) {
-      audio.src = `${API_BASE}/api/podcasts/audio/proxy?url=${encodeURIComponent(track.directUrl)}`
-    } else if (track.videoId) {
-      audio.src = `${API_BASE}/api/stream/${track.videoId}/audio`
-    } else {
-      return
+    audio.src = src
+
+    // Resume podcast from saved position
+    if (track.directUrl) {
+      const saved = getPosition(track.videoId)
+      if (saved && saved > 0) {
+        const onMeta = () => {
+          audio.currentTime = saved
+          audio.removeEventListener('loadedmetadata', onMeta)
+        }
+        audio.addEventListener('loadedmetadata', onMeta)
+      }
+      // Save position every 5s while playing
+      savePositionTimerRef.current = setInterval(() => {
+        if (!audio.paused && audio.duration > 0) {
+          savePosition(track.videoId, audio.currentTime, audio.duration)
+        }
+      }, 5000)
     }
+
     audio.play().catch(() => {})
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load new track when currentIndex changes (handles next/prev/queue navigation).
   // Skips tracks already loaded synchronously by loadAndPlay to avoid resetting playback.
@@ -244,12 +272,24 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     setCurrentIndex(index)
   }, [])
 
+  // Preload a track's audio without playing — call on hover/touchstart for faster start
+  const preloadTrack = useCallback((track: MusicTrack) => {
+    const audio = audioRef.current
+    if (!audio || audio.src.includes(track.videoId) || track.radioStreamUrl) return
+    const src = trackSrc(track)
+    if (!src) return
+    // Use a secondary audio element to warm up the connection, don't disturb current playback
+    const preloader = new Audio()
+    preloader.preload = 'metadata'
+    preloader.src = src
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <MusicContext.Provider value={{
       queue, currentIndex, currentTrack,
       playing, currentTime, duration, volume, muted, shuffle, repeat,
       playTrack, playRadio, playPause, next, prev, seek, setVolume,
-      toggleMute, toggleShuffle, toggleRepeat, addToQueue, playAtIndex,
+      toggleMute, toggleShuffle, toggleRepeat, addToQueue, playAtIndex, preloadTrack,
     }}>
       {children}
     </MusicContext.Provider>

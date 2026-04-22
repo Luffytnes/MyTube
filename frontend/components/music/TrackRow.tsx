@@ -15,7 +15,7 @@ interface TrackRowProps {
 }
 
 export default function TrackRow({ track, queue, index, showThumbnail = false, showAlbum = false }: TrackRowProps) {
-  const { playTrack, addToQueue, currentTrack, playing } = useMusic()
+  const { playTrack, addToQueue, currentTrack, playing, preloadTrack } = useMusic()
   const [showMenu, setShowMenu] = useState(false)
   const [added, setAdded] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -56,6 +56,8 @@ export default function TrackRow({ track, queue, index, showThumbnail = false, s
         'flex items-center gap-3 px-3 py-2 rounded-xl group cursor-pointer transition-colors',
         isCurrent ? 'bg-yt-hover' : 'hover:bg-yt-hover'
       )}
+      onMouseEnter={() => { if (!isCurrent) preloadTrack(track) }}
+      onTouchStart={() => { if (!isCurrent) preloadTrack(track) }}
       onClick={handlePlay}
     >
       {/* Index or play icon */}

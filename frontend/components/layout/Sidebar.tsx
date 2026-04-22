@@ -180,29 +180,24 @@ export default function Sidebar() {
         </div>
       </aside>
 
-      {/* ── Mobile bottom nav ────────────────────────────────── */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden flex items-center justify-around bg-yt-bg border-t border-yt-border/40 h-14 px-1 safe-area-pb">
-        {/* Home */}
+      {/* ── Mobile bottom nav — floating pill ───────────────── */}
+      <nav className="fixed bottom-3 inset-x-3 z-40 md:hidden flex items-center justify-around h-14 px-1 rounded-2xl bg-yt-bg/95 backdrop-blur-xl border border-yt-border/30 shadow-[0_8px_32px_rgba(0,0,0,0.45)]">
         <Link href="/" className={cn('flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl text-xs transition-colors flex-1', isActive('/') ? 'text-yt-red' : 'text-yt-text-muted')}>
           <Home className="w-5 h-5" />
           <span className="text-[10px]">{t('nav_home')}</span>
         </Link>
-        {/* Trending */}
         <Link href="/trending" className={cn('flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl text-xs transition-colors flex-1', isActive('/trending') ? 'text-yt-red' : 'text-yt-text-muted')}>
           <TrendingUp className="w-5 h-5" />
           <span className="text-[10px]">{t('nav_trending')}</span>
         </Link>
-        {/* Music */}
         <Link href="/music" className={cn('flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl text-xs transition-colors flex-1', pathname.startsWith('/music') ? 'text-yt-red' : 'text-yt-text-muted')}>
           <Music2 className="w-5 h-5" />
           <span className="text-[10px]">{t('nav_music')}</span>
         </Link>
-        {/* History */}
         <Link href="/history" className={cn('flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl text-xs transition-colors flex-1', isActive('/history') ? 'text-yt-red' : 'text-yt-text-muted')}>
           <History className="w-5 h-5" />
           <span className="text-[10px]">{t('nav_history')}</span>
         </Link>
-        {/* More */}
         <button
           onClick={() => setShowDrawer(true)}
           className="flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl text-xs text-yt-text-muted flex-1"
