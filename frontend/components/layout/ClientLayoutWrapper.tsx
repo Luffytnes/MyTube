@@ -18,8 +18,7 @@ export default function ClientLayoutWrapper({ children }: { children: ReactNode 
       <Header />
       <div className="flex pt-14">
         <Sidebar />
-        {/* pb accounts for floating nav height + safe-area — fallback 96px if no safe area */}
-        <main className="flex-1 min-w-0 ml-0 md:ml-20 xl:ml-56 md:pb-0" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 80px)' }}>
+        <main className="flex-1 min-w-0 ml-0 md:ml-20 xl:ml-56 md:pb-0" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 96px)' }}>
           {children}
         </main>
       </div>

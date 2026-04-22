@@ -182,8 +182,8 @@ export default function Sidebar() {
 
       {/* ── Mobile bottom nav — floating pill ───────────────── */}
       <nav
-        className="fixed inset-x-1.5 z-40 md:hidden flex items-center justify-around h-14 px-1 rounded-2xl bg-yt-bg/95 backdrop-blur-xl border border-yt-border/30 shadow-[0_8px_32px_rgba(0,0,0,0.45)]"
-        style={{ bottom: 'calc(env(safe-area-inset-bottom) + 8px)' }}
+        className="fixed left-1 right-1 z-40 md:hidden flex items-center justify-around h-14 px-1 rounded-2xl bg-yt-bg/95 backdrop-blur-xl border border-yt-border/30 shadow-[0_8px_32px_rgba(0,0,0,0.45)]"
+        style={{ bottom: 'calc(env(safe-area-inset-bottom) + 20px)' }}
       >
         <Link href="/" className={cn('flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl text-xs transition-colors flex-1', isActive('/') ? 'text-yt-red' : 'text-yt-text-muted')}>
           <Home className="w-5 h-5" />
