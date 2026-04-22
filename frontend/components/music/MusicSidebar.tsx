@@ -148,8 +148,8 @@ export default function MusicSidebar() {
 
       {/* ── Mobile bottom nav — floating pill ───────────────── */}
       <nav
-        className="fixed left-0.5 right-0.5 z-40 md:hidden flex items-center justify-around h-14 px-1 rounded-2xl bg-yt-bg/95 backdrop-blur-xl border border-yt-border/30 shadow-[0_8px_32px_rgba(0,0,0,0.45)]"
-        style={{ bottom: currentTrack ? 'calc(env(safe-area-inset-bottom) + 124px)' : 'calc(env(safe-area-inset-bottom) + 44px)' }}
+        className="fixed left-1/2 -translate-x-1/2 z-40 md:hidden flex items-center justify-around h-16 px-4 rounded-2xl bg-yt-bg/95 backdrop-blur-xl border border-yt-border/30 shadow-[0_8px_32px_rgba(0,0,0,0.45)] w-[340px] max-w-[calc(100vw-24px)]"
+        style={{ bottom: currentTrack ? 'calc(env(safe-area-inset-bottom) + 96px)' : 'calc(env(safe-area-inset-bottom) + 12px)' }}
       >
         {NAV_KEYS.slice(0, 4).map(({ icon: Icon, labelKey, href }) => {
           const active = isActive(href)
@@ -188,7 +188,7 @@ export default function MusicSidebar() {
           {/* Drawer — sits just above the floating nav */}
           <div
             className="fixed left-0 right-0 z-[46] md:hidden bg-yt-bg rounded-t-2xl shadow-2xl max-h-[80vh] overflow-y-auto"
-            style={{ bottom: currentTrack ? 'calc(env(safe-area-inset-bottom) + 196px)' : 'calc(env(safe-area-inset-bottom) + 116px)' }}
+            style={{ bottom: currentTrack ? 'calc(env(safe-area-inset-bottom) + 168px)' : 'calc(env(safe-area-inset-bottom) + 84px)' }}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-yt-border/40">
               <p className="text-sm font-semibold text-yt-text">MyTube Music</p>
