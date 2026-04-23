@@ -160,20 +160,20 @@ export default function Header() {
             </button>
           )}
         </div>
-        <button type="submit" aria-label={t('search_placeholder')} className="flex items-center justify-center w-10 h-10 rounded-full bg-yt-secondary hover:bg-yt-hover border border-yt-border text-yt-text-secondary hover:text-yt-text transition-colors flex-shrink-0">
-          <Search className="w-5 h-5" />
+        <button type="submit" aria-label={t('search_placeholder')} className="liquid-glass-btn flex items-center justify-center w-10 h-10 rounded-full text-yt-text-secondary hover:text-yt-text flex-shrink-0">
+          <Search className="w-5 h-5 z-10 relative" />
         </button>
-        <button type="button" aria-label="Voice search" className="flex items-center justify-center w-10 h-10 rounded-full bg-yt-secondary hover:bg-yt-hover border border-yt-border text-yt-text-secondary hover:text-yt-text transition-colors flex-shrink-0">
-          <Mic className="w-5 h-5" />
+        <button type="button" aria-label="Voice search" className="liquid-glass-btn flex items-center justify-center w-10 h-10 rounded-full text-yt-text-secondary hover:text-yt-text flex-shrink-0">
+          <Mic className="w-5 h-5 z-10 relative" />
         </button>
 
         {/* Search history dropdown */}
         {showDropdown && (
           <div
             ref={dropdownRef}
-            className="absolute top-full left-0 right-12 mt-1 bg-yt-secondary border border-yt-border rounded-xl shadow-2xl z-50 overflow-hidden"
+            className="absolute top-full left-0 right-12 mt-1 liquid-glass rounded-xl z-50 overflow-hidden"
           >
-            <div className="flex items-center justify-between px-4 py-2 border-b border-yt-border/50">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-white/8">
               <span className="text-xs font-semibold text-yt-text-muted uppercase tracking-wide">
                 {t('searchHistory_recent')}
               </span>
@@ -189,7 +189,7 @@ export default function Header() {
             {filtered.slice(0, 8).map((entry) => (
               <div
                 key={entry.query}
-                className="flex items-center gap-3 px-4 py-2.5 hover:bg-yt-hover cursor-pointer group"
+                className="liquid-glass-btn flex items-center gap-3 px-4 py-2.5 cursor-pointer group"
                 onMouseDown={(e) => { e.preventDefault(); handleSearch(undefined, entry.query) }}
               >
                 <Clock className="w-4 h-4 text-yt-text-muted flex-shrink-0" />
@@ -211,7 +211,7 @@ export default function Header() {
       {/* Right actions */}
       <div className="flex items-center gap-2 ml-4 flex-shrink-0">
         <div
-          className="flex items-center gap-1.5 px-3 h-8 rounded-full bg-yt-secondary border border-yt-border text-xs text-yt-text-secondary cursor-default"
+          className="liquid-glass flex items-center gap-1.5 px-3 h-8 rounded-full text-xs text-yt-text-secondary cursor-default"
           title={shieldTooltip || (vpnConnected ? 'VPN actif' : 'Sans VPN — votre IP réelle est utilisée')}
         >
           <Shield className={`w-3.5 h-3.5 ${vpnConnected ? 'text-green-400' : 'text-red-400'}`} />
@@ -222,9 +222,9 @@ export default function Header() {
           onClick={() => setShowSettings(true)}
           aria-label={t('settings_title')}
           title={t('settings_title')}
-          className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-yt-hover text-yt-text-secondary hover:text-yt-text transition-colors"
+          className="liquid-glass-btn flex items-center justify-center w-9 h-9 rounded-full text-yt-text-secondary hover:text-yt-text"
         >
-          <Settings className="w-4 h-4" />
+          <Settings className="w-4 h-4 z-10 relative" />
         </button>
       </div>
 

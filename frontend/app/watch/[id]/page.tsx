@@ -368,13 +368,13 @@ function WatchContent({ params }: WatchPageProps) {
                   setLiked(nowLiked)
                   if (nowLiked) setDisliked(false)
                 }}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium transition-colors ${
+                className={`liquid-glass-btn flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium transition-colors ${
                   liked
                     ? 'bg-blue-600 text-white'
-                    : 'bg-yt-secondary hover:bg-yt-hover text-yt-text border border-yt-border'
+                    : 'text-yt-text'
                 }`}
               >
-                <ThumbsUp className={`w-4 h-4 ${liked ? 'fill-white' : ''}`} />
+                <ThumbsUp className={`w-4 h-4 z-10 relative ${liked ? 'fill-white' : ''}`} />
                 <span>{video.likes}</span>
               </button>
 
@@ -391,30 +391,30 @@ function WatchContent({ params }: WatchPageProps) {
                     return next
                   })
                 }}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium transition-colors ${
+                className={`liquid-glass-btn flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium transition-colors ${
                   disliked
                     ? 'bg-red-600 text-white'
-                    : 'bg-yt-secondary hover:bg-yt-hover text-yt-text border border-yt-border'
+                    : 'text-yt-text'
                 }`}
               >
-                <ThumbsDown className={`w-4 h-4 ${disliked ? 'fill-white' : ''}`} />
+                <ThumbsDown className={`w-4 h-4 z-10 relative ${disliked ? 'fill-white' : ''}`} />
               </button>
 
               {/* Share */}
               <button
                 onClick={() => setShowShare(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-yt-secondary hover:bg-yt-hover text-yt-text border border-yt-border text-sm font-medium transition-colors"
+                className="liquid-glass-btn flex items-center gap-2 px-4 py-2 rounded-full text-yt-text text-sm font-medium"
               >
-                <Share2 className="w-4 h-4" />
+                <Share2 className="w-4 h-4 z-10 relative" />
                 <span className="hidden lg:block">{t('share')}</span>
               </button>
 
               {/* Download */}
               <button
                 onClick={() => setShowDownload(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-yt-secondary hover:bg-yt-hover text-yt-text border border-yt-border text-sm font-medium transition-colors"
+                className="liquid-glass-btn flex items-center gap-2 px-4 py-2 rounded-full text-yt-text text-sm font-medium"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-4 h-4 z-10 relative" />
                 <span className="hidden lg:block">{t('download')}</span>
               </button>
 
@@ -437,10 +437,10 @@ function WatchContent({ params }: WatchPageProps) {
                     setInQueue(true)
                   }
                 }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
+                className={`liquid-glass-btn flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${
                   inQueue
-                    ? 'bg-yt-red border-yt-red text-white'
-                    : 'bg-yt-secondary hover:bg-yt-hover text-yt-text border-yt-border'
+                    ? 'bg-yt-red text-white'
+                    : 'text-yt-text'
                 }`}
               >
                 {inQueue ? <ListChecks className="w-4 h-4" /> : <ListPlus className="w-4 h-4" />}
@@ -454,10 +454,10 @@ function WatchContent({ params }: WatchPageProps) {
                   const isNowSaved = toggleWatchLater({ id: video.id, title: video.title, channel: video.channel.name, channelId: video.channel.id })
                   setSaved(isNowSaved)
                 }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
+                className={`liquid-glass-btn flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${
                   saved
-                    ? 'bg-blue-600 border-blue-600 text-white'
-                    : 'bg-yt-secondary hover:bg-yt-hover text-yt-text border-yt-border'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-yt-text'
                 }`}
               >
                 {saved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
@@ -490,10 +490,10 @@ function WatchContent({ params }: WatchPageProps) {
             </div>
             <button
               onClick={() => video?.channel.id && toggleSubscription({ id: video.channel.id, name: video.channel.name, thumbnail: video.channel.thumbnail ?? null })}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold transition-colors flex-shrink-0 ${
+              className={`liquid-glass-btn flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold flex-shrink-0 ${
                 video?.channel.id && isSubscribed(video.channel.id)
-                  ? 'bg-yt-secondary hover:bg-yt-hover text-yt-text border border-yt-border'
-                  : 'bg-yt-text text-yt-bg hover:bg-yt-text-secondary'
+                  ? 'text-yt-text'
+                  : 'bg-yt-text text-yt-bg'
               }`}
             >
               {video?.channel.id && isSubscribed(video.channel.id)
@@ -506,7 +506,7 @@ function WatchContent({ params }: WatchPageProps) {
           {/* Description */}
           <div className="mt-4">
             <div
-              className={`bg-yt-secondary rounded-xl p-4 cursor-pointer hover:bg-yt-hover transition-colors`}
+              className="liquid-glass rounded-xl p-4 cursor-pointer"
               onClick={() => setDescExpanded((v) => !v)}
             >
               {/* Meta row */}

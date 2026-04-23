@@ -18,7 +18,7 @@ export default function ClientLayoutWrapper({ children }: { children: ReactNode 
       <Header />
       <div className="flex pt-14">
         <Sidebar />
-        <main className="flex-1 min-w-0 ml-0 md:ml-[88px] xl:ml-[228px] md:pb-0" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 96px)' }}>
+        <main className="flex-1 min-w-0 ml-0 md:ml-20 xl:ml-56 md:pb-0" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 96px)' }}>
           {children}
         </main>
       </div>

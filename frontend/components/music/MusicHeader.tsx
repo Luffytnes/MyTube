@@ -87,15 +87,15 @@ export default function MusicHeader() {
             </button>
           )}
         </div>
-        <button type="submit" className="flex items-center justify-center w-10 h-10 rounded-full bg-yt-secondary hover:bg-yt-hover border border-yt-border text-yt-text-secondary hover:text-yt-text transition-colors flex-shrink-0">
-          <Search className="w-4 h-4" />
+        <button type="submit" className="liquid-glass-btn flex items-center justify-center w-10 h-10 rounded-full text-yt-text-secondary hover:text-yt-text flex-shrink-0">
+          <Search className="w-4 h-4 z-10 relative" />
         </button>
       </form>
 
       {/* Right */}
       <div className="flex items-center gap-2 flex-shrink-0">
         <div
-          className="flex items-center gap-1.5 px-3 h-8 rounded-full bg-yt-secondary border border-yt-border text-xs text-yt-text-secondary cursor-default"
+          className="liquid-glass flex items-center gap-1.5 px-3 h-8 rounded-full text-xs text-yt-text-secondary cursor-default"
           title={shieldTooltip || (vpnConnected ? 'VPN actif' : 'Sans VPN — votre IP réelle est utilisée')}
         >
           <Shield className={`w-3.5 h-3.5 ${vpnConnected ? 'text-green-400' : 'text-red-400'}`} />
@@ -106,14 +106,14 @@ export default function MusicHeader() {
           onClick={() => setShowSettings(true)}
           aria-label={t('settings_title')}
           title={t('settings_title')}
-          className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-yt-hover text-yt-text-secondary hover:text-yt-text transition-colors"
+          className="liquid-glass-btn flex items-center justify-center w-9 h-9 rounded-full text-yt-text-secondary hover:text-yt-text"
         >
           <Settings className="w-4 h-4" />
         </button>
 
         <Link
           href="/"
-          className="hidden sm:flex items-center gap-1.5 px-3 h-9 rounded-full bg-yt-secondary hover:bg-yt-hover border border-yt-border text-xs text-yt-text-secondary hover:text-yt-text transition-colors"
+          className="liquid-glass-btn hidden sm:flex items-center gap-1.5 px-3 h-9 rounded-full text-xs text-yt-text-secondary hover:text-yt-text"
         >
           ← {t('music_back')}
         </Link>
