@@ -52,7 +52,7 @@ export default function MusicSidebar() {
   return (
     <>
       {/* ── Desktop sidebar — floating liquid glass ─────────── */}
-      <aside className="fixed left-3 top-[57px] bottom-20 z-40 hidden md:flex flex-col w-[72px] xl:w-52 liquid-glass rounded-2xl pt-3 pb-4 overflow-y-auto overflow-x-hidden transition-all">
+      <aside className="fixed left-0 top-14 bottom-20 z-40 hidden md:flex flex-col w-20 xl:w-56 liquid-glass rounded-none pt-3 pb-4 overflow-y-auto overflow-x-hidden transition-all">
         <nav className="flex flex-col gap-0.5 px-2">
           {NAV_KEYS.map(({ icon: Icon, labelKey, href }) => {
             const active = isActive(href)
