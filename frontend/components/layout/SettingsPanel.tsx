@@ -353,10 +353,10 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       {/* Modal */}
       <div
         ref={modalRef}
-        className="relative z-10 flex w-full max-w-2xl h-[560px] liquid-glass rounded-2xl overflow-hidden"
+        className="relative z-10 flex w-full max-w-2xl h-[560px] bg-yt-bg border border-yt-border rounded-2xl shadow-2xl overflow-hidden"
       >
         {/* Left tab bar */}
-        <div className="relative z-10 w-44 flex-shrink-0 bg-white/5 border-r border-white/8 flex flex-col pt-4 pb-4">
+        <div className="w-44 flex-shrink-0 bg-yt-secondary border-r border-yt-border flex flex-col pt-4 pb-4">
           <p className="px-4 pb-3 text-xs font-semibold text-yt-text-muted uppercase tracking-widest">
             {t('settings_title')}
           </p>
@@ -365,10 +365,10 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               <button
                 key={id}
                 onClick={() => setTab(id)}
-                className={`liquid-glass-btn flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-left ${
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-left transition-colors ${
                   tab === id
-                    ? 'active text-yt-text'
-                    : 'text-yt-text-secondary hover:text-yt-text'
+                    ? 'bg-yt-hover text-yt-text'
+                    : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
                 }`}
               >
                 <span className={tab === id ? 'text-yt-red' : 'text-yt-text-muted'}>{icon}</span>
@@ -380,15 +380,15 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         </div>
 
         {/* Right content */}
-        <div className="relative z-10 flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0">
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/8">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-yt-border/50">
             <h2 className="text-yt-text font-semibold text-base">
               {tab === 'general' ? 'Général' : tab === 'playback' ? t('settings_tab_playback') : tab === 'data' ? t('settings_data_tab') : tab === 'podcast' ? 'Podcast Index' : 'Wireproxy'}
             </h2>
             <button
               onClick={onClose}
-              className="liquid-glass-btn w-8 h-8 flex items-center justify-center rounded-full text-yt-text-secondary hover:text-yt-text"
+              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-yt-hover text-yt-text-secondary hover:text-yt-text transition-colors"
             >
               <X className="w-4 h-4" />
             </button>

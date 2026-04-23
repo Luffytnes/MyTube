@@ -65,8 +65,8 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* ── Desktop sidebar — floating liquid glass ─────────── */}
-      <aside className="fixed left-0 top-14 bottom-0 z-40 hidden md:flex flex-col w-20 xl:w-56 liquid-glass rounded-none pt-3 pb-4 overflow-y-auto overflow-x-hidden transition-all">
+      {/* ── Desktop sidebar ─────────────────────────────────── */}
+      <aside className="fixed left-0 top-14 bottom-0 z-40 hidden md:flex flex-col w-20 xl:w-56 bg-yt-bg border-r border-yt-border/40 pt-3 pb-4 overflow-y-auto overflow-x-hidden transition-all">
         <nav className="flex flex-col gap-0.5 px-2">
           {NAV_ITEMS.map(({ icon: Icon, labelKey, href }) => {
             const active = isActive(href)
@@ -76,49 +76,49 @@ export default function Sidebar() {
                 key={href}
                 href={href}
                 className={cn(
-                  'liquid-glass-btn flex items-center gap-4 px-3 py-2.5 text-sm font-medium group',
-                  active ? 'active text-yt-text' : 'text-yt-text-secondary hover:text-yt-text'
+                  'flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors group',
+                  active ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
                 )}
                 title={label}
               >
-                <Icon className={cn('w-5 h-5 flex-shrink-0 transition-colors z-10 relative', active ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red')} />
-                <span className="hidden xl:block truncate z-10 relative">{label}</span>
+                <Icon className={cn('w-5 h-5 flex-shrink-0 transition-colors', active ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red')} />
+                <span className="hidden xl:block truncate">{label}</span>
               </Link>
             )
           })}
         </nav>
 
         {/* Music + News */}
-        <div className="border-t border-white/8 my-3 mx-3" />
+        <div className="border-t border-yt-border/40 my-3 mx-3" />
         <nav className="px-2 flex flex-col gap-0.5">
           <Link
             href="/music"
             className={cn(
-              'liquid-glass-btn flex items-center gap-4 px-3 py-2.5 text-sm font-medium group',
-              pathname.startsWith('/music') ? 'active text-yt-text' : 'text-yt-text-secondary hover:text-yt-text'
+              'flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors group',
+              pathname.startsWith('/music') ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
             )}
             title={t('nav_music')}
           >
-            <Music2 className={cn('w-5 h-5 flex-shrink-0 z-10 relative transition-colors', pathname.startsWith('/music') ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red')} />
-            <span className="hidden xl:block truncate z-10 relative">{t('nav_music')}</span>
+            <Music2 className={cn('w-5 h-5 flex-shrink-0', pathname.startsWith('/music') ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red transition-colors')} />
+            <span className="hidden xl:block truncate">{t('nav_music')}</span>
           </Link>
           <Link
             href="/news"
             className={cn(
-              'liquid-glass-btn flex items-center gap-4 px-3 py-2.5 text-sm font-medium group',
-              pathname.startsWith('/news') ? 'active text-yt-text' : 'text-yt-text-secondary hover:text-yt-text'
+              'flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors group',
+              pathname.startsWith('/news') ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
             )}
             title={t('nav_news')}
           >
-            <Newspaper className={cn('w-5 h-5 flex-shrink-0 z-10 relative transition-colors', pathname.startsWith('/news') ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red')} />
-            <span className="hidden xl:block truncate z-10 relative">{t('nav_news')}</span>
+            <Newspaper className={cn('w-5 h-5 flex-shrink-0', pathname.startsWith('/news') ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red transition-colors')} />
+            <span className="hidden xl:block truncate">{t('nav_news')}</span>
           </Link>
         </nav>
 
         {/* Subscriptions */}
         {subscriptions.length > 0 && (
           <>
-            <div className="border-t border-white/8 my-3 mx-3" />
+            <div className="border-t border-yt-border/40 my-3 mx-3" />
             <div className="px-2">
               <p className="hidden xl:block px-3 pb-2 text-xs font-semibold text-yt-text-muted uppercase tracking-wider">
                 {t('nav_subscriptions')}
@@ -131,12 +131,12 @@ export default function Sidebar() {
                       key={sub.id}
                       href={`/channel/${sub.id}`}
                       className={cn(
-                        'liquid-glass-btn flex items-center gap-3 px-3 py-2 text-sm group',
-                        active ? 'active text-yt-text' : 'text-yt-text-secondary hover:text-yt-text'
+                        'flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors group',
+                        active ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
                       )}
                       title={sub.name}
                     >
-                      <div className="w-6 h-6 rounded-full flex-shrink-0 relative z-10">
+                      <div className="w-6 h-6 rounded-full flex-shrink-0 relative">
                         <div className="absolute inset-0 rounded-full flex items-center justify-center text-xs font-bold text-white bg-blue-600">
                           {sub.name[0]?.toUpperCase()}
                         </div>
@@ -150,19 +150,19 @@ export default function Sidebar() {
                           />
                         )}
                       </div>
-                      <span className="hidden xl:block truncate z-10 relative">{sub.name}</span>
+                      <span className="hidden xl:block truncate">{sub.name}</span>
                     </Link>
                   )
                 })}
                 {subscriptions.length > SUB_PREVIEW && (
                   <button
                     onClick={() => setShowAllSubs((p) => !p)}
-                    className="liquid-glass-btn flex items-center gap-3 px-3 py-2 text-sm text-yt-text-muted hover:text-yt-text text-left"
+                    className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-yt-text-muted hover:bg-yt-hover hover:text-yt-text transition-colors text-left"
                   >
-                    <span className="w-6 h-6 rounded-full flex-shrink-0 bg-white/10 flex items-center justify-center text-xs z-10 relative">
+                    <span className="w-6 h-6 rounded-full flex-shrink-0 bg-yt-secondary flex items-center justify-center text-xs">
                       {showAllSubs ? '↑' : `+${subscriptions.length - SUB_PREVIEW}`}
                     </span>
-                    <span className="hidden xl:block truncate text-xs z-10 relative">
+                    <span className="hidden xl:block truncate text-xs">
                       {showAllSubs ? t('home_show_less') : t('home_see_all')}
                     </span>
                   </button>
@@ -172,7 +172,7 @@ export default function Sidebar() {
           </>
         )}
 
-        <div className="border-t border-white/8 my-3 mx-3" />
+        <div className="border-t border-yt-border/40 my-3 mx-3" />
         <div className="hidden xl:block px-5 text-xs text-yt-text-muted leading-relaxed">
           <p className="font-medium text-yt-text-secondary mb-1">{t('nav_privacyFirst')}</p>
           <p>{t('nav_noTracking')}</p>
