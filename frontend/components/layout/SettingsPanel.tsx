@@ -346,17 +346,49 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:px-4">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60" aria-hidden="true" />
 
-      {/* Modal */}
+      {/* Modal — bottom sheet on mobile, centered dialog on desktop */}
       <div
         ref={modalRef}
-        className="relative z-10 flex w-full max-w-2xl h-[560px] bg-yt-bg border border-yt-border rounded-2xl shadow-2xl overflow-hidden"
+        className="relative z-10 flex flex-col w-full sm:flex-row sm:max-w-2xl sm:h-[560px] bg-yt-bg border border-yt-border rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[92dvh]"
       >
-        {/* Left tab bar */}
-        <div className="w-44 flex-shrink-0 bg-yt-secondary border-r border-yt-border flex flex-col pt-4 pb-4">
+        {/* ── Mobile: drag handle ── */}
+        <div className="sm:hidden flex-shrink-0 flex flex-col">
+          <div className="flex items-center justify-between px-4 pt-3 pb-2">
+            <div className="w-10 h-1 rounded-full bg-yt-border mx-auto absolute left-1/2 -translate-x-1/2 top-2" />
+            <span className="text-sm font-semibold text-yt-text">{t('settings_title')}</span>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-yt-hover text-yt-text-secondary hover:text-yt-text transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          {/* Horizontal scrollable tab pills */}
+          <div className="flex gap-2 px-4 pb-3 overflow-x-auto scrollbar-none border-b border-yt-border/40">
+            {TABS.map(({ id, label, icon, badge }) => (
+              <button
+                key={id}
+                onClick={() => setTab(id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium flex-shrink-0 transition-colors ${
+                  tab === id
+                    ? 'bg-yt-red text-white'
+                    : 'bg-yt-secondary text-yt-text-secondary'
+                }`}
+              >
+                <span>{icon}</span>
+                <span>{label}</span>
+                {badge}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Desktop: left tab bar ── */}
+        <div className="hidden sm:flex w-44 flex-shrink-0 bg-yt-secondary border-r border-yt-border flex-col pt-4 pb-4">
           <p className="px-4 pb-3 text-xs font-semibold text-yt-text-muted uppercase tracking-widest">
             {t('settings_title')}
           </p>
@@ -380,9 +412,9 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         </div>
 
         {/* Right content */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-yt-border/50">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {/* Header — desktop only */}
+          <div className="hidden sm:flex items-center justify-between px-6 py-4 border-b border-yt-border/50">
             <h2 className="text-yt-text font-semibold text-base">
               {tab === 'general' ? 'Général' : tab === 'playback' ? t('settings_tab_playback') : tab === 'data' ? t('settings_data_tab') : tab === 'podcast' ? 'Podcast Index' : 'Wireproxy'}
             </h2>
@@ -395,7 +427,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           </div>
 
           {/* Content */}
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
 
             {/* ── GÉNÉRAL ── */}
             {tab === 'general' && (
