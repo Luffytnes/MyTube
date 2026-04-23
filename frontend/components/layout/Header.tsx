@@ -140,7 +140,7 @@ export default function Header() {
       </Link>
 
       {/* Search bar */}
-      <form onSubmit={handleSearch} className="flex-1 flex items-center justify-center max-w-2xl mx-auto gap-2 relative">
+      <form onSubmit={handleSearch} className="flex-1 flex items-center justify-center max-w-lg mx-auto gap-2 relative">
         <div className={`flex items-center flex-1 h-10 rounded-full border transition-colors ${
           focused ? 'border-[#1c62b9] bg-yt-bg' : 'border-yt-border bg-yt-secondary'
         }`}>

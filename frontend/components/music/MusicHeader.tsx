@@ -71,7 +71,7 @@ export default function MusicHeader() {
       </Link>
 
       {/* Search bar */}
-      <form onSubmit={handleSearch} className="flex-1 flex items-center max-w-xl mx-auto gap-2">
+      <form onSubmit={handleSearch} className="flex-1 flex items-center max-w-lg mx-auto gap-2">
         <div className="flex-1 flex items-center h-10 rounded-full border border-yt-border bg-yt-secondary px-4 gap-2 focus-within:border-yt-red transition-colors">
           <Search className="w-4 h-4 text-yt-text-muted flex-shrink-0" />
           <input
