@@ -66,7 +66,7 @@ export default function Sidebar() {
   return (
     <>
       {/* ── Desktop sidebar — floating liquid glass ─────────── */}
-      <aside className="fixed left-3 top-[4.5rem] z-40 hidden md:flex flex-col w-[72px] xl:w-52 liquid-glass rounded-2xl pt-3 pb-4 overflow-y-auto overflow-x-hidden transition-all max-h-[calc(100vh-5rem)]">
+      <aside className="fixed left-3 top-16 bottom-3 z-40 hidden md:flex flex-col w-[72px] xl:w-52 liquid-glass rounded-2xl pt-3 pb-4 overflow-y-auto overflow-x-hidden transition-all">
         <nav className="flex flex-col gap-0.5 px-2">
           {NAV_ITEMS.map(({ icon: Icon, labelKey, href }) => {
             const active = isActive(href)
