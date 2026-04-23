@@ -47,6 +47,7 @@ export function setPlaybackSettings(settings: Partial<PlaybackSettings>): Playba
     const current = getPlaybackSettings()
     const updated = { ...current, ...settings }
     localStorage.setItem(KEY, JSON.stringify(updated))
+    window.dispatchEvent(new CustomEvent('mytube-settings-change', { detail: updated }))
     return updated
   } catch {
     return getPlaybackSettings()

@@ -27,6 +27,12 @@ export default function VideoGrid({
 
   useEffect(() => {
     setDensity(getPlaybackSettings().gridDensity)
+    function onSettingsChange(e: Event) {
+      const s = (e as CustomEvent<ReturnType<typeof getPlaybackSettings>>).detail
+      setDensity(s.gridDensity)
+    }
+    window.addEventListener('mytube-settings-change', onSettingsChange)
+    return () => window.removeEventListener('mytube-settings-change', onSettingsChange)
   }, [])
 
   if (loading) {
