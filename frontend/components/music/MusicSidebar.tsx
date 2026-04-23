@@ -51,8 +51,8 @@ export default function MusicSidebar() {
 
   return (
     <>
-      {/* ── Desktop sidebar ─────────────────────────────────── */}
-      <aside className="fixed left-0 top-14 bottom-20 z-40 hidden md:flex flex-col w-20 xl:w-56 bg-yt-bg border-r border-yt-border/40 pt-3 pb-4 overflow-y-auto overflow-x-hidden">
+      {/* ── Desktop sidebar — floating liquid glass ─────────── */}
+      <aside className="fixed left-3 top-[4.5rem] bottom-[86px] z-40 hidden md:flex flex-col w-[72px] xl:w-52 liquid-glass rounded-2xl pt-3 pb-4 overflow-y-auto overflow-x-hidden transition-all">
         <nav className="flex flex-col gap-0.5 px-2">
           {NAV_KEYS.map(({ icon: Icon, labelKey, href }) => {
             const active = isActive(href)
@@ -63,12 +63,12 @@ export default function MusicSidebar() {
                 href={href}
                 title={label}
                 className={cn(
-                  'flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors group',
-                  active ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
+                  'liquid-glass-btn flex items-center gap-4 px-3 py-2.5 text-sm font-medium group',
+                  active ? 'active text-yt-text' : 'text-yt-text-secondary hover:text-yt-text'
                 )}
               >
-                <Icon className={cn('w-5 h-5 flex-shrink-0 transition-colors', active ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red')} />
-                <span className="hidden xl:block truncate">{label}</span>
+                <Icon className={cn('w-5 h-5 flex-shrink-0 transition-colors z-10 relative', active ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red')} />
+                <span className="hidden xl:block truncate z-10 relative">{label}</span>
               </Link>
             )
           })}
@@ -77,13 +77,13 @@ export default function MusicSidebar() {
         {/* Playlists section */}
         {playlists.length > 0 && (
           <>
-            <div className="border-t border-yt-border/40 my-3 mx-3" />
+            <div className="border-t border-white/8 my-3 mx-3" />
             <div className="px-2">
               <div className="hidden xl:flex items-center justify-between px-3 pb-2">
-                <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-wider truncate">
+                <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-wider truncate z-10 relative">
                   {t('music_my_playlists')}
                 </p>
-                <Link href="/music/playlists" className="text-yt-text-muted hover:text-yt-text transition-colors flex-shrink-0">
+                <Link href="/music/playlists" className="text-yt-text-muted hover:text-yt-text transition-colors flex-shrink-0 z-10 relative">
                   <Plus className="w-3.5 h-3.5" />
                 </Link>
               </div>
@@ -98,12 +98,12 @@ export default function MusicSidebar() {
                       href={`/music/playlists/${p.id}`}
                       title={p.name}
                       className={cn(
-                        'flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors group',
-                        active ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
+                        'liquid-glass-btn flex items-center gap-3 px-3 py-2 text-sm group',
+                        active ? 'active text-yt-text' : 'text-yt-text-secondary hover:text-yt-text'
                       )}
                     >
                       {/* Thumbnail / placeholder */}
-                      <div className="w-6 h-6 rounded flex-shrink-0 overflow-hidden bg-yt-secondary flex items-center justify-center">
+                      <div className="w-6 h-6 rounded flex-shrink-0 overflow-hidden bg-yt-secondary flex items-center justify-center z-10 relative">
                         {thumb ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={thumb} alt="" className="w-full h-full object-cover" />
@@ -111,7 +111,7 @@ export default function MusicSidebar() {
                           <ListMusic className="w-3.5 h-3.5 text-yt-text-muted" />
                         )}
                       </div>
-                      <span className={cn('hidden xl:block truncate text-sm', active ? 'text-yt-text' : 'text-yt-text-secondary group-hover:text-yt-text')}>
+                      <span className={cn('hidden xl:block truncate text-sm z-10 relative', active ? 'text-yt-text' : 'text-yt-text-secondary group-hover:text-yt-text')}>
                         {p.name}
                       </span>
                     </Link>
@@ -121,11 +121,13 @@ export default function MusicSidebar() {
                 {playlists.length > PLAYLIST_PREVIEW && (
                   <button
                     onClick={() => setShowAllPlaylists((v) => !v)}
-                    className="hidden xl:flex items-center gap-3 px-3 py-1.5 rounded-xl text-xs text-yt-text-muted hover:bg-yt-hover hover:text-yt-text transition-colors"
+                    className="liquid-glass-btn hidden xl:flex items-center gap-3 px-3 py-1.5 text-xs text-yt-text-muted hover:text-yt-text"
                   >
-                    {showAllPlaylists
-                      ? <><ChevronUp className="w-3.5 h-3.5" /> {t('home_show_less')}</>
-                      : <><ChevronDown className="w-3.5 h-3.5" /> +{playlists.length - PLAYLIST_PREVIEW} {t('music_see_all').toLowerCase()}</>}
+                    <span className="z-10 relative flex items-center gap-1.5">
+                      {showAllPlaylists
+                        ? <><ChevronUp className="w-3.5 h-3.5" /> {t('home_show_less')}</>
+                        : <><ChevronDown className="w-3.5 h-3.5" /> +{playlists.length - PLAYLIST_PREVIEW} {t('music_see_all').toLowerCase()}</>}
+                    </span>
                   </button>
                 )}
               </div>
@@ -133,15 +135,15 @@ export default function MusicSidebar() {
           </>
         )}
 
-        <div className="border-t border-yt-border/40 my-3 mx-3" />
+        <div className="border-t border-white/8 my-3 mx-3" />
         <nav className="px-2">
           <Link
             href="/"
             title={t('music_back')}
-            className="flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text transition-colors group"
+            className="liquid-glass-btn flex items-center gap-4 px-3 py-2.5 text-sm font-medium text-yt-text-secondary hover:text-yt-text group"
           >
-            <ChevronLeft className="w-5 h-5 flex-shrink-0 group-hover:text-yt-text transition-colors" />
-            <span className="hidden xl:block truncate">{t('music_back')}</span>
+            <ChevronLeft className="w-5 h-5 flex-shrink-0 group-hover:text-yt-text transition-colors z-10 relative" />
+            <span className="hidden xl:block truncate z-10 relative">{t('music_back')}</span>
           </Link>
         </nav>
       </aside>
