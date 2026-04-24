@@ -187,10 +187,9 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
               type="range" min="0" max="1" step="0.02"
               value={muted ? 0 : volume}
               onChange={handleVolume}
-              onPointerDown={(e) => (e.currentTarget as HTMLInputElement).setPointerCapture(e.pointerId)}
-              className="flex-1 cursor-pointer accent-white touch-none"
+              className="volume-slider flex-1 h-1 cursor-pointer accent-white"
               style={{
-                height: '20px',
+                touchAction: 'pan-x',
                 background: `linear-gradient(to right, rgba(255,255,255,0.9) ${(muted ? 0 : volume) * 100}%, rgba(255,255,255,0.2) ${(muted ? 0 : volume) * 100}%)`
               }}
             />
@@ -212,7 +211,7 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
               <div>
                 <p className="text-white/40 text-xs mb-2 uppercase tracking-wide">Suivant</p>
                 <div className="flex flex-col gap-1">
-                  {queue.slice(currentIndex + 1, currentIndex + 3).map((track, i) => (
+                  {queue.slice(currentIndex + 1, currentIndex + 6).map((track, i) => (
                     <button
                       key={track.videoId}
                       onClick={() => playAtIndex(currentIndex + 1 + i)}

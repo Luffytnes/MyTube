@@ -220,7 +220,7 @@ export default function Header() {
           onClick={() => setShowSettings(true)}
           aria-label={t('settings_title')}
           title={t('settings_title')}
-          className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-yt-hover text-yt-text-secondary hover:text-yt-text transition-colors"
+          className="hidden md:flex items-center justify-center w-9 h-9 rounded-full hover:bg-yt-hover text-yt-text-secondary hover:text-yt-text transition-colors"
         >
           <Settings className="w-4 h-4" />
         </button>
