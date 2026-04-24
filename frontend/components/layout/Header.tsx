@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback, FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Search, Mic, Shield, Play, X, Clock, Trash2, Settings, AlertTriangle } from 'lucide-react'
+import { Search, Shield, Play, X, Clock, Trash2, Settings, AlertTriangle } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 import SettingsPanel from './SettingsPanel'
 import {
@@ -163,9 +163,6 @@ export default function Header() {
         </div>
         <button type="submit" aria-label={t('search_placeholder')} className="flex items-center justify-center w-10 h-10 rounded-full bg-yt-secondary hover:bg-yt-hover border border-yt-border text-yt-text-secondary hover:text-yt-text transition-colors flex-shrink-0">
           <Search className="w-5 h-5" />
-        </button>
-        <button type="button" aria-label="Voice search" className="flex items-center justify-center w-10 h-10 rounded-full bg-yt-secondary hover:bg-yt-hover border border-yt-border text-yt-text-secondary hover:text-yt-text transition-colors flex-shrink-0">
-          <Mic className="w-5 h-5" />
         </button>
 
         {/* Search history dropdown */}

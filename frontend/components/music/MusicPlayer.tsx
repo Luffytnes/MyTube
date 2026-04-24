@@ -4,10 +4,11 @@ import { useRef, ChangeEvent, useState } from 'react'
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, Repeat, Repeat1, ListMusic,
-  ChevronDown, ListOrdered,
+  ChevronDown, ListOrdered, Plus, Check,
 } from 'lucide-react'
 import { useMusic } from '@/lib/musicContext'
 import { cn } from '@/lib/utils'
+import { getMusicPlaylists, addTrackToPlaylist, type MusicPlaylist } from '@/lib/musicPlaylists'
 
 function formatTime(s: number): string {
   if (!isFinite(s)) return '0:00'
@@ -26,7 +27,22 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
 
   const [showQueue, setShowQueue] = useState(false)
   const [scrubValue, setScrubValue] = useState<number | null>(null)
+  const [showPlaylistPicker, setShowPlaylistPicker] = useState(false)
+  const [addedToPlaylist, setAddedToPlaylist] = useState<string | null>(null)
+  const [playlists, setPlaylists] = useState<MusicPlaylist[]>([])
   const isScrubbing = scrubValue !== null
+
+  function openPlaylistPicker() {
+    setPlaylists(getMusicPlaylists())
+    setShowPlaylistPicker(true)
+  }
+
+  function handleAddToPlaylist(playlistId: string) {
+    if (!currentTrack) return
+    addTrackToPlaylist(playlistId, currentTrack)
+    setAddedToPlaylist(playlistId)
+    setTimeout(() => { setShowPlaylistPicker(false); setAddedToPlaylist(null) }, 1000)
+  }
 
   if (!currentTrack) return null
 
@@ -163,21 +179,66 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
           </div>
 
           {/* Volume */}
-          <div className="flex items-center gap-3 px-6 sm:px-0">
-            <button onClick={toggleMute} className="text-white/50 hover:text-white transition-colors">
-              {muted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+          <div className="flex items-center gap-3 px-6 sm:px-0 mb-5">
+            <button onClick={toggleMute} className="text-white/50 hover:text-white transition-colors flex-shrink-0">
+              {muted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
             </button>
             <input
               type="range" min="0" max="1" step="0.02"
               value={muted ? 0 : volume}
               onChange={handleVolume}
-              className="flex-1 h-1 cursor-pointer accent-white"
-              style={{ background: `linear-gradient(to right, rgba(255,255,255,0.9) ${(muted ? 0 : volume) * 100}%, rgba(255,255,255,0.2) ${(muted ? 0 : volume) * 100}%)` }}
+              onPointerDown={(e) => (e.currentTarget as HTMLInputElement).setPointerCapture(e.pointerId)}
+              className="flex-1 cursor-pointer accent-white touch-none"
+              style={{
+                height: '20px',
+                background: `linear-gradient(to right, rgba(255,255,255,0.9) ${(muted ? 0 : volume) * 100}%, rgba(255,255,255,0.2) ${(muted ? 0 : volume) * 100}%)`
+              }}
             />
+          </div>
+
+          {/* Bottom section: next in queue + add to playlist */}
+          <div className="border-t border-white/10 pt-4 px-6 sm:px-0 flex flex-col gap-3">
+            {/* Add to playlist */}
+            <button
+              onClick={openPlaylistPicker}
+              className="flex items-center gap-3 py-2 text-white/60 hover:text-white transition-colors text-sm"
+            >
+              <Plus className="w-4 h-4 flex-shrink-0" />
+              <span>Ajouter à une playlist</span>
+            </button>
+
+            {/* Next tracks preview */}
+            {queue.slice(currentIndex + 1, currentIndex + 3).length > 0 && (
+              <div>
+                <p className="text-white/40 text-xs mb-2 uppercase tracking-wide">Suivant</p>
+                <div className="flex flex-col gap-1">
+                  {queue.slice(currentIndex + 1, currentIndex + 3).map((track, i) => (
+                    <button
+                      key={track.videoId}
+                      onClick={() => playAtIndex(currentIndex + 1 + i)}
+                      className="flex items-center gap-3 py-1.5 rounded-xl hover:bg-white/10 transition-colors text-left w-full"
+                    >
+                      {track.thumbnail ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={track.thumbnail} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
+                          <ListMusic className="w-4 h-4 text-white/40" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-white/80 text-xs font-medium truncate">{track.title}</p>
+                        <p className="text-white/40 text-xs truncate">{track.artists.map((a) => a.name).join(', ')}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Queue panel — hidden on very small screens, shown as overlay on sm+ */}
+        {/* Queue panel — desktop sidebar */}
         {showQueue && (
           <div className="hidden sm:flex w-64 lg:w-72 flex-shrink-0 flex-col bg-black/30 rounded-2xl overflow-hidden backdrop-blur-sm">
             <div className="px-4 py-3 border-b border-white/10 flex-shrink-0">
@@ -209,21 +270,6 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
                 </button>
               ))}
             </div>
-            {nextTrack && (
-              <div className="px-4 py-3 border-t border-white/10 flex-shrink-0">
-                <p className="text-white/40 text-xs mb-1.5">Suivant</p>
-                <div className="flex items-center gap-2">
-                  {nextTrack.thumbnail && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={nextTrack.thumbnail} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
-                  )}
-                  <div className="min-w-0">
-                    <p className="text-white text-xs font-medium truncate">{nextTrack.title}</p>
-                    <p className="text-white/50 text-xs truncate">{nextTrack.artists.map((a) => a.name).join(', ')}</p>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -264,6 +310,45 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
             </div>
           </div>
         )}
+
+        {/* Playlist picker overlay */}
+        {showPlaylistPicker && (
+          <div className="absolute inset-0 z-20 bg-black/80 backdrop-blur-sm flex flex-col">
+            <div className="flex items-center justify-between px-6 pt-6 pb-3 flex-shrink-0">
+              <p className="text-white font-semibold">Ajouter à une playlist</p>
+              <button onClick={() => setShowPlaylistPicker(false)} className="text-white/60 hover:text-white p-1">
+                <ChevronDown className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-4 py-2">
+              {playlists.length === 0 ? (
+                <p className="text-white/40 text-sm text-center py-8">Aucune playlist créée</p>
+              ) : (
+                playlists.map((pl) => (
+                  <button
+                    key={pl.id}
+                    onClick={() => handleAddToPlaylist(pl.id)}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/10 transition-colors text-left"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-white/10 flex-shrink-0 overflow-hidden flex items-center justify-center">
+                      {pl.tracks[0]?.thumbnail ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={pl.tracks[0].thumbnail} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <ListMusic className="w-5 h-5 text-white/40" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white text-sm font-medium truncate">{pl.name}</p>
+                      <p className="text-white/40 text-xs">{pl.tracks.length} titre{pl.tracks.length !== 1 ? 's' : ''}</p>
+                    </div>
+                    {addedToPlaylist === pl.id && <Check className="w-4 h-4 text-green-400 flex-shrink-0" />}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -300,7 +385,7 @@ export default function MusicPlayer() {
 
       {/* Mini player — floating pill on mobile, full-width bar on desktop */}
       <div
-        className="fixed left-1/2 -translate-x-1/2 md:left-0 md:right-0 md:translate-x-0 md:bottom-0 z-50 rounded-2xl md:rounded-none bg-yt-bg/95 md:bg-yt-bg backdrop-blur-xl md:backdrop-blur-none border border-yt-border/30 md:border-0 md:border-t md:border-yt-border/60 shadow-[0_8px_32px_rgba(0,0,0,0.5)] md:shadow-2xl overflow-hidden w-[340px] max-w-[calc(100vw-24px)] md:w-auto"
+        className="fixed left-1/2 -translate-x-1/2 md:left-0 md:right-0 md:translate-x-0 md:bottom-0 z-50 rounded-2xl md:rounded-none bg-yt-bg/95 md:bg-yt-bg backdrop-blur-xl md:backdrop-blur-none border border-yt-border/30 md:border-0 md:border-t md:border-yt-border/60 shadow-[0_8px_32px_rgba(0,0,0,0.5)] md:shadow-2xl overflow-hidden w-[360px] max-w-[calc(100vw-16px)] md:w-auto"
         style={{ bottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}
       >
         {/* No progress strip on mini player — only shown in fullscreen */}

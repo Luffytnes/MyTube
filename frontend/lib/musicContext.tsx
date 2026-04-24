@@ -95,6 +95,44 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // Media Session API — lock screen / notification controls
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    const track = currentIndex >= 0 && currentIndex < queue.length ? queue[currentIndex] : null
+    if (!track) return
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: track.title,
+      artist: track.artists.map((a) => a.name).join(', '),
+      album: track.album ?? '',
+      artwork: track.thumbnail ? [{ src: track.thumbnail, sizes: '512x512', type: 'image/jpeg' }] : [],
+    })
+  }, [currentIndex, queue])
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    const audio = audioRef.current
+    if (!audio) return
+    navigator.mediaSession.setActionHandler('play', () => audio.play().catch(() => {}))
+    navigator.mediaSession.setActionHandler('pause', () => audio.pause())
+    navigator.mediaSession.setActionHandler('nexttrack', () => {
+      setCurrentIndex((prev) => {
+        const len = queue.length
+        if (len === 0) return prev
+        if (prev + 1 < len) return prev + 1
+        return prev
+      })
+    })
+    navigator.mediaSession.setActionHandler('previoustrack', () => {
+      if (audio.currentTime > 3) { audio.currentTime = 0; return }
+      setCurrentIndex((prev) => {
+        const len = queue.length
+        if (len === 0) return prev
+        if (prev - 1 >= 0) return prev - 1
+        return 0
+      })
+    })
+  }, [queue.length])
+
   // Handle track end
   const handleEnded = useCallback(() => {
     if (repeat === 'one') {
