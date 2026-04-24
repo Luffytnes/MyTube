@@ -3,12 +3,13 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Search, ListMusic, ChevronLeft, Mic2, Bell, Radio, Plus, ChevronDown, ChevronUp, MoreHorizontal, X } from 'lucide-react'
+import { Home, Search, ListMusic, ChevronLeft, Mic2, Bell, Radio, Plus, ChevronDown, ChevronUp, MoreHorizontal, X, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useRegion } from '@/lib/regionContext'
 import { useMusic } from '@/lib/musicContext'
 import type { Translations } from '@/lib/translations'
 import { getMusicPlaylists, type MusicPlaylist } from '@/lib/musicPlaylists'
+import SettingsPanel from '@/components/layout/SettingsPanel'
 
 const NAV_KEYS: { icon: typeof Home; labelKey: keyof Translations; href: string }[] = [
   { icon: Home, labelKey: 'music_home', href: '/music' },
@@ -28,6 +29,7 @@ export default function MusicSidebar() {
   const [playlists, setPlaylists] = useState<MusicPlaylist[]>([])
   const [showAllPlaylists, setShowAllPlaylists] = useState(false)
   const [showMoreDrawer, setShowMoreDrawer] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
 
   useEffect(() => {
     setPlaylists(getMusicPlaylists())
@@ -148,7 +150,7 @@ export default function MusicSidebar() {
 
       {/* ── Mobile bottom nav — floating pill ───────────────── */}
       <nav
-        className="fixed left-1/2 -translate-x-1/2 z-40 md:hidden flex items-center justify-around h-16 px-4 rounded-2xl bg-yt-bg/95 backdrop-blur-xl border border-yt-border/30 shadow-[0_8px_32px_rgba(0,0,0,0.45)] w-[340px] max-w-[calc(100vw-24px)]"
+        className="fixed left-1/2 -translate-x-1/2 z-40 md:hidden flex items-center justify-around h-20 px-4 rounded-2xl bg-yt-bg/95 backdrop-blur-xl border border-yt-border/30 shadow-[0_8px_32px_rgba(0,0,0,0.45)] w-[360px] max-w-[calc(100vw-16px)]"
         style={{ bottom: currentTrack ? 'calc(env(safe-area-inset-bottom) + 96px)' : 'calc(env(safe-area-inset-bottom) + 12px)' }}
       >
         {NAV_KEYS.slice(0, 4).map(({ icon: Icon, labelKey, href }) => {
@@ -158,12 +160,12 @@ export default function MusicSidebar() {
               key={href}
               href={href}
               className={cn(
-                'flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl text-[10px] transition-colors flex-1',
+                'flex flex-col items-center gap-1 py-2 px-2 rounded-xl transition-colors flex-1',
                 active ? 'text-yt-red' : 'text-yt-text-muted hover:text-yt-text'
               )}
             >
-              <Icon className="w-5 h-5" />
-              <span className="truncate max-w-[52px] text-center leading-tight">{t(labelKey)}</span>
+              <Icon className="w-6 h-6" />
+              <span className="text-[11px] truncate max-w-[52px] text-center leading-tight">{t(labelKey)}</span>
             </Link>
           )
         })}
@@ -171,12 +173,12 @@ export default function MusicSidebar() {
         <button
           onClick={() => setShowMoreDrawer((v) => !v)}
           className={cn(
-            'flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl text-[10px] transition-colors flex-1',
+            'flex flex-col items-center gap-1 py-2 px-2 rounded-xl transition-colors flex-1',
             showMoreDrawer ? 'text-yt-red' : 'text-yt-text-muted hover:text-yt-text'
           )}
         >
-          <MoreHorizontal className="w-5 h-5" />
-          <span>Plus</span>
+          <MoreHorizontal className="w-6 h-6" />
+          <span className="text-[11px]">Plus</span>
         </button>
       </nav>
 
@@ -188,7 +190,7 @@ export default function MusicSidebar() {
           {/* Drawer — sits just above the floating nav */}
           <div
             className="fixed left-0 right-0 z-[46] md:hidden bg-yt-bg rounded-t-2xl shadow-2xl max-h-[80vh] overflow-y-auto"
-            style={{ bottom: currentTrack ? 'calc(env(safe-area-inset-bottom) + 168px)' : 'calc(env(safe-area-inset-bottom) + 84px)' }}
+            style={{ bottom: currentTrack ? 'calc(env(safe-area-inset-bottom) + 188px)' : 'calc(env(safe-area-inset-bottom) + 100px)' }}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-yt-border/40">
               <p className="text-sm font-semibold text-yt-text">MyTube Music</p>
@@ -250,8 +252,15 @@ export default function MusicSidebar() {
                 </>
               )}
 
-              {/* Back to MyTube */}
+              {/* Settings + Back to MyTube */}
               <div className="border-t border-yt-border/40 my-2 mx-4" />
+              <button
+                onClick={() => { setShowMoreDrawer(false); setShowSettings(true) }}
+                className="w-full flex items-center gap-4 px-4 py-3 text-sm text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text transition-colors"
+              >
+                <Settings className="w-5 h-5 flex-shrink-0" />
+                {t('settings_title')}
+              </button>
               <Link
                 href="/"
                 className="flex items-center gap-4 px-4 py-3 text-sm text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text transition-colors"
@@ -264,6 +273,7 @@ export default function MusicSidebar() {
         </>
       )}
 
+      <SettingsPanel open={showSettings} onClose={() => setShowSettings(false)} />
     </>
   )
 }

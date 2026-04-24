@@ -3,9 +3,8 @@
 import { useState, useEffect, useCallback, FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Music2, Search, X, Shield, Settings } from 'lucide-react'
+import { Music2, Search, X, Shield } from 'lucide-react'
 import { saveMusicSearchQuery } from '@/lib/musicSearchHistory'
-import SettingsPanel from '@/components/layout/SettingsPanel'
 import { useRegion } from '@/lib/regionContext'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
@@ -14,7 +13,6 @@ export default function MusicHeader() {
   const router = useRouter()
   const { t } = useRegion()
   const [query, setQuery] = useState('')
-  const [showSettings, setShowSettings] = useState(false)
   const [vpnConnected, setVpnConnected] = useState(false)
   const [shieldTooltip, setShieldTooltip] = useState('')
 
@@ -80,6 +78,7 @@ export default function MusicHeader() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t('music_search_placeholder')}
             className="flex-1 bg-transparent text-sm text-yt-text placeholder-yt-text-muted focus:outline-none"
+            style={{ fontSize: '16px' }}
           />
           {query && (
             <button type="button" onClick={() => setQuery('')} className="text-yt-text-muted hover:text-yt-text transition-colors">
@@ -102,15 +101,6 @@ export default function MusicHeader() {
           <span className="hidden md:block">{t('privacy_badge')}</span>
         </div>
 
-        <button
-          onClick={() => setShowSettings(true)}
-          aria-label={t('settings_title')}
-          title={t('settings_title')}
-          className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-yt-hover text-yt-text-secondary hover:text-yt-text transition-colors"
-        >
-          <Settings className="w-4 h-4" />
-        </button>
-
         <Link
           href="/"
           className="hidden sm:flex items-center gap-1.5 px-3 h-9 rounded-full bg-yt-secondary hover:bg-yt-hover border border-yt-border text-xs text-yt-text-secondary hover:text-yt-text transition-colors"
@@ -119,7 +109,6 @@ export default function MusicHeader() {
         </Link>
       </div>
 
-      <SettingsPanel open={showSettings} onClose={() => { setShowSettings(false); fetchVpnStatus(); fetchShieldTooltip() }} />
     </header>
   )
 }

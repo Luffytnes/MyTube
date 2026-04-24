@@ -182,31 +182,31 @@ export default function Sidebar() {
 
       {/* ── Mobile bottom nav — floating pill ───────────────── */}
       <nav
-        className="fixed left-1/2 -translate-x-1/2 z-40 md:hidden flex items-center justify-around h-16 px-4 rounded-2xl bg-yt-bg/95 backdrop-blur-xl border border-yt-border/30 shadow-[0_8px_32px_rgba(0,0,0,0.45)] w-[340px] max-w-[calc(100vw-24px)]"
+        className="fixed left-1/2 -translate-x-1/2 z-40 md:hidden flex items-center justify-around h-20 px-4 rounded-2xl bg-yt-bg/95 backdrop-blur-xl border border-yt-border/30 shadow-[0_8px_32px_rgba(0,0,0,0.45)] w-[360px] max-w-[calc(100vw-16px)]"
         style={{ bottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}
       >
-        <Link href="/" className={cn('flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl text-xs transition-colors flex-1', isActive('/') ? 'text-yt-red' : 'text-yt-text-muted')}>
-          <Home className="w-5 h-5" />
-          <span className="text-[10px]">{t('nav_home')}</span>
+        <Link href="/" className={cn('flex flex-col items-center gap-1 py-2 px-3 rounded-xl transition-colors flex-1', isActive('/') ? 'text-yt-red' : 'text-yt-text-muted')}>
+          <Home className="w-6 h-6" />
+          <span className="text-[11px]">{t('nav_home')}</span>
         </Link>
-        <Link href="/trending" className={cn('flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl text-xs transition-colors flex-1', isActive('/trending') ? 'text-yt-red' : 'text-yt-text-muted')}>
-          <TrendingUp className="w-5 h-5" />
-          <span className="text-[10px]">{t('nav_trending')}</span>
+        <Link href="/trending" className={cn('flex flex-col items-center gap-1 py-2 px-3 rounded-xl transition-colors flex-1', isActive('/trending') ? 'text-yt-red' : 'text-yt-text-muted')}>
+          <TrendingUp className="w-6 h-6" />
+          <span className="text-[11px]">{t('nav_trending')}</span>
         </Link>
-        <Link href="/music" className={cn('flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl text-xs transition-colors flex-1', pathname.startsWith('/music') ? 'text-yt-red' : 'text-yt-text-muted')}>
-          <Music2 className="w-5 h-5" />
-          <span className="text-[10px]">{t('nav_music')}</span>
+        <Link href="/music" className={cn('flex flex-col items-center gap-1 py-2 px-3 rounded-xl transition-colors flex-1', pathname.startsWith('/music') ? 'text-yt-red' : 'text-yt-text-muted')}>
+          <Music2 className="w-6 h-6" />
+          <span className="text-[11px]">{t('nav_music')}</span>
         </Link>
-        <Link href="/history" className={cn('flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl text-xs transition-colors flex-1', isActive('/history') ? 'text-yt-red' : 'text-yt-text-muted')}>
-          <History className="w-5 h-5" />
-          <span className="text-[10px]">{t('nav_history')}</span>
+        <Link href="/history" className={cn('flex flex-col items-center gap-1 py-2 px-3 rounded-xl transition-colors flex-1', isActive('/history') ? 'text-yt-red' : 'text-yt-text-muted')}>
+          <History className="w-6 h-6" />
+          <span className="text-[11px]">{t('nav_history')}</span>
         </Link>
         <button
           onClick={() => setShowDrawer(true)}
-          className="flex flex-col items-center gap-0.5 py-1.5 px-3 rounded-xl text-xs text-yt-text-muted flex-1"
+          className="flex flex-col items-center gap-1 py-2 px-3 rounded-xl text-yt-text-muted flex-1"
         >
-          <MoreHorizontal className="w-5 h-5" />
-          <span className="text-[10px]">Plus</span>
+          <MoreHorizontal className="w-6 h-6" />
+          <span className="text-[11px]">Plus</span>
         </button>
       </nav>
 
@@ -276,7 +276,7 @@ export default function Sidebar() {
                 <div className="border-t border-yt-border/40 my-3 mx-4" />
                 <p className="px-6 pb-2 text-xs font-semibold text-yt-text-muted uppercase tracking-wider">{t('nav_subscriptions')}</p>
                 <div className="px-2 flex flex-col gap-0.5">
-                  {subscriptions.map((sub) => (
+                  {subscriptions.slice(0, 1).map((sub) => (
                     <Link
                       key={sub.id}
                       href={`/channel/${sub.id}`}
@@ -299,6 +299,18 @@ export default function Sidebar() {
                       <span className="truncate">{sub.name}</span>
                     </Link>
                   ))}
+                  {subscriptions.length > 1 && (
+                    <Link
+                      href="/subscriptions"
+                      onClick={() => setShowDrawer(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm text-yt-text-muted hover:bg-yt-hover hover:text-yt-text transition-colors"
+                    >
+                      <span className="w-7 h-7 rounded-full flex-shrink-0 bg-yt-secondary flex items-center justify-center text-xs font-bold">
+                        +{subscriptions.length - 1}
+                      </span>
+                      <span>{t('home_see_all')}</span>
+                    </Link>
+                  )}
                 </div>
               </>
             )}
