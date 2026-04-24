@@ -215,10 +215,11 @@ export default function Sidebar() {
         <div className="fixed inset-0 z-[60] md:hidden">
           {/* Backdrop */}
           <div className="absolute inset-0 bg-black/50" />
-          {/* Sheet */}
+          {/* Sheet — positioned above the floating nav pill */}
           <div
             ref={drawerRef}
-            className="absolute bottom-0 left-0 right-0 bg-yt-bg rounded-t-2xl pb-6 pt-2 max-h-[85vh] overflow-y-auto"
+            className="absolute left-0 right-0 bg-yt-bg rounded-t-2xl pb-6 pt-2 max-h-[80vh] overflow-y-auto"
+            style={{ bottom: 'calc(env(safe-area-inset-bottom) + 100px)' }}
           >
             {/* Handle */}
             <div className="w-10 h-1 rounded-full bg-yt-border mx-auto mb-4" />
