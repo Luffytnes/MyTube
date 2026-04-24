@@ -70,12 +70,12 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
         </button>
       </div>
 
-      <div className="flex flex-1 min-h-0 gap-4 px-4 sm:px-6 pb-4 sm:pb-6">
-        {/* Main content — scrollable on very small screens */}
-        <div className="flex flex-col flex-1 min-w-0 overflow-y-auto">
-          {/* Album art */}
-          <div className="flex justify-center items-center flex-1 py-2 sm:py-4 min-h-0">
-            <div className="w-full max-w-[160px] sm:max-w-xs aspect-square rounded-2xl overflow-hidden shadow-2xl flex-shrink-0">
+      <div className="flex flex-1 min-h-0 gap-4 px-6 sm:px-6 pb-4 sm:pb-6">
+        {/* Main content */}
+        <div className="flex flex-col flex-1 min-w-0">
+          {/* Album art — fixed size, not flex-1 */}
+          <div className="flex justify-center py-3 sm:py-6">
+            <div className="w-full max-w-[140px] sm:max-w-xs aspect-square rounded-2xl overflow-hidden shadow-2xl flex-shrink-0">
               {currentTrack.thumbnail ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -92,13 +92,13 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
           </div>
 
           {/* Track info */}
-          <div className="flex-shrink-0 mb-3 sm:mb-6 px-4 sm:px-0">
-            <p className="text-white text-lg sm:text-2xl font-bold truncate">{currentTrack.title}</p>
+          <div className="mb-3 sm:mb-6 px-6 sm:px-0">
+            <p className="text-white text-base sm:text-2xl font-bold truncate">{currentTrack.title}</p>
             <p className="text-white/60 text-sm sm:text-base truncate mt-0.5 sm:mt-1">{artistNames}</p>
           </div>
 
           {/* Progress */}
-          <div className="flex-shrink-0 mb-3 sm:mb-6 px-4 sm:px-0">
+          <div className="mb-3 sm:mb-6 px-6 sm:px-0">
             {currentTrack.isRadio ? (
               <div className="flex items-center gap-2">
                 <div className="flex-1 h-1.5 rounded-full bg-white/10" />
@@ -133,7 +133,7 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
           </div>
 
           {/* Controls */}
-          <div className="flex-shrink-0 flex items-center justify-between mb-3 sm:mb-6 px-4 sm:px-0">
+          <div className="flex items-center justify-between mb-3 sm:mb-6 px-2 sm:px-0">
             <button
               onClick={toggleShuffle}
               className={cn('p-2 rounded-full transition-colors', shuffle ? 'text-white' : 'text-white/40 hover:text-white/80')}
@@ -163,7 +163,7 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
           </div>
 
           {/* Volume */}
-          <div className="flex-shrink-0 flex items-center gap-3 px-4 sm:px-0">
+          <div className="flex items-center gap-3 px-6 sm:px-0">
             <button onClick={toggleMute} className="text-white/50 hover:text-white transition-colors">
               {muted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
             </button>
