@@ -153,7 +153,7 @@ export default function Header() {
             placeholder={t('search_placeholder')}
             aria-label={t('search_placeholder')}
             className="flex-1 bg-transparent px-4 text-sm text-yt-text placeholder-yt-text-muted focus:outline-none"
-            style={{ fontSize: '16px' }}
+            style={{ fontSize: '16px', touchAction: 'manipulation' }}
           />
           {query && (
             <button type="button" onClick={clearSearch} className="mr-2 p-1 rounded-full hover:bg-yt-hover text-yt-text-secondary" aria-label="Clear">

@@ -221,8 +221,6 @@ export default function Sidebar() {
             className="absolute left-0 right-0 bg-yt-bg rounded-t-2xl pb-6 pt-2 max-h-[80vh] overflow-y-auto"
             style={{ bottom: 'calc(env(safe-area-inset-bottom) + 100px)' }}
           >
-            {/* Handle */}
-            <div className="w-10 h-1 rounded-full bg-yt-border mx-auto mb-4" />
             {/* Close */}
             <div className="flex items-center justify-between px-4 mb-3">
               <span className="text-yt-text font-semibold">MyTube</span>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, ChangeEvent, useState } from 'react'
+import { useRef, ChangeEvent, useState, useCallback } from 'react'
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, Repeat, Repeat1, ListMusic,
@@ -28,6 +28,16 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
   const [showQueue, setShowQueue] = useState(false)
   const [scrubValue, setScrubValue] = useState<number | null>(null)
   const [showPlaylistPicker, setShowPlaylistPicker] = useState(false)
+  const volBarRef = useRef<HTMLDivElement>(null)
+  const volDragging = useRef(false)
+
+  const calcVolFromPointer = useCallback((clientX: number) => {
+    const bar = volBarRef.current
+    if (!bar) return
+    const rect = bar.getBoundingClientRect()
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+    setVolume(pct)
+  }, [setVolume])
   const [addedToPlaylist, setAddedToPlaylist] = useState<string | null>(null)
   const [playlists, setPlaylists] = useState<MusicPlaylist[]>([])
   const isScrubbing = scrubValue !== null
@@ -183,16 +193,35 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
             <button onClick={toggleMute} className="text-white/50 hover:text-white transition-colors flex-shrink-0">
               {muted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
             </button>
-            <input
-              type="range" min="0" max="1" step="0.02"
-              value={muted ? 0 : volume}
-              onChange={handleVolume}
-              className="volume-slider flex-1 h-1 cursor-pointer accent-white"
-              style={{
-                touchAction: 'pan-x',
-                background: `linear-gradient(to right, rgba(255,255,255,0.9) ${(muted ? 0 : volume) * 100}%, rgba(255,255,255,0.2) ${(muted ? 0 : volume) * 100}%)`
+            {/* Custom volume slider — pointer events work reliably on iOS */}
+            <div
+              ref={volBarRef}
+              className="flex-1 relative flex items-center"
+              style={{ height: '32px', cursor: 'pointer' }}
+              onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId)
+                volDragging.current = true
+                calcVolFromPointer(e.clientX)
               }}
-            />
+              onPointerMove={(e) => {
+                if (volDragging.current) calcVolFromPointer(e.clientX)
+              }}
+              onPointerUp={() => { volDragging.current = false }}
+              onPointerCancel={() => { volDragging.current = false }}
+            >
+              {/* Track */}
+              <div className="absolute inset-x-0 h-1 rounded-full bg-white/20">
+                <div
+                  className="h-full rounded-full bg-white/80"
+                  style={{ width: `${(muted ? 0 : volume) * 100}%` }}
+                />
+              </div>
+              {/* Thumb */}
+              <div
+                className="absolute w-3.5 h-3.5 rounded-full bg-white shadow-lg -translate-x-1/2 pointer-events-none"
+                style={{ left: `${(muted ? 0 : volume) * 100}%` }}
+              />
+            </div>
           </div>
 
           {/* Bottom section: next in queue + add to playlist */}

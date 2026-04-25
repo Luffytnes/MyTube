@@ -6,7 +6,7 @@ import { Mic2, Play, Pause, Clock, Bell, BellOff } from 'lucide-react'
 import { useMusic } from '@/lib/musicContext'
 import { useRegion } from '@/lib/regionContext'
 import { isPodcastSubscribed, togglePodcastSubscription } from '@/lib/podcastSubscriptions'
-import { getPosition } from '@/lib/resumePosition'
+import { getPositionEntry } from '@/lib/resumePosition'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -178,9 +178,9 @@ export default function PodcastPage() {
             const track = episodeAsTrack(ep)
             const isActive = currentTrack?.videoId === track.videoId
             const isPlaying = isActive && playing
-            const savedPos = getPosition(ep.id)
-            const durationSec = parseDurationSec(ep.duration)
-            const resumePct = savedPos && durationSec > 0 ? Math.min(100, (savedPos / durationSec) * 100) : 0
+            const posEntry = getPositionEntry(ep.id)
+            const durationSec = parseDurationSec(ep.duration) || posEntry?.duration || 0
+            const resumePct = posEntry && durationSec > 0 ? Math.min(100, (posEntry.position / durationSec) * 100) : 0
             return (
               <button
                 key={ep.id}

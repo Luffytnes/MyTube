@@ -78,7 +78,7 @@ export default function MusicHeader() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t('music_search_placeholder')}
             className="flex-1 bg-transparent text-sm text-yt-text placeholder-yt-text-muted focus:outline-none"
-            style={{ fontSize: '16px' }}
+            style={{ fontSize: '16px', touchAction: 'manipulation' }}
           />
           {query && (
             <button type="button" onClick={() => setQuery('')} className="text-yt-text-muted hover:text-yt-text transition-colors">

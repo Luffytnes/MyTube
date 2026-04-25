@@ -108,12 +108,21 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     })
   }, [currentIndex, queue])
 
+  // Sync playbackState so iOS lock screen shows correct play/pause button
   useEffect(() => {
     if (!('mediaSession' in navigator)) return
-    const audio = audioRef.current
-    if (!audio) return
-    navigator.mediaSession.setActionHandler('play', () => audio.play().catch(() => {}))
-    navigator.mediaSession.setActionHandler('pause', () => audio.pause())
+    navigator.mediaSession.playbackState = playing ? 'playing' : 'paused'
+  }, [playing])
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    // Use audioRef (not audioRef.current) so handlers always read the live element
+    navigator.mediaSession.setActionHandler('play', () => {
+      audioRef.current?.play().catch(() => {})
+    })
+    navigator.mediaSession.setActionHandler('pause', () => {
+      audioRef.current?.pause()
+    })
     navigator.mediaSession.setActionHandler('nexttrack', () => {
       setCurrentIndex((prev) => {
         const len = queue.length
@@ -123,7 +132,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       })
     })
     navigator.mediaSession.setActionHandler('previoustrack', () => {
-      if (audio.currentTime > 3) { audio.currentTime = 0; return }
+      const audio = audioRef.current
+      if (audio && audio.currentTime > 3) { audio.currentTime = 0; return }
       setCurrentIndex((prev) => {
         const len = queue.length
         if (len === 0) return prev

@@ -48,6 +48,16 @@ export function getPosition(videoId: string): number | null {
   }
 }
 
+export function getPositionEntry(videoId: string): { position: number; duration: number } | null {
+  try {
+    const entry = load()[videoId]
+    if (!entry) return null
+    return { position: entry.position, duration: entry.duration }
+  } catch {
+    return null
+  }
+}
+
 export function clearPosition(videoId: string) {
   try {
     const data = load()
