@@ -31,7 +31,7 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
   const volBarRef = useRef<HTMLDivElement>(null)
   const volDragging = useRef(false)
 
-  const calcVolFromPointer = useCallback((clientX: number) => {
+  const calcVolFromX = useCallback((clientX: number) => {
     const bar = volBarRef.current
     if (!bar) return
     const rect = bar.getBoundingClientRect()
@@ -193,21 +193,17 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
             <button onClick={toggleMute} className="text-white/50 hover:text-white transition-colors flex-shrink-0">
               {muted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
             </button>
-            {/* Custom volume slider — pointer events work reliably on iOS */}
+            {/* Custom volume slider — touch events with preventDefault for iOS */}
             <div
               ref={volBarRef}
               className="flex-1 relative flex items-center"
-              style={{ height: '32px', cursor: 'pointer' }}
-              onPointerDown={(e) => {
-                e.currentTarget.setPointerCapture(e.pointerId)
-                volDragging.current = true
-                calcVolFromPointer(e.clientX)
-              }}
-              onPointerMove={(e) => {
-                if (volDragging.current) calcVolFromPointer(e.clientX)
-              }}
-              onPointerUp={() => { volDragging.current = false }}
-              onPointerCancel={() => { volDragging.current = false }}
+              style={{ height: '44px', cursor: 'pointer', touchAction: 'none' }}
+              onTouchStart={(e) => { e.preventDefault(); calcVolFromX(e.touches[0].clientX) }}
+              onTouchMove={(e) => { e.preventDefault(); calcVolFromX(e.touches[0].clientX) }}
+              onMouseDown={(e) => { volDragging.current = true; calcVolFromX(e.clientX) }}
+              onMouseMove={(e) => { if (volDragging.current) calcVolFromX(e.clientX) }}
+              onMouseUp={() => { volDragging.current = false }}
+              onMouseLeave={() => { volDragging.current = false }}
             >
               {/* Track */}
               <div className="absolute inset-x-0 h-1 rounded-full bg-white/20">

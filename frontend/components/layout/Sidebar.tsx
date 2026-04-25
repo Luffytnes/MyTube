@@ -35,6 +35,7 @@ export default function Sidebar() {
   const { t } = useRegion()
   const { subscriptions } = useSubscriptions()
   const [showAllSubs, setShowAllSubs] = useState(false)
+  const [showDrawerSubs, setShowDrawerSubs] = useState(false)
   const [showDrawer, setShowDrawer] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const drawerRef = useRef<HTMLDivElement>(null)
@@ -61,7 +62,7 @@ export default function Sidebar() {
   }, [showDrawer])
 
   // Close drawer on navigation
-  useEffect(() => { setShowDrawer(false) }, [pathname])
+  useEffect(() => { setShowDrawer(false); setShowDrawerSubs(false) }, [pathname])
 
   return (
     <>
@@ -275,7 +276,7 @@ export default function Sidebar() {
                 <div className="border-t border-yt-border/40 my-3 mx-4" />
                 <p className="px-6 pb-2 text-xs font-semibold text-yt-text-muted uppercase tracking-wider">{t('nav_subscriptions')}</p>
                 <div className="px-2 flex flex-col gap-0.5">
-                  {subscriptions.slice(0, 1).map((sub) => (
+                  {(showDrawerSubs ? subscriptions : subscriptions.slice(0, 1)).map((sub) => (
                     <Link
                       key={sub.id}
                       href={`/channel/${sub.id}`}
@@ -299,16 +300,15 @@ export default function Sidebar() {
                     </Link>
                   ))}
                   {subscriptions.length > 1 && (
-                    <Link
-                      href="/subscriptions"
-                      onClick={() => setShowDrawer(false)}
-                      className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm text-yt-text-muted hover:bg-yt-hover hover:text-yt-text transition-colors"
+                    <button
+                      onClick={() => setShowDrawerSubs((v) => !v)}
+                      className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm text-yt-text-muted hover:bg-yt-hover hover:text-yt-text transition-colors w-full text-left"
                     >
                       <span className="w-7 h-7 rounded-full flex-shrink-0 bg-yt-secondary flex items-center justify-center text-xs font-bold">
-                        +{subscriptions.length - 1}
+                        {showDrawerSubs ? '↑' : `+${subscriptions.length - 1}`}
                       </span>
-                      <span>{t('home_see_all')}</span>
-                    </Link>
+                      <span>{showDrawerSubs ? t('home_show_less') : t('home_see_all')}</span>
+                    </button>
                   )}
                 </div>
               </>

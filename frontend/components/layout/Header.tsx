@@ -58,10 +58,12 @@ export default function Header() {
     }
   }, [])
 
-  // Fetch VPN status on mount
+  // Fetch VPN status on mount + poll every 10s
   useEffect(() => {
     fetchVpnStatus()
     fetchShieldTooltip()
+    const interval = setInterval(fetchVpnStatus, 10_000)
+    return () => clearInterval(interval)
   }, [fetchVpnStatus, fetchShieldTooltip])
 
   // Load history when dropdown opens

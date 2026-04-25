@@ -56,6 +56,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   // Tracks when playTrack/playRadio already set the src synchronously (mobile gesture context).
   // The useEffect skips re-setting src for that track to avoid resetting playback.
   const pendingTrackIdRef = useRef<string | null>(null)
+  // Last known playback position — used to restore after iOS lock screen suspend
+  const lastKnownTimeRef = useRef<number>(0)
   const savePositionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [queue, setQueue] = useState<MusicTrack[]>([])
   const [currentIndex, setCurrentIndex] = useState(-1)
@@ -77,7 +79,10 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     audio.preload = 'auto'
     audioRef.current = audio
 
-    audio.addEventListener('timeupdate', () => setCurrentTime(audio.currentTime))
+    audio.addEventListener('timeupdate', () => {
+      setCurrentTime(audio.currentTime)
+      if (audio.currentTime > 0) lastKnownTimeRef.current = audio.currentTime
+    })
     audio.addEventListener('loadedmetadata', () => setDuration(audio.duration))
     audio.addEventListener('play', () => setPlaying(true))
     audio.addEventListener('pause', () => setPlaying(false))
@@ -118,7 +123,15 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     if (!('mediaSession' in navigator)) return
     // Use audioRef (not audioRef.current) so handlers always read the live element
     navigator.mediaSession.setActionHandler('play', () => {
-      audioRef.current?.play().catch(() => {})
+      const audio = audioRef.current
+      if (!audio) return
+      const savedTime = lastKnownTimeRef.current
+      audio.play().catch(() => {}).then(() => {
+        // iOS sometimes resets currentTime to 0 after a lock-screen suspend — restore it
+        if (savedTime > 2 && audio.currentTime < 1) {
+          audio.currentTime = savedTime
+        }
+      })
     })
     navigator.mediaSession.setActionHandler('pause', () => {
       audioRef.current?.pause()
