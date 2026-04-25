@@ -73,10 +73,15 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     ? queue[currentIndex]
     : null
 
-  // Initialize audio element once
+  // Initialize audio element once — attached to DOM so iOS treats it as a real media element
+  // (new Audio() objects get suspended by iOS in background/lock screen mode)
   useEffect(() => {
-    const audio = new Audio()
+    const audio = document.createElement('audio')
     audio.preload = 'auto'
+    audio.setAttribute('playsinline', '')        // prevent iOS fullscreen hijack
+    audio.setAttribute('webkit-playsinline', '') // older iOS
+    audio.style.display = 'none'
+    document.body.appendChild(audio)
     audioRef.current = audio
 
     audio.addEventListener('timeupdate', () => {
@@ -86,17 +91,28 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     audio.addEventListener('loadedmetadata', () => setDuration(audio.duration))
     audio.addEventListener('play', () => setPlaying(true))
     audio.addEventListener('pause', () => setPlaying(false))
-    audio.addEventListener('ended', () => {
-      // handled by onEnded below
-    })
+    audio.addEventListener('ended', () => {})
     audio.addEventListener('volumechange', () => {
       setVolumeState(audio.volume)
       setMuted(audio.muted)
     })
 
+    // iOS: when app comes back to foreground after lock screen, restore playback position
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !audio.paused) {
+        const saved = lastKnownTimeRef.current
+        if (saved > 2 && audio.currentTime < 1) {
+          audio.currentTime = saved
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
     return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
       audio.pause()
       audio.src = ''
+      document.body.removeChild(audio)
     }
   }, [])
 
@@ -125,13 +141,10 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     navigator.mediaSession.setActionHandler('play', () => {
       const audio = audioRef.current
       if (!audio) return
-      const savedTime = lastKnownTimeRef.current
-      audio.play().catch(() => {}).then(() => {
-        // iOS sometimes resets currentTime to 0 after a lock-screen suspend — restore it
-        if (savedTime > 2 && audio.currentTime < 1) {
-          audio.currentTime = savedTime
-        }
-      })
+      // Restore position if iOS reset it to 0 during background suspend
+      const saved = lastKnownTimeRef.current
+      if (saved > 2 && audio.currentTime < 1) audio.currentTime = saved
+      audio.play().catch(() => {})
     })
     navigator.mediaSession.setActionHandler('pause', () => {
       audioRef.current?.pause()

@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, ChangeEvent, useState, useCallback } from 'react'
+import { useRef, ChangeEvent, useState, useCallback, useEffect } from 'react'
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, Repeat, Repeat1, ListMusic,
@@ -38,6 +38,22 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
     const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
     setVolume(pct)
   }, [setVolume])
+
+  // Attach non-passive native touch listeners — React registers touch as passive by default
+  // which prevents preventDefault and makes the slider unresponsive on iOS
+  useEffect(() => {
+    const bar = volBarRef.current
+    if (!bar) return
+    const onTouchStart = (e: TouchEvent) => { e.preventDefault(); calcVolFromX(e.touches[0].clientX) }
+    const onTouchMove  = (e: TouchEvent) => { e.preventDefault(); calcVolFromX(e.touches[0].clientX) }
+    bar.addEventListener('touchstart', onTouchStart, { passive: false })
+    bar.addEventListener('touchmove',  onTouchMove,  { passive: false })
+    return () => {
+      bar.removeEventListener('touchstart', onTouchStart)
+      bar.removeEventListener('touchmove',  onTouchMove)
+    }
+  }, [calcVolFromX])
+
   const [addedToPlaylist, setAddedToPlaylist] = useState<string | null>(null)
   const [playlists, setPlaylists] = useState<MusicPlaylist[]>([])
   const isScrubbing = scrubValue !== null
@@ -198,8 +214,6 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
               ref={volBarRef}
               className="flex-1 relative flex items-center"
               style={{ height: '44px', cursor: 'pointer', touchAction: 'none' }}
-              onTouchStart={(e) => { e.preventDefault(); calcVolFromX(e.touches[0].clientX) }}
-              onTouchMove={(e) => { e.preventDefault(); calcVolFromX(e.touches[0].clientX) }}
               onMouseDown={(e) => { volDragging.current = true; calcVolFromX(e.clientX) }}
               onMouseMove={(e) => { if (volDragging.current) calcVolFromX(e.clientX) }}
               onMouseUp={() => { volDragging.current = false }}
