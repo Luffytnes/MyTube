@@ -204,34 +204,28 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
             </button>
           </div>
 
-          {/* Volume */}
+          {/* Volume — slider desktop only, mobile uses physical buttons */}
           <div className="flex items-center gap-3 px-6 sm:px-0 mb-5">
             <button onClick={toggleMute} className="text-white/50 hover:text-white transition-colors flex-shrink-0">
               {muted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
             </button>
-            {/* Custom volume slider — touch events with preventDefault for iOS */}
+            {/* Slider visible only on desktop (sm+) */}
             <div
               ref={volBarRef}
-              className="flex-1 relative flex items-center"
+              className="hidden sm:flex flex-1 relative items-center"
               style={{ height: '44px', cursor: 'pointer', touchAction: 'none' }}
               onMouseDown={(e) => { volDragging.current = true; calcVolFromX(e.clientX) }}
               onMouseMove={(e) => { if (volDragging.current) calcVolFromX(e.clientX) }}
               onMouseUp={() => { volDragging.current = false }}
               onMouseLeave={() => { volDragging.current = false }}
             >
-              {/* Track */}
               <div className="absolute inset-x-0 h-1 rounded-full bg-white/20">
-                <div
-                  className="h-full rounded-full bg-white/80"
-                  style={{ width: `${(muted ? 0 : volume) * 100}%` }}
-                />
+                <div className="h-full rounded-full bg-white/80" style={{ width: `${(muted ? 0 : volume) * 100}%` }} />
               </div>
-              {/* Thumb */}
-              <div
-                className="absolute w-3.5 h-3.5 rounded-full bg-white shadow-lg -translate-x-1/2 pointer-events-none"
-                style={{ left: `${(muted ? 0 : volume) * 100}%` }}
-              />
+              <div className="absolute w-3.5 h-3.5 rounded-full bg-white shadow-lg -translate-x-1/2 pointer-events-none" style={{ left: `${(muted ? 0 : volume) * 100}%` }} />
             </div>
+            {/* Mobile: hint text */}
+            <span className="sm:hidden text-white/30 text-xs">Boutons physiques</span>
           </div>
 
           {/* Bottom section: next in queue + add to playlist */}

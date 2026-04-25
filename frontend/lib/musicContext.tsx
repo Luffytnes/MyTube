@@ -58,6 +58,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const pendingTrackIdRef = useRef<string | null>(null)
   // Last known playback position — used to restore after iOS lock screen suspend
   const lastKnownTimeRef = useRef<number>(0)
+  // Always-current track ref — readable from Media Session handlers without stale closure
+  const currentTrackRef = useRef<MusicTrack | null>(null)
   const savePositionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [queue, setQueue] = useState<MusicTrack[]>([])
   const [currentIndex, setCurrentIndex] = useState(-1)
@@ -72,6 +74,9 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const currentTrack = currentIndex >= 0 && currentIndex < queue.length
     ? queue[currentIndex]
     : null
+
+  // Keep ref in sync so Media Session handlers always have the current track
+  currentTrackRef.current = currentTrack
 
   // Initialize audio element once — attached to DOM so iOS treats it as a real media element
   // (new Audio() objects get suspended by iOS in background/lock screen mode)
@@ -141,7 +146,24 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     navigator.mediaSession.setActionHandler('play', () => {
       const audio = audioRef.current
       if (!audio) return
-      // Restore position if iOS reset it to 0 during background suspend
+      const track = currentTrackRef.current
+      // iOS may have cleared audio.src during background suspend — reload it
+      if (!audio.src || audio.src === window.location.href) {
+        if (track) {
+          const src = trackSrc(track)
+          if (src) {
+            audio.src = src
+            audio.load()
+            const saved = lastKnownTimeRef.current
+            audio.addEventListener('canplay', () => {
+              if (saved > 2) audio.currentTime = saved
+              audio.play().catch(() => {})
+            }, { once: true })
+            return
+          }
+        }
+      }
+      // Restore position if iOS reset currentTime to 0
       const saved = lastKnownTimeRef.current
       if (saved > 2 && audio.currentTime < 1) audio.currentTime = saved
       audio.play().catch(() => {})
