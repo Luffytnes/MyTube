@@ -1412,11 +1412,7 @@ _hls_sessions: Dict[str, Dict[str, Any]] = {}
 _hls_lock = asyncio.Lock()
 
 async def _get_video_and_audio_urls(video_id: str, itag: str) -> tuple:
-    """Return (video_url, audio_url), using cache where possible.
-
-    Uses yt-dlp subprocess (--get-url) so the returned URLs are fully processed
-    (n-parameter decoded, signature resolved) and usable by ffmpeg directly.
-    """
+    """Return (video_url, audio_url), using cache where possible."""
     video_cache_key = f"stream:{video_id}:{itag}"
     audio_cache_key = f"stream:{video_id}:bestaudio_m4a"
 
@@ -1426,43 +1422,31 @@ async def _get_video_and_audio_urls(video_id: str, itag: str) -> tuple:
     if cached_v and cached_a:
         return cached_v[0], cached_a[0]
 
-    yt_url = f"https://www.youtube.com/watch?v={video_id}"
+    opts = get_ydl_opts(**{"quiet": True, "no_warnings": True})
     loop = asyncio.get_event_loop()
 
-    # Use VPN proxy for URL extraction when active — Hetzner IPs get bot-detected by YouTube.
-    # CDN URLs will be bound to the VPN IP, so ffmpeg must also use the VPN proxy.
-    proxy_url = _get_proxy_url() if ('_wireproxy_process' in globals() and _wireproxy_process and _wireproxy_process.poll() is None) else None
+    def _fetch():
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+            if not info:
+                return None, None
+            v_url = None
+            for fmt in info.get("formats", []):
+                if str(fmt.get("format_id")) == str(itag):
+                    v_url = fmt.get("url")
+                    stream_url_cache_set(video_cache_key, v_url, fmt.get("ext", "mp4"))
+                    break
+            a_url = None
+            for fmt in sorted(info.get("formats", []), key=lambda f: -(f.get("abr") or 0)):
+                if (fmt.get("acodec", "none") != "none"
+                        and fmt.get("vcodec", "none") == "none"
+                        and fmt.get("ext") in ("m4a", "mp4")):
+                    a_url = fmt.get("url")
+                    stream_url_cache_set(audio_cache_key, a_url, fmt.get("ext", "m4a"))
+                    break
+            return v_url, a_url
 
-    def _fetch_both() -> tuple:
-        try:
-            # Single yt-dlp call returns two lines: video URL then audio URL
-            cmd = ["yt-dlp", "-f", f"{itag}+bestaudio[ext=m4a]/bestaudio",
-                   "--get-url", "--no-playlist"]
-            if proxy_url:
-                cmd += ["--proxy", proxy_url]
-            cmd.append(yt_url)
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-            lines = [l.strip() for l in result.stdout.splitlines() if l.strip().startswith("http")]
-            if len(lines) >= 2:
-                return lines[0], lines[1]
-            if len(lines) == 1:
-                return lines[0], lines[0]
-            import logging as _log
-            _log.getLogger("uvicorn").error(f"yt-dlp --get-url no output: rc={result.returncode} stderr={result.stderr[-300:]}")
-            return None, None
-        except Exception as exc:
-            import logging as _log
-            _log.getLogger("uvicorn").error(f"yt-dlp --get-url exception: {exc}")
-            return None, None
-
-    v_url, a_url = await loop.run_in_executor(None, _fetch_both)
-
-    if v_url:
-        stream_url_cache_set(video_cache_key, v_url, "mp4")
-    if a_url:
-        stream_url_cache_set(audio_cache_key, a_url, "m4a")
-
-    return v_url, a_url
+    return await loop.run_in_executor(None, _fetch)
 
 
 async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
@@ -1495,26 +1479,12 @@ async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
             "-avoid_negative_ts", "make_zero",
             "-fflags", "+genpts",
             "-f", "hls",
-            "-hls_time", "4",
+            "-hls_time", "1",
             "-hls_list_size", "0",
             "-hls_flags", "append_list",
             "-hls_segment_filename", str(Path(tmpdir) / "seg%05d.ts"),
             str(Path(tmpdir) / "stream.m3u8"),
         ]
-
-        # If VPN is active, route ffmpeg through wireproxy SOCKS5 via proxychains4
-        # so it downloads CDN URLs from the same VPN IP that generated them.
-        _vpn_active = ('_wireproxy_process' in globals()
-                       and _wireproxy_process
-                       and _wireproxy_process.poll() is None)
-        if _vpn_active:
-            pc_conf = (
-                f"strict_chain\nproxy_dns\n"
-                f"[ProxyList]\nsocks5 127.0.0.1 {_wireproxy_socks_port}\n"
-            )
-            pc_path = str(Path(tmpdir) / "proxychains.conf")
-            Path(pc_path).write_text(pc_conf)
-            cmd = ["proxychains4", "-q", "-f", pc_path] + cmd
 
         process = await asyncio.create_subprocess_exec(
             *cmd,
@@ -3250,7 +3220,7 @@ _vpn_failover_lock = asyncio.Lock()   # prevent concurrent failovers
 
 WIREPROXY_BIN = shutil.which("wireproxy") or "/usr/local/bin/wireproxy"
 
-SOCKS5_SECTION = f"\n[Socks5]\nBindAddress = 127.0.0.1:{_wireproxy_socks_port}\n\n[Http]\nBindAddress = 127.0.0.1:{_wireproxy_socks_port + 1}\n"
+SOCKS5_SECTION = f"\n[Socks5]\nBindAddress = 127.0.0.1:{_wireproxy_socks_port}\n"
 
 # Persistent storage for saved configs
 VPN_CONFIGS_DIR = os.path.join(os.path.expanduser("~"), ".mytube", "vpn_configs")
