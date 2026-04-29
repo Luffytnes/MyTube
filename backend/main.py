@@ -1486,10 +1486,16 @@ async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
             str(Path(tmpdir) / "stream.m3u8"),
         ]
 
+        import os as _os
+        _ffmpeg_env = _os.environ.copy()
+        if '_wireproxy_process' in globals() and _wireproxy_process and _wireproxy_process.poll() is None:
+            _hp = f"http://127.0.0.1:{_wireproxy_socks_port + 1}"
+            _ffmpeg_env.update({"http_proxy": _hp, "https_proxy": _hp, "HTTP_PROXY": _hp, "HTTPS_PROXY": _hp})
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
+            env=_ffmpeg_env,
         )
 
         _hls_sessions[session_key] = {"dir": tmpdir, "process": process, "start": start}
@@ -3212,7 +3218,7 @@ _vpn_failover_lock = asyncio.Lock()   # prevent concurrent failovers
 
 WIREPROXY_BIN = shutil.which("wireproxy") or "/usr/local/bin/wireproxy"
 
-SOCKS5_SECTION = f"\n[Socks5]\nBindAddress = 127.0.0.1:{_wireproxy_socks_port}\n"
+SOCKS5_SECTION = f"\n[Socks5]\nBindAddress = 127.0.0.1:{_wireproxy_socks_port}\n\n[Http]\nBindAddress = 127.0.0.1:{_wireproxy_socks_port + 1}\n"
 
 # Persistent storage for saved configs
 VPN_CONFIGS_DIR = os.path.join(os.path.expanduser("~"), ".mytube", "vpn_configs")
