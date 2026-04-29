@@ -1422,7 +1422,10 @@ async def _get_video_and_audio_urls(video_id: str, itag: str) -> tuple:
     if cached_v and cached_a:
         return cached_v[0], cached_a[0]
 
+    # Do NOT use proxy for video URL extraction — CDN URLs are IP-bound,
+    # so ffmpeg must download from the same IP that extracted them.
     opts = get_ydl_opts(**{"quiet": True, "no_warnings": True})
+    opts.pop("proxy", None)
     loop = asyncio.get_event_loop()
 
     def _fetch():
@@ -1486,23 +1489,10 @@ async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
             str(Path(tmpdir) / "stream.m3u8"),
         ]
 
-        import os as _os, socket as _socket
-        _ffmpeg_env = _os.environ.copy()
-        if '_wireproxy_process' in globals() and _wireproxy_process and _wireproxy_process.poll() is None:
-            _http_proxy_port = _wireproxy_socks_port + 1
-            # Only inject proxy if the HTTP proxy port is actually listening
-            try:
-                _s = _socket.create_connection(("127.0.0.1", _http_proxy_port), timeout=0.5)
-                _s.close()
-                _hp = f"http://127.0.0.1:{_http_proxy_port}"
-                _ffmpeg_env.update({"http_proxy": _hp, "https_proxy": _hp, "HTTP_PROXY": _hp, "HTTPS_PROXY": _hp})
-            except OSError:
-                pass  # proxy not ready yet, ffmpeg runs without proxy
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
-            env=_ffmpeg_env,
         )
 
         _hls_sessions[session_key] = {"dir": tmpdir, "process": process, "start": start}
