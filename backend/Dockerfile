@@ -1,11 +1,13 @@
 FROM python:3.11-slim
 
-# System dependencies: ffmpeg, curl (for yt-dlp), wget (for wireproxy)
+# System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     curl \
     wget \
     ca-certificates \
+    unzip \
+    proxychains4 \
     && rm -rf /var/lib/apt/lists/*
 
 # yt-dlp (latest)
@@ -24,6 +26,12 @@ RUN ARCH=$(dpkg --print-architecture) \
     && tar -xzf /tmp/wireproxy.tar.gz -C /usr/local/bin wireproxy \
     && chmod +x /usr/local/bin/wireproxy \
     && rm /tmp/wireproxy.tar.gz
+
+# Deno (JS runtime for yt-dlp)
+RUN curl -fsSL https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip -o /tmp/deno.zip \
+    && unzip /tmp/deno.zip -d /usr/local/bin \
+    && chmod +x /usr/local/bin/deno \
+    && rm /tmp/deno.zip
 
 WORKDIR /app
 COPY requirements.txt .
