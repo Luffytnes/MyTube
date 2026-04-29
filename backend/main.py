@@ -1429,21 +1429,28 @@ async def _get_video_and_audio_urls(video_id: str, itag: str) -> tuple:
     yt_url = f"https://www.youtube.com/watch?v={video_id}"
     loop = asyncio.get_event_loop()
 
-    def _fetch_url(fmt_selector: str) -> str | None:
+    def _fetch_both() -> tuple:
         try:
+            # Single yt-dlp call returns two lines: video URL then audio URL
             result = subprocess.run(
-                ["yt-dlp", "-f", fmt_selector, "--get-url", "--no-playlist", yt_url],
-                capture_output=True, text=True, timeout=30,
+                ["yt-dlp", "-f", f"{itag}+bestaudio[ext=m4a]/bestaudio",
+                 "--get-url", "--no-playlist", yt_url],
+                capture_output=True, text=True, timeout=60,
             )
-            url = result.stdout.strip().splitlines()[0] if result.stdout.strip() else None
-            return url
-        except Exception:
-            return None
+            lines = [l.strip() for l in result.stdout.splitlines() if l.strip().startswith("http")]
+            if len(lines) >= 2:
+                return lines[0], lines[1]
+            if len(lines) == 1:
+                return lines[0], lines[0]
+            import logging as _log
+            _log.getLogger("uvicorn").error(f"yt-dlp --get-url no output: rc={result.returncode} stderr={result.stderr[-300:]}")
+            return None, None
+        except Exception as exc:
+            import logging as _log
+            _log.getLogger("uvicorn").error(f"yt-dlp --get-url exception: {exc}")
+            return None, None
 
-    v_url, a_url = await asyncio.gather(
-        loop.run_in_executor(None, _fetch_url, str(itag)),
-        loop.run_in_executor(None, _fetch_url, "bestaudio[ext=m4a]/bestaudio"),
-    )
+    v_url, a_url = await loop.run_in_executor(None, _fetch_both)
 
     if v_url:
         stream_url_cache_set(video_cache_key, v_url, "mp4")
