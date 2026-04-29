@@ -1495,7 +1495,7 @@ async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
             "-avoid_negative_ts", "make_zero",
             "-fflags", "+genpts",
             "-f", "hls",
-            "-hls_time", "1",
+            "-hls_time", "4",
             "-hls_list_size", "0",
             "-hls_flags", "append_list",
             "-hls_segment_filename", str(Path(tmpdir) / "seg%05d.ts"),
