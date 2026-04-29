@@ -1412,7 +1412,11 @@ _hls_sessions: Dict[str, Dict[str, Any]] = {}
 _hls_lock = asyncio.Lock()
 
 async def _get_video_and_audio_urls(video_id: str, itag: str) -> tuple:
-    """Return (video_url, audio_url), using cache where possible."""
+    """Return (video_url, audio_url), using cache where possible.
+
+    Uses yt-dlp subprocess (--get-url) so the returned URLs are fully processed
+    (n-parameter decoded, signature resolved) and usable by ffmpeg directly.
+    """
     video_cache_key = f"stream:{video_id}:{itag}"
     audio_cache_key = f"stream:{video_id}:bestaudio_m4a"
 
@@ -1422,34 +1426,31 @@ async def _get_video_and_audio_urls(video_id: str, itag: str) -> tuple:
     if cached_v and cached_a:
         return cached_v[0], cached_a[0]
 
-    # Do NOT use proxy for video URL extraction — CDN URLs are IP-bound,
-    # so ffmpeg must download from the same IP that extracted them.
-    opts = get_ydl_opts(**{"quiet": True, "no_warnings": True})
-    opts.pop("proxy", None)
+    yt_url = f"https://www.youtube.com/watch?v={video_id}"
     loop = asyncio.get_event_loop()
 
-    def _fetch():
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-            if not info:
-                return None, None
-            v_url = None
-            for fmt in info.get("formats", []):
-                if str(fmt.get("format_id")) == str(itag):
-                    v_url = fmt.get("url")
-                    stream_url_cache_set(video_cache_key, v_url, fmt.get("ext", "mp4"))
-                    break
-            a_url = None
-            for fmt in sorted(info.get("formats", []), key=lambda f: -(f.get("abr") or 0)):
-                if (fmt.get("acodec", "none") != "none"
-                        and fmt.get("vcodec", "none") == "none"
-                        and fmt.get("ext") in ("m4a", "mp4")):
-                    a_url = fmt.get("url")
-                    stream_url_cache_set(audio_cache_key, a_url, fmt.get("ext", "m4a"))
-                    break
-            return v_url, a_url
+    def _fetch_url(fmt_selector: str) -> str | None:
+        try:
+            result = subprocess.run(
+                ["yt-dlp", "-f", fmt_selector, "--get-url", "--no-playlist", yt_url],
+                capture_output=True, text=True, timeout=30,
+            )
+            url = result.stdout.strip().splitlines()[0] if result.stdout.strip() else None
+            return url
+        except Exception:
+            return None
 
-    return await loop.run_in_executor(None, _fetch)
+    v_url, a_url = await asyncio.gather(
+        loop.run_in_executor(None, _fetch_url, str(itag)),
+        loop.run_in_executor(None, _fetch_url, "bestaudio[ext=m4a]/bestaudio"),
+    )
+
+    if v_url:
+        stream_url_cache_set(video_cache_key, v_url, "mp4")
+    if a_url:
+        stream_url_cache_set(audio_cache_key, a_url, "m4a")
+
+    return v_url, a_url
 
 
 async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
