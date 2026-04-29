@@ -1429,14 +1429,19 @@ async def _get_video_and_audio_urls(video_id: str, itag: str) -> tuple:
     yt_url = f"https://www.youtube.com/watch?v={video_id}"
     loop = asyncio.get_event_loop()
 
+    # Use VPN proxy for URL extraction when active — Hetzner IPs get bot-detected by YouTube.
+    # CDN URLs will be bound to the VPN IP, so ffmpeg must also use the VPN proxy.
+    proxy_url = _get_proxy_url() if ('_wireproxy_process' in globals() and _wireproxy_process and _wireproxy_process.poll() is None) else None
+
     def _fetch_both() -> tuple:
         try:
             # Single yt-dlp call returns two lines: video URL then audio URL
-            result = subprocess.run(
-                ["yt-dlp", "-f", f"{itag}+bestaudio[ext=m4a]/bestaudio",
-                 "--get-url", "--no-playlist", yt_url],
-                capture_output=True, text=True, timeout=60,
-            )
+            cmd = ["yt-dlp", "-f", f"{itag}+bestaudio[ext=m4a]/bestaudio",
+                   "--get-url", "--no-playlist"]
+            if proxy_url:
+                cmd += ["--proxy", proxy_url]
+            cmd.append(yt_url)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
             lines = [l.strip() for l in result.stdout.splitlines() if l.strip().startswith("http")]
             if len(lines) >= 2:
                 return lines[0], lines[1]
@@ -1497,10 +1502,25 @@ async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
             str(Path(tmpdir) / "stream.m3u8"),
         ]
 
+        # If VPN is active and HTTP proxy port is ready, route ffmpeg through it
+        # so it downloads from the same VPN IP that generated the CDN URLs.
+        import os as _os, socket as _socket
+        _ffmpeg_env = _os.environ.copy()
+        if '_wireproxy_process' in globals() and _wireproxy_process and _wireproxy_process.poll() is None:
+            _hp_port = _wireproxy_socks_port + 1
+            try:
+                _s = _socket.create_connection(("127.0.0.1", _hp_port), timeout=0.5)
+                _s.close()
+                _hp = f"http://127.0.0.1:{_hp_port}"
+                _ffmpeg_env.update({"http_proxy": _hp, "https_proxy": _hp, "HTTP_PROXY": _hp, "HTTPS_PROXY": _hp})
+            except OSError:
+                pass
+
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
+            env=_ffmpeg_env,
         )
 
         _hls_sessions[session_key] = {"dir": tmpdir, "process": process, "start": start}
