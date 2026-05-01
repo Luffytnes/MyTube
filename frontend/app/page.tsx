@@ -63,16 +63,9 @@ export default function HomePage() {
     const hasSubs = subscriptions.length > 0
     setHasActivity(hasSearches || hasSubs)
 
-    // No activity → trending fallback
+    // No activity → show empty state, don't fetch trending
     if (!hasSearches && !hasSubs) {
-      try {
-        const data = await getTrending(region.code, 'all', lang)
-        setVideos(data.videos)
-      } catch {
-        setError(t('error_trending'))
-      } finally {
-        setLoading(false)
-      }
+      setLoading(false)
       return
     }
 

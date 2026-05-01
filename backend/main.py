@@ -610,6 +610,7 @@ async def youtubei_channel_videos(channel_id: str, page: int = 1) -> Optional[Li
                     headers=_YT_HEADERS,
                 )
                 if resp.status_code == 200:
+                    reset_youtube_errors()
                     videos, token, channel_name = _extract_channel_videos(resp.json())
                     if token:
                         _channel_continuations[f"{channel_id}:{page + 1}"] = token
@@ -617,6 +618,8 @@ async def youtubei_channel_videos(channel_id: str, page: int = 1) -> Optional[Li
                         _channel_continuations[f"{channel_id}:name"] = channel_name
                     _enrich_channel_info(videos, channel_id, channel_name)
                     return videos if videos else None
+                else:
+                    record_youtube_error(resp.status_code)
             else:
                 token = _channel_continuations.get(f"{channel_id}:{page}")
                 if not token:
@@ -628,11 +631,14 @@ async def youtubei_channel_videos(channel_id: str, page: int = 1) -> Optional[Li
                     headers=_YT_HEADERS,
                 )
                 if resp.status_code == 200:
+                    reset_youtube_errors()
                     videos, next_token = _extract_continuation_videos(resp.json())
                     if next_token:
                         _channel_continuations[f"{channel_id}:{page + 1}"] = next_token
                     _enrich_channel_info(videos, channel_id, channel_name)
                     return videos if videos else None
+                else:
+                    record_youtube_error(resp.status_code)
     except Exception:
         pass
     return None
@@ -720,8 +726,11 @@ async def youtubei_trending(region: str = "US", lang: str = "en") -> Optional[Li
                 headers=_YT_HEADERS,
             )
             if resp.status_code == 200:
+                reset_youtube_errors()
                 videos = _extract_trending_videos(resp.json())
                 return videos if videos else None
+            else:
+                record_youtube_error(resp.status_code)
     except Exception:
         pass
     return None
@@ -3207,7 +3216,7 @@ _vpn_auto_mode: bool = False          # user-enabled auto failover
 _vpn_error_count: int = 0             # consecutive YouTube errors on current conf
 _vpn_failed_confs: set = set()        # confs that have already been tried and failed
 _vpn_all_failed: bool = False         # True when all confs exhausted
-_vpn_failover_threshold: int = 3      # errors before switching conf
+_vpn_failover_threshold: int = 1      # errors before switching conf
 _vpn_failover_lock = asyncio.Lock()   # prevent concurrent failovers
 
 WIREPROXY_BIN = shutil.which("wireproxy") or "/usr/local/bin/wireproxy"
