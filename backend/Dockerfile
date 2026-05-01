@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-# System dependencies
+# System dependencies: ffmpeg, curl (for yt-dlp), wget (for wireproxy)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     curl \

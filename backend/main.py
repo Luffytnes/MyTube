@@ -1489,7 +1489,7 @@ async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
         )
 
         _hls_sessions[session_key] = {"dir": tmpdir, "process": process, "start": start}
@@ -1538,14 +1538,6 @@ async def hls_playlist(video_id: str, itag: str, start: int = 0):
             proc = session["process"]
             if proc.returncode is not None and proc.returncode != 0:
                 # URL may have expired — clear stream cache and let client retry
-                stderr_out = b""
-                if proc.stderr:
-                    try:
-                        stderr_out = await asyncio.wait_for(proc.stderr.read(), timeout=1.0)
-                    except Exception:
-                        pass
-                import logging as _logging
-                _logging.getLogger("uvicorn").error(f"ffmpeg failed (rc={proc.returncode}): {stderr_out.decode(errors='replace')[-2000:]}")
                 stream_url_cache_invalidate(video_id)
                 async with _hls_lock:
                     _hls_sessions.pop(session_key, None)
