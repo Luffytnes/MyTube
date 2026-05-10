@@ -4041,6 +4041,8 @@ async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4"):
         try:
             async for chunk in resp.aiter_bytes(65536):
                 yield chunk
+        except Exception:
+            pass  # Client disconnected or server closed early — expected during playback
         finally:
             await resp.aclose()
             await client.aclose()
