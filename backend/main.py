@@ -8,7 +8,7 @@ from time import time as _time
 from typing import Optional, List, Dict, Any
 from urllib.parse import urlparse
 import urllib.parse
-from fastapi import FastAPI, HTTPException, Request, Query
+from fastapi import FastAPI, HTTPException, Request, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, Response
 import httpx
@@ -3782,6 +3782,83 @@ async def get_news(region: str = "FR", category: str = "general"):
         raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+
+# ─── IPTV / Xtream ────────────────────────────────────────────────────────────
+_xtream_cfg_path = os.path.join(os.path.expanduser("~"), ".mytube", "xtream.json")
+_xtream_cfg: dict = {}
+
+def _xtream_load():
+    global _xtream_cfg
+    try:
+        with open(_xtream_cfg_path) as f:
+            _xtream_cfg = json.load(f)
+    except Exception:
+        _xtream_cfg = {}
+
+def _xtream_save():
+    try:
+        os.makedirs(os.path.dirname(_xtream_cfg_path), exist_ok=True)
+        with open(_xtream_cfg_path, "w") as f:
+            json.dump(_xtream_cfg, f)
+    except Exception:
+        pass
+
+_xtream_load()
+
+@app.get("/api/iptv/status")
+async def iptv_status():
+    return {"configured": bool(_xtream_cfg.get("server"))}
+
+@app.post("/api/iptv/credentials")
+async def iptv_save_credentials(body: dict = Body(...)):
+    global _xtream_cfg
+    server = body.get("server", "").rstrip("/")
+    if not server.startswith("http"):
+        server = "http://" + server
+    _xtream_cfg = {"server": server, "username": body.get("username",""), "password": body.get("password","")}
+    _xtream_save()
+    return {"ok": True}
+
+@app.delete("/api/iptv/credentials")
+async def iptv_delete_credentials():
+    global _xtream_cfg
+    _xtream_cfg = {}
+    _xtream_save()
+    return {"ok": True}
+
+@app.get("/api/iptv/categories")
+async def iptv_categories():
+    if not _xtream_cfg.get("server"):
+        raise HTTPException(status_code=400, detail="IPTV not configured")
+    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
+    async with httpx_client(timeout=15.0) as client:
+        resp = await client.get(f"{s}/player_api.php", params={"username": u, "password": p, "action": "get_live_categories"})
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="Xtream API error")
+        return resp.json()
+
+@app.get("/api/iptv/channels")
+async def iptv_channels(category_id: Optional[str] = None):
+    if not _xtream_cfg.get("server"):
+        raise HTTPException(status_code=400, detail="IPTV not configured")
+    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
+    params: dict = {"username": u, "password": p, "action": "get_live_streams"}
+    if category_id:
+        params["category_id"] = category_id
+    async with httpx_client(timeout=30.0) as client:
+        resp = await client.get(f"{s}/player_api.php", params=params)
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="Xtream API error")
+        return resp.json()
+
+@app.get("/api/iptv/stream/{stream_id}")
+async def iptv_stream_url(stream_id: str):
+    if not _xtream_cfg.get("server"):
+        raise HTTPException(status_code=400, detail="IPTV not configured")
+    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
+    url = f"{s}/live/{u}/{p}/{stream_id}.m3u8"
+    return {"url": url}
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Sun, Moon, Monitor, Upload, Wifi, WifiOff, AlertCircle, Loader2, Shield, RefreshCw, MapPin, Trash2, Check, Globe, Network, Play, Database, Download, CheckCircle2, Mic2, Eye, EyeOff } from 'lucide-react'
+import { X, Sun, Moon, Monitor, Upload, Wifi, WifiOff, AlertCircle, Loader2, Shield, RefreshCw, MapPin, Trash2, Check, Globe, Network, Play, Database, Download, CheckCircle2, Mic2, Eye, EyeOff, Tv } from 'lucide-react'
 import { useTheme, type ThemeMode } from '@/lib/themeContext'
 import { useRegion, REGIONS } from '@/lib/regionContext'
 import { getPlaybackSettings, setPlaybackSettings, type PlaybackSettings } from '@/lib/playbackSettings'
@@ -9,7 +9,7 @@ import { getPlaybackSettings, setPlaybackSettings, type PlaybackSettings } from 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 type VpnStatus = 'disconnected' | 'connecting' | 'connected' | 'disconnecting' | 'error'
-type Tab = 'general' | 'playback' | 'data' | 'wireproxy' | 'podcast'
+type Tab = 'general' | 'playback' | 'data' | 'wireproxy' | 'podcast' | 'iptv'
 
 interface VpnState {
   status: VpnStatus
@@ -49,6 +49,12 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const [piShowSecret, setPiShowSecret] = useState(false)
   const [piSaving, setPiSaving] = useState(false)
   const [piSaved, setPiSaved] = useState(false)
+  const [xtreamServer, setXtreamServer] = useState('')
+  const [xtreamUser, setXtreamUser] = useState('')
+  const [xtreamPass, setXtreamPass] = useState('')
+  const [xtreamSaving, setXtreamSaving] = useState(false)
+  const [xtreamSaved, setXtreamSaved] = useState(false)
+  const [xtreamConfigured, setXtreamConfigured] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
   const modalRef = useRef<HTMLDivElement>(null)
@@ -103,6 +109,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     fetchVpnStatus()
     fetchIpInfo()
     fetchConfigs()
+    fetch(`${API_BASE}/api/iptv/status`).then(r => r.json()).then(d => setXtreamConfigured(d.configured)).catch(() => {})
   }, [open, fetchVpnStatus, fetchIpInfo, fetchConfigs])
 
   // Refresh VPN status every time the Wireproxy tab becomes active
@@ -332,6 +339,14 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       icon: <Mic2 className="w-4 h-4" />,
     },
     {
+      id: 'iptv',
+      label: 'IPTV',
+      icon: <Tv className="w-4 h-4" />,
+      badge: xtreamConfigured ? (
+        <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
+      ) : undefined,
+    },
+    {
       id: 'wireproxy',
       label: 'Wireproxy',
       icon: <Network className="w-4 h-4" />,
@@ -416,7 +431,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           {/* Header — desktop only */}
           <div className="hidden sm:flex items-center justify-between px-6 py-4 border-b border-yt-border/50">
             <h2 className="text-yt-text font-semibold text-base">
-              {tab === 'general' ? 'Général' : tab === 'playback' ? t('settings_tab_playback') : tab === 'data' ? t('settings_data_tab') : tab === 'podcast' ? 'Podcast Index' : 'Wireproxy'}
+              {tab === 'general' ? 'Général' : tab === 'playback' ? t('settings_tab_playback') : tab === 'data' ? t('settings_data_tab') : tab === 'podcast' ? 'Podcast Index' : tab === 'iptv' ? t('iptv_settings') : 'Wireproxy'}
             </h2>
             <button
               onClick={onClose}
@@ -759,6 +774,88 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     </button>
                   </div>
                 </section>
+              </div>
+            )}
+
+            {/* ── IPTV ── */}
+            {tab === 'iptv' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-yt-text font-semibold mb-1">{t('iptv_settings')}</h3>
+                  <p className="text-yt-text-muted text-sm mb-4">{t('iptv_not_configured_desc')}</p>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-yt-text-muted text-xs uppercase tracking-wide block mb-1">{t('iptv_server')}</label>
+                    <input
+                      type="text"
+                      value={xtreamServer}
+                      onChange={e => setXtreamServer(e.target.value)}
+                      placeholder="http://your-server:port"
+                      className="w-full bg-yt-secondary border border-yt-border rounded-xl px-3 py-2 text-sm text-yt-text placeholder-yt-text-muted focus:outline-none focus:border-yt-red"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-yt-text-muted text-xs uppercase tracking-wide block mb-1">{t('iptv_username')}</label>
+                    <input
+                      type="text"
+                      value={xtreamUser}
+                      onChange={e => setXtreamUser(e.target.value)}
+                      className="w-full bg-yt-secondary border border-yt-border rounded-xl px-3 py-2 text-sm text-yt-text focus:outline-none focus:border-yt-red"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-yt-text-muted text-xs uppercase tracking-wide block mb-1">{t('iptv_password')}</label>
+                    <input
+                      type="password"
+                      value={xtreamPass}
+                      onChange={e => setXtreamPass(e.target.value)}
+                      className="w-full bg-yt-secondary border border-yt-border rounded-xl px-3 py-2 text-sm text-yt-text focus:outline-none focus:border-yt-red"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      if (!xtreamServer || !xtreamUser) return
+                      setXtreamSaving(true)
+                      try {
+                        await fetch(`${API_BASE}/api/iptv/credentials`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ server: xtreamServer, username: xtreamUser, password: xtreamPass })
+                        })
+                        setXtreamSaved(true)
+                        setXtreamConfigured(true)
+                        setTimeout(() => setXtreamSaved(false), 2000)
+                      } catch {} finally { setXtreamSaving(false) }
+                    }}
+                    disabled={xtreamSaving || !xtreamServer || !xtreamUser}
+                    className="flex-1 py-2 bg-yt-red hover:bg-yt-red-hover disabled:opacity-50 text-white rounded-xl text-sm font-medium transition-colors"
+                  >
+                    {xtreamSaved ? t('iptv_saved') : xtreamSaving ? '…' : t('iptv_save')}
+                  </button>
+                  {xtreamConfigured && (
+                    <button
+                      onClick={async () => {
+                        await fetch(`${API_BASE}/api/iptv/credentials`, { method: 'DELETE' })
+                        setXtreamConfigured(false)
+                        setXtreamServer('')
+                        setXtreamUser('')
+                        setXtreamPass('')
+                      }}
+                      className="px-4 py-2 bg-yt-secondary hover:bg-yt-hover border border-yt-border text-yt-text-muted rounded-xl text-sm transition-colors"
+                    >
+                      {t('iptv_delete')}
+                    </button>
+                  )}
+                </div>
+                {xtreamConfigured && (
+                  <p className="text-green-400 text-xs flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                    IPTV configuré
+                  </p>
+                )}
               </div>
             )}
 
