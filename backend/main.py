@@ -3976,11 +3976,33 @@ async def iptv_vod(category_id: Optional[str] = None):
     return data if isinstance(data, list) else []
 
 @app.get("/api/iptv/vod_stream/{stream_id}")
-async def iptv_vod_stream_url(stream_id: str, ext: str = "mp4"):
+async def iptv_vod_stream_url(stream_id: str, ext: str = "mp4", request: Request):
+    if not _xtream_cfg.get("server"):
+        raise HTTPException(status_code=400, detail="IPTV not configured")
+    base = str(request.base_url).rstrip("/")
+    return {"url": f"{base}/api/iptv/vod_hls/{stream_id}"}
+
+@app.get("/api/iptv/vod_hls/{stream_id}")
+async def iptv_vod_hls(stream_id: str, request: Request):
+    """Proxy VOD as HLS manifest to fix CORS and codec compatibility."""
     if not _xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
     s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
-    return {"url": f"{s}/movie/{u}/{p}/{stream_id}.{ext}"}
+    m3u8_url = f"{s}/movie/{u}/{p}/{stream_id}.m3u8"
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            resp = await client.get(m3u8_url)
+        if resp.status_code == 200 and "#EXTM3U" in resp.text:
+            base = str(request.base_url).rstrip("/")
+            rewritten = rewrite_hls_manifest(resp.text, str(resp.url), f"{base}/api/iptv/proxy")
+            return Response(
+                content=rewritten,
+                media_type="application/vnd.apple.mpegurl",
+                headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache, no-store"},
+            )
+    except Exception:
+        pass
+    raise HTTPException(status_code=502, detail="VOD HLS not available for this stream")
 
 @app.get("/api/iptv/series_categories")
 async def iptv_series_categories():

@@ -28,22 +28,17 @@ export default function IPTVWatchPage() {
 
     async function startStream() {
       try {
-        let url: string
-        if (type === 'live') {
-          const res = await fetch(`${API_BASE}/api/iptv/stream/${id}`)
-          if (!res.ok) throw new Error()
-          url = (await res.json()).url
-        } else {
-          const res = await fetch(`${API_BASE}/api/iptv/vod_stream/${id}?ext=${ext}`)
-          if (!res.ok) throw new Error()
-          url = (await res.json()).url
-        }
-
+        const endpoint = type === 'live'
+          ? `${API_BASE}/api/iptv/stream/${id}`
+          : `${API_BASE}/api/iptv/vod_stream/${id}?ext=${ext}`
+        const res = await fetch(endpoint)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const { url } = await res.json()
         const video = videoRef.current
         if (!video) return
 
-        if (type === 'live' && Hls.isSupported()) {
-          hls = new Hls({ enableWorker: true, lowLatencyMode: true })
+        if (Hls.isSupported()) {
+          hls = new Hls({ enableWorker: true, lowLatencyMode: type === 'live' })
           hls.loadSource(url)
           hls.attachMedia(video)
           hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -51,16 +46,18 @@ export default function IPTVWatchPage() {
             video.play().catch(() => {})
           })
           hls.on(Hls.Events.ERROR, (_, data) => {
-            if (data.fatal) setError(t('iptv_error'))
+            if (data.fatal) {
+              setError(t('iptv_error'))
+              setLoading(false)
+            }
           })
-        } else if (type === 'live' && video.canPlayType('application/vnd.apple.mpegurl')) {
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
           video.src = url
           video.addEventListener('loadedmetadata', () => { setLoading(false); video.play().catch(() => {}) })
-        } else {
-          // VOD: direct URL
-          video.src = url
-          video.addEventListener('loadedmetadata', () => setLoading(false))
           video.addEventListener('error', () => { setError(t('iptv_error')); setLoading(false) })
+        } else {
+          setError(t('iptv_error'))
+          setLoading(false)
         }
       } catch {
         setError(t('iptv_error'))
