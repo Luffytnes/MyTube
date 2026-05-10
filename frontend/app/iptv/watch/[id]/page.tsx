@@ -18,6 +18,7 @@ export default function IPTVWatchPage() {
   const icon = searchParams.get('icon') || ''
   const type = (searchParams.get('type') || 'live') as 'live' | 'vod'
   const ext = searchParams.get('ext') || 'mp4'
+  const media = searchParams.get('media') || 'movie'
   const videoRef = useRef<HTMLVideoElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -30,7 +31,7 @@ export default function IPTVWatchPage() {
       try {
         const endpoint = type === 'live'
           ? `${API_BASE}/api/iptv/stream/${id}`
-          : `${API_BASE}/api/iptv/vod_stream/${id}?ext=${ext}`
+          : `${API_BASE}/api/iptv/vod_stream/${id}?ext=${ext}&media=${media}`
         const res = await fetch(endpoint)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
@@ -72,7 +73,7 @@ export default function IPTVWatchPage() {
 
     startStream()
     return () => { hls?.destroy() }
-  }, [id, type, ext, t])
+  }, [id, type, ext, media, t])
 
   const isLive = type === 'live'
 

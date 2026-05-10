@@ -117,7 +117,7 @@ export default function SeriesInfoPage() {
               .map(ep => (
                 <Link
                   key={ep.id}
-                  href={`/iptv/watch/${ep.id}?type=vod&ext=${ep.container_extension || 'mp4'}&name=${encodeURIComponent(`${name} — ${t('iptv_episode_short')}${ep.episode_num}`)}`}
+                  href={`/iptv/watch/${ep.id}?type=vod&media=series&ext=${ep.container_extension || 'mp4'}&name=${encodeURIComponent(`${name} — ${t('iptv_episode_short')}${ep.episode_num}`)}`}
                   className="flex items-center gap-4 p-3 rounded-xl bg-yt-secondary hover:bg-yt-hover transition-colors border border-yt-border/30 group"
                 >
                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-yt-hover group-hover:bg-yt-red flex items-center justify-center transition-colors">

@@ -3976,30 +3976,30 @@ async def iptv_vod(category_id: Optional[str] = None):
     return data if isinstance(data, list) else []
 
 @app.get("/api/iptv/vod_stream/{stream_id}")
-async def iptv_vod_stream_url(stream_id: str, request: Request, ext: str = "mp4"):
-    """Return the best available URL for a VOD stream: HLS if supported, direct proxy otherwise."""
+async def iptv_vod_stream_url(stream_id: str, request: Request, ext: str = "mp4", media: str = "movie"):
+    """Return the best available URL for a VOD stream: HLS if supported, direct proxy otherwise.
+    media: 'movie' for VOD films, 'series' for series episodes."""
     if not _xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
     s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
     base = str(request.base_url).rstrip("/")
-    # Check if Xtream server exposes this VOD as HLS
+    # Check if Xtream server exposes this as HLS
     try:
         async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
-            resp = await client.get(f"{s}/movie/{u}/{p}/{stream_id}.m3u8")
+            resp = await client.get(f"{s}/{media}/{u}/{p}/{stream_id}.m3u8")
         if resp.status_code == 200 and "#EXTM3U" in resp.text:
-            return {"url": f"{base}/api/iptv/vod_hls/{stream_id}", "hls": True}
+            return {"url": f"{base}/api/iptv/vod_hls/{stream_id}?media={media}", "hls": True}
     except Exception:
         pass
-    # Fall back: direct file proxy (handles Range requests for seeking)
-    return {"url": f"{base}/api/iptv/vod_proxy/{stream_id}?ext={ext}", "hls": False}
+    return {"url": f"{base}/api/iptv/vod_proxy/{stream_id}?ext={ext}&media={media}", "hls": False}
 
 @app.get("/api/iptv/vod_hls/{stream_id}")
-async def iptv_vod_hls(stream_id: str, request: Request):
+async def iptv_vod_hls(stream_id: str, request: Request, media: str = "movie"):
     """Proxy VOD HLS manifest + rewrite segment URLs through our proxy."""
     if not _xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
     s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
-    m3u8_url = f"{s}/movie/{u}/{p}/{stream_id}.m3u8"
+    m3u8_url = f"{s}/{media}/{u}/{p}/{stream_id}.m3u8"
     async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
         resp = await client.get(m3u8_url)
     if resp.status_code != 200 or "#EXTM3U" not in resp.text:
@@ -4013,12 +4013,12 @@ async def iptv_vod_hls(stream_id: str, request: Request):
     )
 
 @app.get("/api/iptv/vod_proxy/{stream_id}")
-async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4"):
-    """Stream VOD file through backend with Range support (fixes CORS for direct files)."""
+async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", media: str = "movie"):
+    """Stream VOD/series file through backend with Range support (fixes CORS)."""
     if not _xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
     s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
-    url = f"{s}/movie/{u}/{p}/{stream_id}.{ext}"
+    url = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
     req_headers: dict = {}
     if "range" in request.headers:
         req_headers["Range"] = request.headers["range"]
@@ -4033,16 +4033,17 @@ async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4"):
         await client.aclose()
         raise HTTPException(status_code=502, detail=str(e))
     ct = resp.headers.get("content-type", "video/mp4")
+    # Don't forward Content-Length — chunked transfer avoids "shorter than Content-Length"
+    # errors when the client disconnects mid-stream. Content-Range still provides total size.
     out_headers: dict = {"Access-Control-Allow-Origin": "*", "Accept-Ranges": "bytes"}
-    for src, dst in [("content-range", "Content-Range"), ("content-length", "Content-Length")]:
-        if src in resp.headers:
-            out_headers[dst] = resp.headers[src]
+    if "content-range" in resp.headers:
+        out_headers["Content-Range"] = resp.headers["content-range"]
     async def _stream():
         try:
             async for chunk in resp.aiter_bytes(65536):
                 yield chunk
         except Exception:
-            pass  # Client disconnected or server closed early — expected during playback
+            pass  # Client disconnected or server closed early
         finally:
             await resp.aclose()
             await client.aclose()
