@@ -3976,7 +3976,7 @@ async def iptv_vod(category_id: Optional[str] = None):
     return data if isinstance(data, list) else []
 
 @app.get("/api/iptv/vod_stream/{stream_id}")
-async def iptv_vod_stream_url(stream_id: str, ext: str = "mp4", request: Request):
+async def iptv_vod_stream_url(stream_id: str, request: Request, ext: str = "mp4"):
     if not _xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
     base = str(request.base_url).rstrip("/")
