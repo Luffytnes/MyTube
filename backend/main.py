@@ -3827,73 +3827,93 @@ async def iptv_delete_credentials():
     _xtream_save()
     return {"ok": True}
 
-@app.get("/api/iptv/categories")
-async def iptv_categories():
+async def _xtream_api(action: str, extra: dict | None = None, timeout: float = 45.0) -> Any:
+    """Call Xtream Codes player_api.php directly, bypassing any VPN proxy."""
     if not _xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
     s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
-    async with httpx_client(timeout=15.0) as client:
-        resp = await client.get(f"{s}/player_api.php", params={"username": u, "password": p, "action": "get_live_categories"})
+    params: dict = {"username": u, "password": p, "action": action}
+    if extra:
+        params.update(extra)
+    try:
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+            resp = await client.get(f"{s}/player_api.php", params=params)
         if resp.status_code != 200:
-            raise HTTPException(status_code=502, detail="Xtream API error")
-        return resp.json()
+            raise HTTPException(status_code=502, detail=f"Xtream HTTP {resp.status_code}")
+        try:
+            return resp.json()
+        except Exception:
+            raise HTTPException(status_code=502, detail="Xtream returned non-JSON response")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Xtream connection error: {type(e).__name__}: {e}")
+
+@app.get("/api/iptv/debug")
+async def iptv_debug():
+    """Test Xtream connection and return diagnostics."""
+    if not _xtream_cfg.get("server"):
+        return {"configured": False}
+    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
+    try:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            resp = await client.get(f"{s}/player_api.php", params={"username": u, "password": p})
+        data = resp.json() if resp.status_code == 200 else {}
+        return {
+            "server": s,
+            "http_status": resp.status_code,
+            "user_status": data.get("user_info", {}).get("status", "unknown"),
+            "active": data.get("user_info", {}).get("active_cons", "?"),
+            "max_connections": data.get("user_info", {}).get("max_connections", "?"),
+            "expiry": data.get("user_info", {}).get("exp_date", "?"),
+        }
+    except Exception as e:
+        return {"server": s, "error": str(e)}
+
+@app.get("/api/iptv/categories")
+async def iptv_categories():
+    data = await _xtream_api("get_live_categories", timeout=15.0)
+    return data if isinstance(data, list) else []
 
 @app.get("/api/iptv/channels")
 async def iptv_channels(category_id: Optional[str] = None):
-    if not _xtream_cfg.get("server"):
-        raise HTTPException(status_code=400, detail="IPTV not configured")
-    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
-    params: dict = {"username": u, "password": p, "action": "get_live_streams"}
-    if category_id:
-        params["category_id"] = category_id
-    async with httpx_client(timeout=30.0) as client:
-        resp = await client.get(f"{s}/player_api.php", params=params)
-        if resp.status_code != 200:
-            raise HTTPException(status_code=502, detail="Xtream API error")
-        return resp.json()
+    extra = {"category_id": category_id} if category_id else None
+    data = await _xtream_api("get_live_streams", extra=extra, timeout=60.0)
+    return data if isinstance(data, list) else []
 
 @app.get("/api/iptv/stream/{stream_id}")
 async def iptv_stream_url(stream_id: str):
     if not _xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
     s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
-    url = f"{s}/live/{u}/{p}/{stream_id}.m3u8"
-    return {"url": url}
+    return {"url": f"{s}/live/{u}/{p}/{stream_id}.m3u8"}
 
 @app.get("/api/iptv/icon")
 async def iptv_icon_proxy(url: str):
+    if not url or not url.startswith("http"):
+        raise HTTPException(status_code=400, detail="Invalid URL")
     try:
-        async with httpx_client(timeout=5.0) as client:
-            resp = await client.get(url)
-            ct = resp.headers.get("content-type", "image/png")
-            return Response(content=resp.content, media_type=ct)
+        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+        if resp.status_code != 200:
+            raise HTTPException(status_code=404, detail="Icon not found")
+        ct = resp.headers.get("content-type", "image/png")
+        return Response(content=resp.content, media_type=ct)
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=404, detail="Icon not found")
 
 @app.get("/api/iptv/vod_categories")
 async def iptv_vod_categories():
-    if not _xtream_cfg.get("server"):
-        raise HTTPException(status_code=400, detail="IPTV not configured")
-    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
-    async with httpx_client(timeout=15.0) as client:
-        resp = await client.get(f"{s}/player_api.php", params={"username": u, "password": p, "action": "get_vod_categories"})
-        if resp.status_code != 200:
-            raise HTTPException(status_code=502, detail="Xtream API error")
-        return resp.json()
+    data = await _xtream_api("get_vod_categories", timeout=15.0)
+    return data if isinstance(data, list) else []
 
 @app.get("/api/iptv/vod")
 async def iptv_vod(category_id: Optional[str] = None):
-    if not _xtream_cfg.get("server"):
-        raise HTTPException(status_code=400, detail="IPTV not configured")
-    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
-    params: dict = {"username": u, "password": p, "action": "get_vod_streams"}
-    if category_id:
-        params["category_id"] = category_id
-    async with httpx_client(timeout=60.0) as client:
-        resp = await client.get(f"{s}/player_api.php", params=params)
-        if resp.status_code != 200:
-            raise HTTPException(status_code=502, detail="Xtream API error")
-        return resp.json()
+    extra = {"category_id": category_id} if category_id else None
+    data = await _xtream_api("get_vod_streams", extra=extra, timeout=60.0)
+    return data if isinstance(data, list) else []
 
 @app.get("/api/iptv/vod_stream/{stream_id}")
 async def iptv_vod_stream_url(stream_id: str, ext: str = "mp4"):
@@ -3904,39 +3924,18 @@ async def iptv_vod_stream_url(stream_id: str, ext: str = "mp4"):
 
 @app.get("/api/iptv/series_categories")
 async def iptv_series_categories():
-    if not _xtream_cfg.get("server"):
-        raise HTTPException(status_code=400, detail="IPTV not configured")
-    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
-    async with httpx_client(timeout=15.0) as client:
-        resp = await client.get(f"{s}/player_api.php", params={"username": u, "password": p, "action": "get_series_categories"})
-        if resp.status_code != 200:
-            raise HTTPException(status_code=502, detail="Xtream API error")
-        return resp.json()
+    data = await _xtream_api("get_series_categories", timeout=15.0)
+    return data if isinstance(data, list) else []
 
 @app.get("/api/iptv/series")
 async def iptv_series_list(category_id: Optional[str] = None):
-    if not _xtream_cfg.get("server"):
-        raise HTTPException(status_code=400, detail="IPTV not configured")
-    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
-    params: dict = {"username": u, "password": p, "action": "get_series"}
-    if category_id:
-        params["category_id"] = category_id
-    async with httpx_client(timeout=60.0) as client:
-        resp = await client.get(f"{s}/player_api.php", params=params)
-        if resp.status_code != 200:
-            raise HTTPException(status_code=502, detail="Xtream API error")
-        return resp.json()
+    extra = {"category_id": category_id} if category_id else None
+    data = await _xtream_api("get_series", extra=extra, timeout=60.0)
+    return data if isinstance(data, list) else []
 
 @app.get("/api/iptv/series_info/{series_id}")
 async def iptv_series_info(series_id: str):
-    if not _xtream_cfg.get("server"):
-        raise HTTPException(status_code=400, detail="IPTV not configured")
-    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
-    async with httpx_client(timeout=20.0) as client:
-        resp = await client.get(f"{s}/player_api.php", params={"username": u, "password": p, "action": "get_series_info", "series_id": series_id})
-        if resp.status_code != 200:
-            raise HTTPException(status_code=502, detail="Xtream API error")
-        return resp.json()
+    return await _xtream_api("get_series_info", extra={"series_id": series_id}, timeout=20.0)
 
 
 if __name__ == "__main__":
