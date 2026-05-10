@@ -3860,6 +3860,84 @@ async def iptv_stream_url(stream_id: str):
     url = f"{s}/live/{u}/{p}/{stream_id}.m3u8"
     return {"url": url}
 
+@app.get("/api/iptv/icon")
+async def iptv_icon_proxy(url: str):
+    try:
+        async with httpx_client(timeout=5.0) as client:
+            resp = await client.get(url)
+            ct = resp.headers.get("content-type", "image/png")
+            return Response(content=resp.content, media_type=ct)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Icon not found")
+
+@app.get("/api/iptv/vod_categories")
+async def iptv_vod_categories():
+    if not _xtream_cfg.get("server"):
+        raise HTTPException(status_code=400, detail="IPTV not configured")
+    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
+    async with httpx_client(timeout=15.0) as client:
+        resp = await client.get(f"{s}/player_api.php", params={"username": u, "password": p, "action": "get_vod_categories"})
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="Xtream API error")
+        return resp.json()
+
+@app.get("/api/iptv/vod")
+async def iptv_vod(category_id: Optional[str] = None):
+    if not _xtream_cfg.get("server"):
+        raise HTTPException(status_code=400, detail="IPTV not configured")
+    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
+    params: dict = {"username": u, "password": p, "action": "get_vod_streams"}
+    if category_id:
+        params["category_id"] = category_id
+    async with httpx_client(timeout=60.0) as client:
+        resp = await client.get(f"{s}/player_api.php", params=params)
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="Xtream API error")
+        return resp.json()
+
+@app.get("/api/iptv/vod_stream/{stream_id}")
+async def iptv_vod_stream_url(stream_id: str, ext: str = "mp4"):
+    if not _xtream_cfg.get("server"):
+        raise HTTPException(status_code=400, detail="IPTV not configured")
+    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
+    return {"url": f"{s}/movie/{u}/{p}/{stream_id}.{ext}"}
+
+@app.get("/api/iptv/series_categories")
+async def iptv_series_categories():
+    if not _xtream_cfg.get("server"):
+        raise HTTPException(status_code=400, detail="IPTV not configured")
+    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
+    async with httpx_client(timeout=15.0) as client:
+        resp = await client.get(f"{s}/player_api.php", params={"username": u, "password": p, "action": "get_series_categories"})
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="Xtream API error")
+        return resp.json()
+
+@app.get("/api/iptv/series")
+async def iptv_series_list(category_id: Optional[str] = None):
+    if not _xtream_cfg.get("server"):
+        raise HTTPException(status_code=400, detail="IPTV not configured")
+    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
+    params: dict = {"username": u, "password": p, "action": "get_series"}
+    if category_id:
+        params["category_id"] = category_id
+    async with httpx_client(timeout=60.0) as client:
+        resp = await client.get(f"{s}/player_api.php", params=params)
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="Xtream API error")
+        return resp.json()
+
+@app.get("/api/iptv/series_info/{series_id}")
+async def iptv_series_info(series_id: str):
+    if not _xtream_cfg.get("server"):
+        raise HTTPException(status_code=400, detail="IPTV not configured")
+    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
+    async with httpx_client(timeout=20.0) as client:
+        resp = await client.get(f"{s}/player_api.php", params={"username": u, "password": p, "action": "get_series_info", "series_id": series_id})
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="Xtream API error")
+        return resp.json()
+
 
 if __name__ == "__main__":
     import uvicorn

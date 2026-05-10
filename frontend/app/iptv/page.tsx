@@ -1,27 +1,57 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, Tv, Radio } from 'lucide-react'
+import { Search, Tv, Radio, Film, Layers } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 import Link from 'next/link'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
+type Section = 'live' | 'vod' | 'series'
+
 interface Category { category_id: string; category_name: string; parent_id: number }
-interface Channel {
-  stream_id: number; name: string; stream_icon: string
-  epg_channel_id: string; added: string; category_id: string
-  stream_type: string; num: number
+interface Channel { stream_id: number; name: string; stream_icon: string; category_id: string }
+interface VodItem { stream_id: number; name: string; stream_icon: string; category_id: string; container_extension: string }
+interface SeriesItem { series_id: number; name: string; cover: string; category_id: string }
+
+function IptvIcon({ src, name }: { src: string; name: string }) {
+  const [err, setErr] = useState(false)
+  if (!src || err) return <Radio className="w-8 h-8 text-yt-text-muted" />
+  return (
+    <img
+      src={`${API_BASE}/api/iptv/icon?url=${encodeURIComponent(src)}`}
+      alt={name}
+      loading="lazy"
+      className="w-full h-full object-contain p-1"
+      onError={() => setErr(true)}
+    />
+  )
+}
+
+function CoverImage({ src, name, fallback }: { src: string; name: string; fallback: React.ReactNode }) {
+  const [err, setErr] = useState(false)
+  if (!src || err) return <div className="w-full h-full flex items-center justify-center">{fallback}</div>
+  return (
+    <img
+      src={`${API_BASE}/api/iptv/icon?url=${encodeURIComponent(src)}`}
+      alt={name}
+      loading="lazy"
+      className="w-full h-full object-cover"
+      onError={() => setErr(true)}
+    />
+  )
 }
 
 export default function IPTVPage() {
   const { t } = useRegion()
   const [configured, setConfigured] = useState<boolean | null>(null)
+  const [section, setSection] = useState<Section>('live')
   const [categories, setCategories] = useState<Category[]>([])
-  const [channels, setChannels] = useState<Channel[]>([])
   const [selectedCat, setSelectedCat] = useState<string | null>(null)
+  const [items, setItems] = useState<(Channel | VodItem | SeriesItem)[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadingCats, setLoadingCats] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -31,25 +61,44 @@ export default function IPTVPage() {
       .catch(() => setConfigured(false))
   }, [])
 
-  useEffect(() => {
-    if (!configured) return
-    fetch(`${API_BASE}/api/iptv/categories`)
-      .then(r => r.json())
-      .then(d => Array.isArray(d) ? setCategories(d) : setCategories([]))
-      .catch(() => {})
-  }, [configured])
-
-  const loadChannels = useCallback(async (catId: string | null) => {
-    setLoading(true)
+  const loadCategories = useCallback(async (sec: Section) => {
+    setLoadingCats(true)
+    setCategories([])
+    setSelectedCat(null)
+    setItems([])
     setError(null)
     try {
-      const url = catId
-        ? `${API_BASE}/api/iptv/channels?category_id=${catId}`
-        : `${API_BASE}/api/iptv/channels`
-      const res = await fetch(url)
+      const ep = sec === 'live' ? 'categories' : sec === 'vod' ? 'vod_categories' : 'series_categories'
+      const res = await fetch(`${API_BASE}/api/iptv/${ep}`)
       if (!res.ok) throw new Error()
       const data = await res.json()
-      setChannels(Array.isArray(data) ? data : [])
+      const cats: Category[] = Array.isArray(data) ? data : []
+      setCategories(cats)
+      if (cats.length > 0) setSelectedCat(cats[0].category_id)
+    } catch {
+      setError(t('iptv_error'))
+    } finally {
+      setLoadingCats(false)
+    }
+  }, [t])
+
+  useEffect(() => {
+    if (configured) loadCategories(section)
+  }, [configured, section, loadCategories])
+
+  const loadItems = useCallback(async (sec: Section, catId: string) => {
+    setLoading(true)
+    setError(null)
+    setItems([])
+    try {
+      let url: string
+      if (sec === 'live') url = `${API_BASE}/api/iptv/channels?category_id=${catId}`
+      else if (sec === 'vod') url = `${API_BASE}/api/iptv/vod?category_id=${catId}`
+      else url = `${API_BASE}/api/iptv/series?category_id=${catId}`
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`${res.status}`)
+      const data = await res.json()
+      setItems(Array.isArray(data) ? data : [])
     } catch {
       setError(t('iptv_error'))
     } finally {
@@ -58,12 +107,14 @@ export default function IPTVPage() {
   }, [t])
 
   useEffect(() => {
-    if (configured) loadChannels(selectedCat)
-  }, [configured, selectedCat, loadChannels])
+    if (configured && selectedCat) loadItems(section, selectedCat)
+  }, [configured, section, selectedCat, loadItems])
 
-  const filtered = channels.filter(c =>
-    !search || c.name.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = items.filter(item => {
+    if (!search) return true
+    const name = 'name' in item ? (item as { name: string }).name : ''
+    return name.toLowerCase().includes(search.toLowerCase())
+  })
 
   if (configured === null) return (
     <div className="flex items-center justify-center min-h-screen">
@@ -81,17 +132,37 @@ export default function IPTVPage() {
     </div>
   )
 
+  const tabs: { id: Section; label: string; icon: React.ReactNode }[] = [
+    { id: 'live', label: t('iptv_tab_channels'), icon: <Tv className="w-4 h-4" /> },
+    { id: 'vod', label: t('iptv_tab_vod'), icon: <Film className="w-4 h-4" /> },
+    { id: 'series', label: t('iptv_tab_series'), icon: <Layers className="w-4 h-4" /> },
+  ]
+
   return (
     <div className="min-h-screen px-4 py-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-yt-text text-2xl font-semibold flex items-center gap-2">
-          <Tv className="w-6 h-6 text-yt-red" />
-          {t('iptv_title')}
-        </h1>
+      <h1 className="text-yt-text text-2xl font-semibold flex items-center gap-2 mb-6">
+        <Tv className="w-6 h-6 text-yt-red" />
+        {t('iptv_title')}
+      </h1>
+
+      {/* Section tabs */}
+      <div className="flex gap-2 mb-6">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => { setSection(tab.id); setSearch('') }}
+            className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-colors ${
+              section === tab.id ? 'bg-yt-text text-yt-bg' : 'bg-yt-secondary text-yt-text-secondary hover:bg-yt-hover'
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Search */}
-      <div className="relative mb-6">
+      <div className="relative mb-5">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-yt-text-muted" />
         <input
           type="text"
@@ -103,23 +174,17 @@ export default function IPTVPage() {
         />
       </div>
 
-      {/* Categories */}
-      {categories.length > 0 && (
+      {/* Category pills */}
+      {!loadingCats && categories.length > 0 && (
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
-          <button
-            onClick={() => setSelectedCat(null)}
-            className={`flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              !selectedCat ? 'bg-yt-text text-yt-bg' : 'bg-yt-secondary text-yt-text-secondary hover:bg-yt-hover'
-            }`}
-          >
-            {t('iptv_all_cats')}
-          </button>
           {categories.map(cat => (
             <button
               key={cat.category_id}
               onClick={() => setSelectedCat(cat.category_id)}
               className={`flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                selectedCat === cat.category_id ? 'bg-yt-text text-yt-bg' : 'bg-yt-secondary text-yt-text-secondary hover:bg-yt-hover'
+                selectedCat === cat.category_id
+                  ? 'bg-yt-red text-white'
+                  : 'bg-yt-secondary text-yt-text-secondary hover:bg-yt-hover'
               }`}
             >
               {cat.category_name}
@@ -128,36 +193,67 @@ export default function IPTVPage() {
         </div>
       )}
 
-      {/* Channels grid */}
-      {loading ? (
+      {/* Content */}
+      {loading || loadingCats ? (
         <div className="flex justify-center py-20">
           <div className="w-8 h-8 border-2 border-yt-red border-t-transparent rounded-full animate-spin" />
         </div>
       ) : error ? (
         <div className="text-center py-20">
-          <p className="text-yt-text-muted">{error}</p>
+          <p className="text-yt-text-muted mb-4">{error}</p>
+          <button
+            onClick={() => selectedCat && loadItems(section, selectedCat)}
+            className="px-5 py-2 bg-yt-red text-white rounded-full text-sm font-medium hover:bg-yt-red-hover transition-colors"
+          >
+            {t('retry')}
+          </button>
         </div>
-      ) : (
+      ) : section === 'live' ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-          {filtered.map(channel => (
+          {(filtered as Channel[]).map(ch => (
             <Link
-              key={channel.stream_id}
-              href={`/iptv/watch/${channel.stream_id}?name=${encodeURIComponent(channel.name)}&icon=${encodeURIComponent(channel.stream_icon || '')}`}
-              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-yt-secondary hover:bg-yt-hover transition-colors border border-yt-border/30 cursor-pointer"
+              key={ch.stream_id}
+              href={`/iptv/watch/${ch.stream_id}?type=live&name=${encodeURIComponent(ch.name)}&icon=${encodeURIComponent(ch.stream_icon || '')}`}
+              className="group flex flex-col items-center gap-2 p-3 rounded-xl bg-yt-secondary hover:bg-yt-hover transition-colors border border-yt-border/30"
             >
               <div className="w-16 h-16 rounded-xl bg-yt-bg flex items-center justify-center overflow-hidden">
-                {channel.stream_icon ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={channel.stream_icon} alt={channel.name} className="w-full h-full object-contain p-1" onError={e => { (e.target as HTMLImageElement).style.display='none' }} />
-                ) : (
-                  <Radio className="w-8 h-8 text-yt-text-muted" />
-                )}
+                <IptvIcon src={ch.stream_icon} name={ch.name} />
               </div>
-              <p className="text-yt-text text-xs font-medium text-center line-clamp-2 leading-tight">{channel.name}</p>
+              <p className="text-yt-text text-xs font-medium text-center line-clamp-2 leading-tight">{ch.name}</p>
               <div className="flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
                 <span className="text-[10px] text-yt-text-muted">{t('iptv_live')}</span>
               </div>
+            </Link>
+          ))}
+        </div>
+      ) : section === 'vod' ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+          {(filtered as VodItem[]).map(v => (
+            <Link
+              key={v.stream_id}
+              href={`/iptv/watch/${v.stream_id}?type=vod&ext=${v.container_extension || 'mp4'}&name=${encodeURIComponent(v.name)}&icon=${encodeURIComponent(v.stream_icon || '')}`}
+              className="group flex flex-col rounded-xl overflow-hidden bg-yt-secondary hover:bg-yt-hover transition-colors border border-yt-border/30"
+            >
+              <div className="relative w-full aspect-[2/3] bg-yt-bg">
+                <CoverImage src={v.stream_icon} name={v.name} fallback={<Film className="w-10 h-10 text-yt-text-muted" />} />
+              </div>
+              <p className="text-yt-text text-xs font-medium line-clamp-2 leading-tight px-2 py-2">{v.name}</p>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+          {(filtered as SeriesItem[]).map(s => (
+            <Link
+              key={s.series_id}
+              href={`/iptv/series/${s.series_id}?name=${encodeURIComponent(s.name)}&icon=${encodeURIComponent(s.cover || '')}`}
+              className="group flex flex-col rounded-xl overflow-hidden bg-yt-secondary hover:bg-yt-hover transition-colors border border-yt-border/30"
+            >
+              <div className="relative w-full aspect-[2/3] bg-yt-bg">
+                <CoverImage src={s.cover} name={s.name} fallback={<Layers className="w-10 h-10 text-yt-text-muted" />} />
+              </div>
+              <p className="text-yt-text text-xs font-medium line-clamp-2 leading-tight px-2 py-2">{s.name}</p>
             </Link>
           ))}
         </div>

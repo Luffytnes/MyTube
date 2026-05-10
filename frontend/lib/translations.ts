@@ -98,6 +98,8 @@ export interface Translations {
   iptv_password: string; iptv_save: string; iptv_saved: string
   iptv_delete: string; iptv_epg_now: string; iptv_epg_next: string
   iptv_categories: string; iptv_all_cats: string
+  iptv_tab_channels: string; iptv_tab_vod: string; iptv_tab_series: string
+  iptv_season: string; iptv_episode_short: string
   news_title: string; news_loading: string; news_error: string; news_empty: string
   news_cat_general: string; news_cat_technology: string; news_cat_business: string
   news_cat_entertainment: string; news_cat_sports: string; news_cat_science: string
@@ -218,6 +220,8 @@ export const translations: Record<Lang, Translations> = {
     iptv_server: 'Server URL', iptv_username: 'Username', iptv_password: 'Password',
     iptv_save: 'Save', iptv_saved: 'Saved!', iptv_delete: 'Remove',
     iptv_epg_now: 'Now', iptv_epg_next: 'Next', iptv_categories: 'Categories', iptv_all_cats: 'All',
+    iptv_tab_channels: 'Channels', iptv_tab_vod: 'Movies', iptv_tab_series: 'Series',
+    iptv_season: 'Season', iptv_episode_short: 'Ep.',
     news_title: 'News', news_loading: 'Loading news…', news_error: 'Failed to load news.', news_empty: 'No articles found.',
     news_cat_general: 'General', news_cat_technology: 'Tech', news_cat_business: 'Business', news_cat_entertainment: 'Entertainment', news_cat_sports: 'Sports', news_cat_science: 'Science', news_cat_health: 'Health', news_cat_world: 'World', news_cat_nation: 'Nation', news_cat_politics: 'Politics',
     news_ago_just_now: 'Just now', news_ago_minutes: 'min ago', news_ago_hours: 'h ago', news_ago_days: 'd ago', news_read_more: 'Read',
@@ -332,6 +336,8 @@ export const translations: Record<Lang, Translations> = {
     iptv_server: 'URL du serveur', iptv_username: 'Identifiant', iptv_password: 'Mot de passe',
     iptv_save: 'Enregistrer', iptv_saved: 'Enregistré !', iptv_delete: 'Supprimer',
     iptv_epg_now: 'En cours', iptv_epg_next: 'Ensuite', iptv_categories: 'Catégories', iptv_all_cats: 'Tout',
+    iptv_tab_channels: 'Chaînes', iptv_tab_vod: 'Films', iptv_tab_series: 'Séries',
+    iptv_season: 'Saison', iptv_episode_short: 'Ép.',
     news_title: 'Actualité', news_loading: 'Chargement des actualités…', news_error: 'Impossible de charger les actualités.', news_empty: 'Aucun article trouvé.',
     news_cat_general: 'Général', news_cat_technology: 'Tech', news_cat_business: 'Business', news_cat_entertainment: 'Divertissement', news_cat_sports: 'Sport', news_cat_science: 'Science', news_cat_health: 'Santé', news_cat_world: 'Monde', news_cat_nation: 'Nation', news_cat_politics: 'Politique',
     news_ago_just_now: 'À l\'instant', news_ago_minutes: 'min', news_ago_hours: 'h', news_ago_days: 'j', news_read_more: 'Lire',
@@ -444,6 +450,8 @@ export const translations: Record<Lang, Translations> = {
     iptv_server: 'URL del servidor', iptv_username: 'Usuario', iptv_password: 'Contraseña',
     iptv_save: 'Guardar', iptv_saved: '¡Guardado!', iptv_delete: 'Eliminar',
     iptv_epg_now: 'Ahora', iptv_epg_next: 'Siguiente', iptv_categories: 'Categorías', iptv_all_cats: 'Todo',
+    iptv_tab_channels: 'Canales', iptv_tab_vod: 'Películas', iptv_tab_series: 'Series',
+    iptv_season: 'Temporada', iptv_episode_short: 'Ep.',
     news_title: 'Noticias', news_loading: 'Cargando noticias…', news_error: 'Error al cargar las noticias.', news_empty: 'No se encontraron artículos.',
     news_cat_general: 'General', news_cat_technology: 'Tecnología', news_cat_business: 'Negocios', news_cat_entertainment: 'Entretenimiento', news_cat_sports: 'Deportes', news_cat_science: 'Ciencia', news_cat_health: 'Salud', news_cat_world: 'Mundo', news_cat_nation: 'Nacional', news_cat_politics: 'Política',
     news_ago_just_now: 'Ahora', news_ago_minutes: 'min', news_ago_hours: 'h', news_ago_days: 'd', news_read_more: 'Leer',
@@ -556,6 +564,8 @@ export const translations: Record<Lang, Translations> = {
     iptv_server: 'Server-URL', iptv_username: 'Benutzername', iptv_password: 'Passwort',
     iptv_save: 'Speichern', iptv_saved: 'Gespeichert!', iptv_delete: 'Entfernen',
     iptv_epg_now: 'Jetzt', iptv_epg_next: 'Danach', iptv_categories: 'Kategorien', iptv_all_cats: 'Alle',
+    iptv_tab_channels: 'Sender', iptv_tab_vod: 'Filme', iptv_tab_series: 'Serien',
+    iptv_season: 'Staffel', iptv_episode_short: 'Ep.',
     news_title: 'Nachrichten', news_loading: 'Nachrichten werden geladen…', news_error: 'Nachrichten konnten nicht geladen werden.', news_empty: 'Keine Artikel gefunden.',
     news_cat_general: 'Allgemein', news_cat_technology: 'Technik', news_cat_business: 'Wirtschaft', news_cat_entertainment: 'Unterhaltung', news_cat_sports: 'Sport', news_cat_science: 'Wissenschaft', news_cat_health: 'Gesundheit', news_cat_world: 'Welt', news_cat_nation: 'National', news_cat_politics: 'Politik',
     news_ago_just_now: 'Jetzt', news_ago_minutes: 'Min.', news_ago_hours: 'Std.', news_ago_days: 'T.', news_read_more: 'Lesen',
@@ -668,6 +678,8 @@ export const translations: Record<Lang, Translations> = {
     iptv_server: 'URL do servidor', iptv_username: 'Usuário', iptv_password: 'Senha',
     iptv_save: 'Salvar', iptv_saved: 'Salvo!', iptv_delete: 'Remover',
     iptv_epg_now: 'Agora', iptv_epg_next: 'A seguir', iptv_categories: 'Categorias', iptv_all_cats: 'Todos',
+    iptv_tab_channels: 'Canais', iptv_tab_vod: 'Filmes', iptv_tab_series: 'Séries',
+    iptv_season: 'Temporada', iptv_episode_short: 'Ep.',
     news_title: 'Notícias', news_loading: 'Carregando notícias…', news_error: 'Erro ao carregar notícias.', news_empty: 'Nenhum artigo encontrado.',
     news_cat_general: 'Geral', news_cat_technology: 'Tecnologia', news_cat_business: 'Negócios', news_cat_entertainment: 'Entretenimento', news_cat_sports: 'Esportes', news_cat_science: 'Ciência', news_cat_health: 'Saúde', news_cat_world: 'Mundo', news_cat_nation: 'Nacional', news_cat_politics: 'Política',
     news_ago_just_now: 'Agora', news_ago_minutes: 'min', news_ago_hours: 'h', news_ago_days: 'd', news_read_more: 'Ler',
@@ -780,6 +792,8 @@ export const translations: Record<Lang, Translations> = {
     iptv_server: 'URL del server', iptv_username: 'Nome utente', iptv_password: 'Password',
     iptv_save: 'Salva', iptv_saved: 'Salvato!', iptv_delete: 'Rimuovi',
     iptv_epg_now: 'Ora', iptv_epg_next: 'Dopo', iptv_categories: 'Categorie', iptv_all_cats: 'Tutti',
+    iptv_tab_channels: 'Canali', iptv_tab_vod: 'Film', iptv_tab_series: 'Serie',
+    iptv_season: 'Stagione', iptv_episode_short: 'Ep.',
     news_title: 'Notizie', news_loading: 'Caricamento notizie…', news_error: 'Impossibile caricare le notizie.', news_empty: 'Nessun articolo trovato.',
     news_cat_general: 'Generale', news_cat_technology: 'Tecnologia', news_cat_business: 'Economia', news_cat_entertainment: 'Intrattenimento', news_cat_sports: 'Sport', news_cat_science: 'Scienza', news_cat_health: 'Salute', news_cat_world: 'Mondo', news_cat_nation: 'Nazionale', news_cat_politics: 'Politica',
     news_ago_just_now: 'Ora', news_ago_minutes: 'min fa', news_ago_hours: 'ore fa', news_ago_days: 'gg fa', news_read_more: 'Leggi',
@@ -892,6 +906,8 @@ export const translations: Record<Lang, Translations> = {
     iptv_server: 'サーバーURL', iptv_username: 'ユーザー名', iptv_password: 'パスワード',
     iptv_save: '保存', iptv_saved: '保存済み！', iptv_delete: '削除',
     iptv_epg_now: '現在', iptv_epg_next: '次', iptv_categories: 'カテゴリ', iptv_all_cats: 'すべて',
+    iptv_tab_channels: 'チャンネル', iptv_tab_vod: '映画', iptv_tab_series: 'シリーズ',
+    iptv_season: 'シーズン', iptv_episode_short: '話',
     news_title: 'ニュース', news_loading: 'ニュースを読み込み中…', news_error: 'ニュースを読み込めませんでした。', news_empty: '記事が見つかりません。',
     news_cat_general: '総合', news_cat_technology: 'テクノロジー', news_cat_business: 'ビジネス', news_cat_entertainment: 'エンタメ', news_cat_sports: 'スポーツ', news_cat_science: 'サイエンス', news_cat_health: '健康', news_cat_world: '国際', news_cat_nation: '国内', news_cat_politics: '政治',
     news_ago_just_now: 'たった今', news_ago_minutes: '分前', news_ago_hours: '時間前', news_ago_days: '日前', news_read_more: '読む',
@@ -1004,6 +1020,8 @@ export const translations: Record<Lang, Translations> = {
     iptv_server: '서버 URL', iptv_username: '사용자 이름', iptv_password: '비밀번호',
     iptv_save: '저장', iptv_saved: '저장됨!', iptv_delete: '삭제',
     iptv_epg_now: '현재', iptv_epg_next: '다음', iptv_categories: '카테고리', iptv_all_cats: '전체',
+    iptv_tab_channels: '채널', iptv_tab_vod: '영화', iptv_tab_series: '시리즈',
+    iptv_season: '시즌', iptv_episode_short: '화',
     news_title: '뉴스', news_loading: '뉴스 로딩 중…', news_error: '뉴스를 불러올 수 없습니다.', news_empty: '기사를 찾을 수 없습니다.',
     news_cat_general: '전체', news_cat_technology: '기술', news_cat_business: '비즈니스', news_cat_entertainment: '엔터테인먼트', news_cat_sports: '스포츠', news_cat_science: '과학', news_cat_health: '건강', news_cat_world: '세계', news_cat_nation: '국내', news_cat_politics: '정치',
     news_ago_just_now: '방금', news_ago_minutes: '분 전', news_ago_hours: '시간 전', news_ago_days: '일 전', news_read_more: '읽기',
@@ -1116,6 +1134,8 @@ export const translations: Record<Lang, Translations> = {
     iptv_server: 'URL сервера', iptv_username: 'Имя пользователя', iptv_password: 'Пароль',
     iptv_save: 'Сохранить', iptv_saved: 'Сохранено!', iptv_delete: 'Удалить',
     iptv_epg_now: 'Сейчас', iptv_epg_next: 'Далее', iptv_categories: 'Категории', iptv_all_cats: 'Все',
+    iptv_tab_channels: 'Каналы', iptv_tab_vod: 'Фильмы', iptv_tab_series: 'Сериалы',
+    iptv_season: 'Сезон', iptv_episode_short: 'Эп.',
     news_title: 'Новости', news_loading: 'Загрузка новостей…', news_error: 'Не удалось загрузить новости.', news_empty: 'Статьи не найдены.',
     news_cat_general: 'Главное', news_cat_technology: 'Технологии', news_cat_business: 'Бизнес', news_cat_entertainment: 'Развлечения', news_cat_sports: 'Спорт', news_cat_science: 'Наука', news_cat_health: 'Здоровье', news_cat_world: 'Мир', news_cat_nation: 'Страна', news_cat_politics: 'Политика',
     news_ago_just_now: 'Только что', news_ago_minutes: 'мин назад', news_ago_hours: 'ч назад', news_ago_days: 'д назад', news_read_more: 'Читать',
