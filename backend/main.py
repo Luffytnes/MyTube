@@ -3977,32 +3977,74 @@ async def iptv_vod(category_id: Optional[str] = None):
 
 @app.get("/api/iptv/vod_stream/{stream_id}")
 async def iptv_vod_stream_url(stream_id: str, request: Request, ext: str = "mp4"):
+    """Return the best available URL for a VOD stream: HLS if supported, direct proxy otherwise."""
     if not _xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
+    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
     base = str(request.base_url).rstrip("/")
-    return {"url": f"{base}/api/iptv/vod_hls/{stream_id}"}
+    # Check if Xtream server exposes this VOD as HLS
+    try:
+        async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+            resp = await client.get(f"{s}/movie/{u}/{p}/{stream_id}.m3u8")
+        if resp.status_code == 200 and "#EXTM3U" in resp.text:
+            return {"url": f"{base}/api/iptv/vod_hls/{stream_id}", "hls": True}
+    except Exception:
+        pass
+    # Fall back: direct file proxy (handles Range requests for seeking)
+    return {"url": f"{base}/api/iptv/vod_proxy/{stream_id}?ext={ext}", "hls": False}
 
 @app.get("/api/iptv/vod_hls/{stream_id}")
 async def iptv_vod_hls(stream_id: str, request: Request):
-    """Proxy VOD as HLS manifest to fix CORS and codec compatibility."""
+    """Proxy VOD HLS manifest + rewrite segment URLs through our proxy."""
     if not _xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
     s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
     m3u8_url = f"{s}/movie/{u}/{p}/{stream_id}.m3u8"
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        resp = await client.get(m3u8_url)
+    if resp.status_code != 200 or "#EXTM3U" not in resp.text:
+        raise HTTPException(status_code=502, detail="VOD HLS not available")
+    base = str(request.base_url).rstrip("/")
+    rewritten = rewrite_hls_manifest(resp.text, str(resp.url), f"{base}/api/iptv/proxy")
+    return Response(
+        content=rewritten,
+        media_type="application/vnd.apple.mpegurl",
+        headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache, no-store"},
+    )
+
+@app.get("/api/iptv/vod_proxy/{stream_id}")
+async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4"):
+    """Stream VOD file through backend with Range support (fixes CORS for direct files)."""
+    if not _xtream_cfg.get("server"):
+        raise HTTPException(status_code=400, detail="IPTV not configured")
+    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
+    url = f"{s}/movie/{u}/{p}/{stream_id}.{ext}"
+    req_headers: dict = {}
+    if "range" in request.headers:
+        req_headers["Range"] = request.headers["range"]
+    client = httpx.AsyncClient(
+        timeout=httpx.Timeout(connect=10.0, read=None, write=None, pool=5.0),
+        follow_redirects=True,
+    )
     try:
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-            resp = await client.get(m3u8_url)
-        if resp.status_code == 200 and "#EXTM3U" in resp.text:
-            base = str(request.base_url).rstrip("/")
-            rewritten = rewrite_hls_manifest(resp.text, str(resp.url), f"{base}/api/iptv/proxy")
-            return Response(
-                content=rewritten,
-                media_type="application/vnd.apple.mpegurl",
-                headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache, no-store"},
-            )
-    except Exception:
-        pass
-    raise HTTPException(status_code=502, detail="VOD HLS not available for this stream")
+        req = client.build_request("GET", url, headers=req_headers)
+        resp = await client.send(req, stream=True)
+    except Exception as e:
+        await client.aclose()
+        raise HTTPException(status_code=502, detail=str(e))
+    ct = resp.headers.get("content-type", "video/mp4")
+    out_headers: dict = {"Access-Control-Allow-Origin": "*", "Accept-Ranges": "bytes"}
+    for src, dst in [("content-range", "Content-Range"), ("content-length", "Content-Length")]:
+        if src in resp.headers:
+            out_headers[dst] = resp.headers[src]
+    async def _stream():
+        try:
+            async for chunk in resp.aiter_bytes(65536):
+                yield chunk
+        finally:
+            await resp.aclose()
+            await client.aclose()
+    return StreamingResponse(_stream(), status_code=resp.status_code, headers=out_headers, media_type=ct)
 
 @app.get("/api/iptv/series_categories")
 async def iptv_series_categories():
