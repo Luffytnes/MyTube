@@ -340,7 +340,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     },
     {
       id: 'iptv',
-      label: 'IPTV',
+      label: 'MyTube TV',
       icon: <Tv className="w-4 h-4" />,
       badge: xtreamConfigured ? (
         <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
@@ -853,7 +853,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 {xtreamConfigured && (
                   <p className="text-green-400 text-xs flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                    IPTV configuré
+                    MyTube TV configuré
                   </p>
                 )}
               </div>

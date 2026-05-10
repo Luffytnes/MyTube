@@ -93,14 +93,14 @@ export default function Sidebar() {
         <div className="border-t border-yt-border/40 my-3 mx-3" />
         <nav className="px-2 flex flex-col gap-0.5">
           <Link
-            href="/iptv"
+            href="/tv"
             className={cn(
               'flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors group',
-              pathname.startsWith('/iptv') ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
+              pathname.startsWith('/tv') ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
             )}
             title={t('nav_iptv')}
           >
-            <Tv className={cn('w-5 h-5 flex-shrink-0', pathname.startsWith('/iptv') ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red transition-colors')} />
+            <Tv className={cn('w-5 h-5 flex-shrink-0', pathname.startsWith('/tv') ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red transition-colors')} />
             <span className="hidden xl:block truncate">{t('nav_iptv')}</span>
           </Link>
           <Link
@@ -266,10 +266,10 @@ export default function Sidebar() {
             {/* Music & News */}
             <div className="px-2 flex flex-col gap-0.5">
               <Link
-                href="/iptv"
-                className={cn('flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-medium transition-colors', pathname.startsWith('/iptv') ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text')}
+                href="/tv"
+                className={cn('flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-medium transition-colors', pathname.startsWith('/tv') ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text')}
               >
-                <Tv className={cn('w-5 h-5 flex-shrink-0', pathname.startsWith('/iptv') ? 'text-yt-red' : 'text-yt-text-secondary')} />
+                <Tv className={cn('w-5 h-5 flex-shrink-0', pathname.startsWith('/tv') ? 'text-yt-red' : 'text-yt-text-secondary')} />
                 {t('nav_iptv')}
               </Link>
               <Link

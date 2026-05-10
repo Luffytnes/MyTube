@@ -8,8 +8,9 @@ import Sidebar from './Sidebar'
 export default function ClientLayoutWrapper({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const isMusic = pathname.startsWith('/music')
+  const isTv = pathname.startsWith('/tv')
 
-  if (isMusic) {
+  if (isMusic || isTv) {
     return <>{children}</>
   }
 

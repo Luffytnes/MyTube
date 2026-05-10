@@ -3788,6 +3788,14 @@ async def get_news(region: str = "FR", category: str = "general"):
 _xtream_cfg_path = os.path.join(os.path.expanduser("~"), ".mytube", "xtream.json")
 _xtream_cfg: dict = {}
 
+# Persistent client for IPTV VOD streaming — reuses TCP connections to Xtream
+# so that each browser Range request doesn't pay a full TLS handshake.
+_iptv_stream_client = httpx.AsyncClient(
+    timeout=httpx.Timeout(connect=10.0, read=None, write=None, pool=5.0),
+    follow_redirects=True,
+    limits=httpx.Limits(max_connections=20, max_keepalive_connections=10, keepalive_expiry=30),
+)
+
 def _xtream_load():
     global _xtream_cfg
     try:
@@ -3975,23 +3983,155 @@ async def iptv_vod(category_id: Optional[str] = None):
     data = await _xtream_api("get_vod_streams", extra=extra, timeout=60.0)
     return data if isinstance(data, list) else []
 
+@app.get("/api/iptv/vod_tracks/{stream_id}")
+async def iptv_vod_tracks(stream_id: str, ext: str = "mp4", media: str = "movie"):
+    """List audio and subtitle tracks via ffprobe."""
+    if not _xtream_cfg.get("server"):
+        raise HTTPException(status_code=400, detail="IPTV not configured")
+    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
+    src_url = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
+    streams = []
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "/opt/homebrew/bin/ffprobe",
+            "-v", "quiet", "-print_format", "json",
+            "-seekable", "0",
+            "-analyzeduration", "3000000", "-probesize", "10000000",
+            "-show_streams",
+            src_url,
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            cwd="/tmp",
+        )
+        try:
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10.0)
+            streams = json.loads(stdout).get("streams", [])
+        except (asyncio.TimeoutError, Exception):
+            try: proc.kill()
+            except Exception: pass
+            try: await asyncio.wait_for(proc.wait(), timeout=2.0)
+            except Exception: pass
+    except Exception:
+        pass
+
+    audio, subtitles, a_idx, s_idx = [], [], 0, 0
+    for stream in streams:
+        ctype = stream.get("codec_type", "")
+        tags = stream.get("tags", {})
+        lang = tags.get("language") or tags.get("lang") or ""
+        title = tags.get("title") or tags.get("handler_name") or ""
+        if ctype == "audio":
+            audio.append({"index": a_idx, "language": lang, "title": title, "codec": stream.get("codec_name", ""), "channels": stream.get("channels", 2)})
+            a_idx += 1
+        elif ctype == "subtitle":
+            subtitles.append({"index": s_idx, "language": lang, "title": title, "codec": stream.get("codec_name", "")})
+            s_idx += 1
+    return {"audio": audio, "subtitles": subtitles}
+
+
+@app.get("/api/iptv/vod_subtitle/{stream_id}")
+async def iptv_vod_subtitle(stream_id: str, ext: str = "mp4", media: str = "movie", sub_idx: int = 0):
+    """Extract an embedded subtitle track as WebVTT (buffered, text subs only)."""
+    if not _xtream_cfg.get("server"):
+        raise HTTPException(status_code=400, detail="IPTV not configured")
+    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
+    url = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
+    cmd = [
+        "/opt/homebrew/bin/ffmpeg", "-loglevel", "error",
+        "-seekable", "0", "-i", url,
+        "-map", f"0:s:{sub_idx}",
+        "-vn", "-an",  # skip video/audio decoding — subtitle only
+        "-f", "webvtt",
+        "pipe:1",
+    ]
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            cwd="/tmp",
+        )
+        try:
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30.0)
+        except asyncio.TimeoutError:
+            try: proc.kill()
+            except Exception: pass
+            await proc.wait()
+            raise HTTPException(status_code=504, detail="Subtitle extraction timed out")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return Response(
+        content=stdout,
+        media_type="text/vtt",
+        headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"},
+    )
+
+
 @app.get("/api/iptv/vod_stream/{stream_id}")
-async def iptv_vod_stream_url(stream_id: str, request: Request, ext: str = "mp4", media: str = "movie"):
-    """Return the best available URL for a VOD stream: HLS if supported, direct proxy otherwise.
-    media: 'movie' for VOD films, 'series' for series episodes."""
+async def iptv_vod_stream_url(stream_id: str, request: Request, ext: str = "mp4", media: str = "movie", audio_idx: int = 0):
+    """Return the ffmpeg-transcoded proxy URL + duration via ffprobe (3 s timeout)."""
     if not _xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
     s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
     base = str(request.base_url).rstrip("/")
-    # Check if Xtream server exposes this as HLS
+    src_url = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
+
+    duration_secs: float | None = None
     try:
-        async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
-            resp = await client.get(f"{s}/{media}/{u}/{p}/{stream_id}.m3u8")
-        if resp.status_code == 200 and "#EXTM3U" in resp.text:
-            return {"url": f"{base}/api/iptv/vod_hls/{stream_id}?media={media}", "hls": True}
+        proc = await asyncio.create_subprocess_exec(
+            "/opt/homebrew/bin/ffprobe",
+            "-v", "quiet", "-print_format", "json",
+            "-seekable", "0",
+            "-analyzeduration", "3000000", "-probesize", "10000000",
+            # Ask for both container duration and per-stream duration (fallback)
+            "-show_entries", "format=duration:stream=duration,codec_type",
+            src_url,
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            cwd="/tmp",
+        )
+        try:
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5.0)
+            info = json.loads(stdout)
+            # 1) Format-level duration (most reliable)
+            dur = float(info.get("format", {}).get("duration") or 0)
+            if dur <= 0:
+                # 2) Fall back to first video stream duration
+                for s in info.get("streams", []):
+                    if s.get("codec_type") == "video":
+                        dur = float(s.get("duration") or 0)
+                        if dur > 0:
+                            break
+            if dur <= 0:
+                # 3) Any stream with a positive duration
+                for s in info.get("streams", []):
+                    dur = float(s.get("duration") or 0)
+                    if dur > 0:
+                        break
+            if dur > 0:
+                duration_secs = dur
+        except (asyncio.TimeoutError, Exception):
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=2.0)
+            except Exception:
+                pass
     except Exception:
         pass
-    return {"url": f"{base}/api/iptv/vod_proxy/{stream_id}?ext={ext}&media={media}", "hls": False}
+
+    return {
+        "url": f"{base}/api/iptv/vod_proxy/{stream_id}?ext={ext}&media={media}&audio_idx={audio_idx}",
+        "hls": False,
+        "duration": duration_secs,
+    }
 
 @app.get("/api/iptv/vod_hls/{stream_id}")
 async def iptv_vod_hls(stream_id: str, request: Request, media: str = "movie"):
@@ -4012,42 +4152,207 @@ async def iptv_vod_hls(stream_id: str, request: Request, media: str = "movie"):
         headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache, no-store"},
     )
 
+_FFMPEG = "/opt/homebrew/bin/ffmpeg"
+_OUTPUT_ARGS = [
+    # Disable subtitle/data streams (fMP4 can't mux most subtitle codecs)
+    "-sn", "-dn",
+    # Downmix to stereo + 48 kHz — Apple AudioToolbox (Firefox/Safari) rejects
+    # multi-channel AAC-LC AudioSpecificConfig (5.1 AC3/DTS input → 6-ch AAC fails)
+    "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-ar", "48000",
+    "-f", "mp4", "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+    "pipe:1",
+]
+
+async def _log_stderr(stderr: asyncio.StreamReader) -> None:
+    """Drain stderr line-by-line and log it. Must start BEFORE reading stdout
+    to prevent the 64 KB pipe-buffer from filling and deadlocking ffmpeg."""
+    try:
+        async for raw in stderr:
+            msg = raw.decode("utf-8", errors="replace").rstrip()
+            if msg:
+                print(f"[ffmpeg] {msg}", flush=True)
+    except Exception:
+        pass
+
+
+async def _download_reconnecting(url: str, stdin: asyncio.StreamWriter) -> None:
+    """Download *url* sequentially, reconnecting with Range requests whenever
+    the provider closes the connection mid-file (common rate-limit pattern).
+
+    Writes each received byte directly to *stdin* (ffmpeg's stdin pipe).
+    Stops cleanly when stdin closes (ffmpeg exited) or all data is received.
+    """
+    print(f"[downloader] start url={url[-40:]}", flush=True)
+    offset = 0
+    # Allow up to 300 reconnects — enough for a 5-hour film at 60-second chunks.
+    for attempt in range(300):
+        headers: dict[str, str] = {}
+        if offset > 0:
+            headers["Range"] = f"bytes={offset}-"
+            print(f"[downloader] reconnect attempt={attempt} offset={offset}", flush=True)
+        try:
+            async with httpx_client(
+                timeout=httpx.Timeout(connect=15.0, read=120.0, write=None, pool=None),
+                follow_redirects=True,
+            ) as client:
+                async with client.stream("GET", url, headers=headers) as resp:
+                    print(f"[downloader] HTTP {resp.status_code} offset={offset}", flush=True)
+                    if resp.status_code == 416:
+                        break  # Range not satisfiable → we already have everything
+                    if resp.status_code not in (200, 206):
+                        break
+                    async for chunk in resp.aiter_bytes(65536):
+                        try:
+                            stdin.write(chunk)
+                            await stdin.drain()
+                        except Exception as e:
+                            print(f"[downloader] stdin closed at offset={offset}: {e}", flush=True)
+                            return  # ffmpeg stdin closed (process killed or done)
+                        offset += len(chunk)
+            # Server closed cleanly — loop to reconnect from current offset.
+            print(f"[downloader] server EOF at offset={offset}, reconnecting...", flush=True)
+            if offset == 0:
+                print("[downloader] no data received, giving up", flush=True)
+                break
+        except Exception as exc:
+            print(f"[downloader] exception at offset={offset}: {exc}", flush=True)
+            if offset == 0 and attempt >= 2:
+                break
+            # Brief pause before reconnect
+            await asyncio.sleep(0.2)
+    print(f"[downloader] done, total={offset} bytes", flush=True)
+    try:
+        stdin.close()
+        await stdin.wait_closed()
+    except Exception:
+        pass
+
+
+async def _start_ffmpeg(cmd: list, timeout: float = 25.0) -> tuple[asyncio.subprocess.Process, bytes]:
+    """Start ffmpeg and read the first chunk within *timeout* seconds.
+
+    Returns (process, first_chunk) so the caller can start streaming.
+    Raises RuntimeError if ffmpeg exits without producing any output.
+
+    stderr is piped and drained by _log_stderr (started before reading stdout)
+    so the 64 KB pipe buffer never fills → no deadlock.
+    """
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdin=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    # Start draining stderr immediately — before touching stdout.
+    asyncio.ensure_future(_log_stderr(proc.stderr))
+    try:
+        chunk = await asyncio.wait_for(proc.stdout.read(4096), timeout=timeout)
+    except asyncio.TimeoutError:
+        try: proc.kill()
+        except Exception: pass
+        await proc.wait()
+        raise RuntimeError(f"timeout ({timeout:.0f}s) — source indisponible ou trop lente")
+    if not chunk:
+        rc = await proc.wait()
+        raise RuntimeError(f"source inaccessible ou format non supporté (exit {rc})")
+    return proc, chunk
+
+
 @app.get("/api/iptv/vod_proxy/{stream_id}")
-async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", media: str = "movie"):
-    """Stream VOD/series file through backend with Range support (fixes CORS)."""
+async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", media: str = "movie", audio_idx: int = 0):
+    """Transcode VOD/series → fragmented H.264 MP4.
+
+    The source is piped into ffmpeg via stdin (pipe:0) through a reconnecting
+    downloader. This bypasses providers that rate-limit HTTP connections to
+    ~60 seconds of data per request: our downloader transparently reconnects
+    with a Range: bytes=N- header so ffmpeg sees an uninterrupted stream.
+
+    Tries VideoToolbox (hardware) first; falls back to libx264 (software).
+    """
     if not _xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
     s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
-    url = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
-    req_headers: dict = {}
-    if "range" in request.headers:
-        req_headers["Range"] = request.headers["range"]
-    client = httpx.AsyncClient(
-        timeout=httpx.Timeout(connect=10.0, read=None, write=None, pool=5.0),
-        follow_redirects=True,
-    )
-    try:
-        req = client.build_request("GET", url, headers=req_headers)
-        resp = await client.send(req, stream=True)
-    except Exception as e:
-        await client.aclose()
-        raise HTTPException(status_code=502, detail=str(e))
-    ct = resp.headers.get("content-type", "video/mp4")
-    # Don't forward Content-Length — chunked transfer avoids "shorter than Content-Length"
-    # errors when the client disconnects mid-stream. Content-Range still provides total size.
-    out_headers: dict = {"Access-Control-Allow-Origin": "*", "Accept-Ranges": "bytes"}
-    if "content-range" in resp.headers:
-        out_headers["Content-Range"] = resp.headers["content-range"]
-    async def _stream():
+    src = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
+
+    # Feed source via stdin so the MKV demuxer runs in sequential (non-seekable)
+    # mode and our reconnect loop can transparently restart the HTTP download.
+    base = [_FFMPEG, "-loglevel", "error",
+            "-probesize", "2097152",        # 2 MB (vs défaut 5 MB) → sonde plus rapide
+            "-analyzeduration", "2000000",  # 2 s  (vs défaut 5 s)
+            "-i", "pipe:0",
+            "-map", "0:v:0?", "-map", f"0:a:{audio_idx}?"]
+
+    process: asyncio.subprocess.Process | None = None
+    first_chunk: bytes = b""
+    last_err = "transcoding failed"
+
+    for video_args, timeout in (
+        # libx264 first: standard-compliant H.264, compatible with all browsers
+        (["-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+          "-profile:v", "high", "-level", "4.1"], 45.0),
+        # VideoToolbox as fallback (faster on macOS but less browser-compatible)
+        (["-c:v", "h264_videotoolbox", "-b:v", "3M",
+          "-profile:v", "high", "-level", "4.1"], 15.0),
+    ):
+        cmd = base + video_args + _OUTPUT_ARGS
         try:
-            async for chunk in resp.aiter_bytes(65536):
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            asyncio.ensure_future(_log_stderr(proc.stderr))
+            asyncio.ensure_future(_download_reconnecting(src, proc.stdin))
+            try:
+                first_chunk = await asyncio.wait_for(proc.stdout.read(4096), timeout=timeout)
+            except asyncio.TimeoutError:
+                try: proc.kill()
+                except Exception: pass
+                await proc.wait()
+                last_err = f"timeout ({timeout:.0f}s)"
+                process = None
+                continue
+            if not first_chunk:
+                rc = await proc.wait()
+                last_err = f"source inaccessible ou format non supporté (exit {rc})"
+                process = None
+                continue
+            process = proc
+            break
+        except Exception as e:
+            last_err = str(e)
+            process = None
+
+    if process is None or not first_chunk:
+        raise HTTPException(status_code=502, detail=f"ffmpeg: {last_err}")
+
+    async def _stream():
+        assert process is not None
+        total = len(first_chunk)
+        yield first_chunk
+        print(f"[stream] started, first_chunk={len(first_chunk)}B", flush=True)
+        try:
+            while True:
+                chunk = await process.stdout.read(65536)
+                if not chunk:
+                    print(f"[stream] ffmpeg EOF, total={total//1024}KB", flush=True)
+                    break
+                total += len(chunk)
+                if total % (4 * 1024 * 1024) < 65536:
+                    print(f"[stream] {total//1024//1024}MB streamed", flush=True)
                 yield chunk
-        except Exception:
-            pass  # Client disconnected or server closed early
         finally:
-            await resp.aclose()
-            await client.aclose()
-    return StreamingResponse(_stream(), status_code=resp.status_code, headers=out_headers, media_type=ct)
+            print(f"[stream] ended, total={total//1024}KB", flush=True)
+            try: process.kill()
+            except Exception: pass
+            await process.wait()
+
+    return StreamingResponse(
+        _stream(),
+        media_type="video/mp4",
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
 
 @app.get("/api/iptv/series_categories")
 async def iptv_series_categories():
@@ -4063,6 +4368,131 @@ async def iptv_series_list(category_id: Optional[str] = None):
 @app.get("/api/iptv/series_info/{series_id}")
 async def iptv_series_info(series_id: str):
     return await _xtream_api("get_series_info", extra={"series_id": series_id}, timeout=20.0)
+
+@app.get("/api/iptv/search")
+async def iptv_search(q: str = "", type: str = "live"):
+    """Search across all live/vod/series streams (no category filter)."""
+    if not q.strip():
+        return []
+    q_lower = q.lower()
+    if type == "live":
+        data = await _xtream_api("get_live_streams", timeout=60.0)
+    elif type == "vod":
+        data = await _xtream_api("get_vod_streams", timeout=60.0)
+    else:
+        data = await _xtream_api("get_series", timeout=60.0)
+    if not isinstance(data, list):
+        return []
+    name_key = "name"
+    return [item for item in data if q_lower in str(item.get(name_key, "")).lower()][:100]
+
+
+_TNT_ORDER = [
+    "TF1", "France 2", "France 3", "Canal+", "France 5", "M6", "Arte",
+    "C8", "W9", "TMC", "TFX", "TF1 Séries Films", "LCI", "France 4",
+    "CNews", "CStar", "Gulli", "France Info", "BFM TV", "RMC Story",
+    "RMC Découverte", "Chérie 25", "NRJ 12", "LCP",
+]
+
+_THEMATIC_WORDS = {
+    "sport", "sports", "foot", "football", "rugby", "tennis",
+    "cinema", "cinéma", "film", "films",
+    "series", "séries",
+    "kids", "junior", "family", "famille",
+    "news", "business",
+    "décou", "decouverte", "découverte",
+    "comedy", "comedie",
+}
+_HD_TOKENS = {"hd", "4k", "uhd", "fhd"}
+
+
+def _normalize_tnt(s: str) -> str:
+    """Normalize a channel name for flexible TNT matching.
+
+    - Replace dots / underscores with spaces (providers use dots as separators)
+    - Insert space between letter→digit transitions (France2 → France 2, Chérie25 → Chérie 25)
+    - Collapse whitespace
+    """
+    s = re.sub(r'[._]+', ' ', s)
+    # [^\W\d_] matches any Unicode letter (including accented)
+    s = re.sub(r'([^\W\d_])(\d)', r'\1 \2', s)
+    return re.sub(r'\s+', ' ', s).strip()
+
+
+def _tnt_score(ch_lower: str, tnt_lower: str) -> int:
+    """Score how well ch_lower matches tnt_lower. Returns -1 if not a valid match.
+
+    HD variants score higher than exact SD matches so that 'TF1 HD' beats 'TF1'.
+    Thematic variants (sport, cinema, ...) are always rejected.
+    Handles provider naming conventions: 'FR:France2.HD', 'FR:France.Info.HD', etc.
+    """
+    # Strip common country/provider prefixes: "FR:", "FRA:", "[FR]", "FRANCE |", etc.
+    # Use IGNORECASE because ch_lower is already lowercased.
+    stripped = re.sub(r'^(\[?[A-Za-z]{2,4}\]?\s*[-|:]\s*)', '', ch_lower).strip()
+
+    # Normalize both sides: dots→spaces, letter-digit spacing
+    cand = _normalize_tnt(stripped)
+    base = _normalize_tnt(tnt_lower)
+
+    def _suffix_ok(full: str, pfx: str) -> tuple[bool, bool]:
+        """(valid, has_hd) — rejects thematic suffixes."""
+        suffix = full[len(pfx):].strip()
+        tokens = {t for t in suffix.split() if t}
+        if tokens & _THEMATIC_WORDS:
+            return False, False
+        return True, bool(tokens & _HD_TOKENS)
+
+    # Exact match (normalized)
+    if cand == base:
+        return 85
+
+    # Word-boundary startswith: "france 2 hd" starts with "france 2"
+    if cand.startswith(base) and (len(cand) == len(base) or cand[len(base)] == ' '):
+        ok, hd = _suffix_ok(cand, base)
+        if not ok:
+            return -1
+        return 100 if hd else 82  # HD beats exact (85)
+
+    # TNT base appears somewhere within candidate (word boundaries)
+    pattern = r'(?<!\w)' + re.escape(base) + r'(?!\w)'
+    if re.search(pattern, cand):
+        remainder = re.sub(pattern, ' ', cand).strip()
+        tokens = {t for t in remainder.split() if t}
+        if tokens & _THEMATIC_WORDS:
+            return -1
+        return 70 if bool(tokens & _HD_TOKENS) else 60
+
+    return -1
+
+
+@app.get("/api/iptv/tnt_channels")
+async def iptv_tnt_channels():
+    """Return best IPTV matches for French TNT channels, sorted by broadcast order."""
+    cached = cache_get("iptv:tnt")
+    if cached is not None:
+        return cached
+    data = await _xtream_api("get_live_streams", timeout=60.0)
+    if not isinstance(data, list):
+        return []
+    result = []
+    for idx, tnt_name in enumerate(_TNT_ORDER):
+        tnt_lower = tnt_name.lower()
+        best_score, best_ch = -1, None
+        for ch in data:
+            ch_name = str(ch.get("name", ""))
+            score = _tnt_score(ch_name.lower(), tnt_lower)
+            if score > best_score:
+                best_score, best_ch = score, ch
+        if best_ch is not None:
+            result.append({
+                "tnt_index": idx,
+                "tnt_name": tnt_name,
+                "stream_id": best_ch.get("stream_id"),
+                "name": best_ch.get("name", tnt_name),
+                "stream_icon": best_ch.get("stream_icon", ""),
+            })
+    cache_set("iptv:tnt", result)
+    return result
 
 
 if __name__ == "__main__":

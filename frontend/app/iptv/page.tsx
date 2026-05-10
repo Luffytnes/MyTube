@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Search, Tv, Radio, Film, Layers } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 import Link from 'next/link'
@@ -44,15 +45,25 @@ function CoverImage({ src, name, fallback }: { src: string; name: string; fallba
 
 export default function IPTVPage() {
   const { t } = useRegion()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
   const [configured, setConfigured] = useState<boolean | null>(null)
-  const [section, setSection] = useState<Section>('live')
+  const [section, setSection] = useState<Section>((searchParams.get('tab') as Section) || 'live')
   const [categories, setCategories] = useState<Category[]>([])
-  const [selectedCat, setSelectedCat] = useState<string | null>(null)
+  const [selectedCat, setSelectedCat] = useState<string | null>(searchParams.get('cat'))
   const [items, setItems] = useState<(Channel | VodItem | SeriesItem)[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
   const [loadingCats, setLoadingCats] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const pushUrl = useCallback((tab: Section, cat: string | null) => {
+    const params = new URLSearchParams()
+    params.set('tab', tab)
+    if (cat) params.set('cat', cat)
+    router.replace(`/iptv?${params.toString()}`, { scroll: false })
+  }, [router])
 
   useEffect(() => {
     fetch(`${API_BASE}/api/iptv/status`)
@@ -61,10 +72,9 @@ export default function IPTVPage() {
       .catch(() => setConfigured(false))
   }, [])
 
-  const loadCategories = useCallback(async (sec: Section) => {
+  const loadCategories = useCallback(async (sec: Section, savedCat?: string | null) => {
     setLoadingCats(true)
     setCategories([])
-    setSelectedCat(null)
     setItems([])
     setError(null)
     try {
@@ -74,17 +84,22 @@ export default function IPTVPage() {
       const data = await res.json()
       const cats: Category[] = Array.isArray(data) ? data : []
       setCategories(cats)
-      if (cats.length > 0) setSelectedCat(cats[0].category_id)
+      const catToSelect = savedCat && cats.find(c => c.category_id === savedCat)
+        ? savedCat
+        : cats[0]?.category_id ?? null
+      setSelectedCat(catToSelect)
+      pushUrl(sec, catToSelect)
     } catch {
       setError(t('iptv_error'))
     } finally {
       setLoadingCats(false)
     }
-  }, [t])
+  }, [t, pushUrl])
 
   useEffect(() => {
-    if (configured) loadCategories(section)
-  }, [configured, section, loadCategories])
+    if (configured) loadCategories(section, searchParams.get('cat'))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configured, section])
 
   const loadItems = useCallback(async (sec: Section, catId: string) => {
     setLoading(true)
@@ -150,7 +165,7 @@ export default function IPTVPage() {
         {tabs.map(tab => (
           <button
             key={tab.id}
-            onClick={() => { setSection(tab.id); setSearch('') }}
+            onClick={() => { setSection(tab.id); setSelectedCat(null); setSearch('') }}
             className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-semibold transition-colors ${
               section === tab.id ? 'bg-yt-text text-yt-bg' : 'bg-yt-secondary text-yt-text-secondary hover:bg-yt-hover'
             }`}
@@ -180,7 +195,7 @@ export default function IPTVPage() {
           {categories.map(cat => (
             <button
               key={cat.category_id}
-              onClick={() => setSelectedCat(cat.category_id)}
+              onClick={() => { setSelectedCat(cat.category_id); pushUrl(section, cat.category_id) }}
               className={`flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
                 selectedCat === cat.category_id
                   ? 'bg-yt-red text-white'

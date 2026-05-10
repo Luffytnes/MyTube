@@ -2,7 +2,7 @@
 
 <img src="assets/logo2.png" alt="MyTube" />
 
-**A privacy-focused YouTube frontend — no tracking, no ads, no Google.**
+**A privacy-focused YouTube + IPTV frontend — no tracking, no ads, no Google.**
 
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Next.js](https://img.shields.io/badge/Frontend-Next.js%2014-black?style=flat-square&logo=next.js)](https://nextjs.org)
@@ -16,7 +16,9 @@
 
 ## What is MyTube?
 
-MyTube is a **self-hosted YouTube frontend** that lets you browse, search, and watch YouTube videos without Google ever knowing you're there. All requests are proxied through your own server — your browser never contacts Google directly.
+MyTube is a **self-hosted YouTube + IPTV frontend** that lets you browse, search, and watch YouTube videos without Google ever knowing you're there. All requests are proxied through your own server — your browser never contacts Google directly.
+
+**v1.5 adds MyTube TV** — a fully integrated IPTV player supporting live channels, films, and series via any Xtream Codes provider, with real-time transcoding so any format plays in your browser.
 
 > **Why?** Because your viewing habits are yours. No recommendation algorithm, no targeted ads, no watch history sent to Google.
 
@@ -96,6 +98,25 @@ MyTube is a **self-hosted YouTube frontend** that lets you browse, search, and w
 - **Radio suggestions** on the Music home page based on your region
 - Stations stream through your server (no direct connection to third-party CDNs)
 - Powered by the [Radio Browser API](https://www.radio-browser.info/) — free, no key required
+
+### 📡 MyTube TV (IPTV)
+
+- Dedicated **TV section** at `/tv` — separate from YouTube, its own sidebar and layout
+- **Live channels** — browse by category, watch with HLS via hls.js
+- **Films (VOD)** — browse, search, and play films in any container format (MKV, AVI, MP4…)
+- **Series** — season/episode navigation, play any episode directly
+- **Real-time transcoding** — ffmpeg re-encodes on the fly to H.264 fMP4, so MKV/HEVC/AC3 content plays natively in every browser
+  - VideoToolbox hardware encoder (macOS) with libx264 software fallback
+  - Audio downmixed to stereo AAC — avoids Apple AudioToolbox multi-channel rejection in Firefox/Safari
+  - Reconnecting HTTP downloader — transparently resumes with `Range: bytes=N-` when the provider closes the connection after 60 s
+- **Search** — unified search across live channels, films, and series
+- **Favorites** — star any channel, film, or series; pinned in the sidebar and on the Favorites page
+- **Continue watching** — resume films and episodes from where you left off (stored in `localStorage`)
+- **Audio track selection** — switch between all audio tracks in a multi-audio file
+- **Subtitle support** — load embedded subtitle tracks from the source file
+- **Provider configuration** — enter Xtream Codes server URL, username, and password in Settings; credentials stored only on your server
+- **French free-to-air channels** — quick access to TNT channels on the TV home page
+- **Fully translated** in all 9 languages
 
 ### 🌍 Multilingual
 - **9 languages**: 🇬🇧 English · 🇫🇷 French · 🇪🇸 Spanish · 🇩🇪 German · 🇧🇷 Portuguese · 🇮🇹 Italian · 🇯🇵 Japanese · 🇰🇷 Korean · 🇷🇺 Russian
@@ -308,6 +329,8 @@ Every request your browser makes goes through **your own backend**, never direct
 | Watch history | `localStorage` only — never leaves your browser |
 | Subscriptions | `localStorage` only — never leaves your browser |
 | Queue / Playlists / Likes | `localStorage` only — never leaves your browser |
+| IPTV streams & icons | Transcoded / proxied through your server |
+| IPTV credentials | Stored server-side only, never sent to the browser |
 | VPN (optional) | wireproxy — userspace WireGuard, no system impact |
 | Analytics | ❌ None |
 
@@ -337,6 +360,17 @@ Every request your browser makes goes through **your own backend**, never direct
 | `GET /api/radio/stations?country=FR&tag=pop` | Radio stations by country/genre |
 | `GET /api/radio/stream/proxy?url=...` | Proxy radio stream |
 | `GET /api/news?region=FR&category=technology` | News articles (Google News RSS) |
+| `GET /api/iptv/channels?category_id=1` | Live IPTV channels |
+| `GET /api/iptv/stream/{id}` | Live channel stream (HLS proxy) |
+| `GET /api/iptv/vod?category_id=1` | VOD film list |
+| `GET /api/iptv/vod_stream/{id}?ext=mkv&media=movie` | VOD stream URL + duration via ffprobe |
+| `GET /api/iptv/vod_proxy/{id}?ext=mkv` | Real-time ffmpeg transcode → fMP4 stream |
+| `GET /api/iptv/vod_tracks/{id}` | Audio & subtitle track list |
+| `GET /api/iptv/series` | Series list |
+| `GET /api/iptv/series_info/{id}` | Series info + episode list |
+| `GET /api/iptv/search?q=...&type=vod` | Search live / VOD / series |
+| `GET /api/iptv/icon?url=...` | Channel/content icon proxy |
+| `POST /api/iptv/config` | Save Xtream Codes credentials |
 | `GET /api/vpn/status` | VPN status |
 | `POST /api/vpn/upload` | Upload WireGuard .conf |
 | `POST /api/vpn/start` | Start VPN tunnel |

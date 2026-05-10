@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Layers, Play } from 'lucide-react'
+import { ArrowLeft, Layers, Play, Star } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
+import { toggleTvFavorite, isTvFavorite } from '@/lib/tvFavorites'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -21,7 +22,7 @@ interface SeriesInfo {
   episodes: Record<string, Episode[]>
 }
 
-export default function SeriesInfoPage() {
+export default function TvSeriesPage() {
   const params = useParams()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -34,6 +35,15 @@ export default function SeriesInfoPage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null)
   const [coverErr, setCoverErr] = useState(false)
+  const [fav, setFav] = useState(false)
+
+  useEffect(() => { setFav(isTvFavorite(seriesId, 'series')) }, [seriesId])
+
+  function toggleFav() {
+    const next = toggleTvFavorite({ id: seriesId, type: 'series', name, icon })
+    setFav(next)
+    window.dispatchEvent(new Event('focus'))
+  }
 
   useEffect(() => {
     fetch(`${API_BASE}/api/iptv/series_info/${seriesId}`)
@@ -52,20 +62,27 @@ export default function SeriesInfoPage() {
 
   return (
     <div className="min-h-screen px-4 py-6 max-w-5xl mx-auto">
-      {/* Back */}
-      <button onClick={() => router.back()} className="inline-flex items-center gap-2 text-yt-text-muted hover:text-yt-text text-sm mb-6 transition-colors">
-        <ArrowLeft className="w-4 h-4" />
-        {t('nav_back')}
-      </button>
+      <div className="flex items-center gap-2 mb-6">
+        <button onClick={() => router.back()} className="inline-flex items-center gap-2 text-yt-text-muted hover:text-yt-text text-sm transition-colors">
+          <ArrowLeft className="w-4 h-4" />
+          {t('nav_back')}
+        </button>
+        <div className="flex-1" />
+        <button
+          onClick={toggleFav}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-colors border ${fav ? 'bg-yt-red/10 border-yt-red text-yt-red' : 'border-yt-border text-yt-text-muted hover:text-yt-text hover:border-yt-text'}`}
+        >
+          <Star className={`w-4 h-4 ${fav ? 'fill-current' : ''}`} />
+          {fav ? 'Favori' : 'Ajouter'}
+        </button>
+      </div>
 
       {loading ? (
         <div className="flex justify-center py-20">
           <div className="w-8 h-8 border-2 border-yt-red border-t-transparent rounded-full animate-spin" />
         </div>
       ) : error ? (
-        <div className="text-center py-20">
-          <p className="text-yt-text-muted">{error}</p>
-        </div>
+        <div className="text-center py-20"><p className="text-yt-text-muted">{error}</p></div>
       ) : data ? (
         <>
           {/* Header */}
@@ -115,26 +132,28 @@ export default function SeriesInfoPage() {
             {episodes
               .slice()
               .sort((a, b) => a.episode_num - b.episode_num)
-              .map(ep => (
-                <Link
-                  key={ep.id}
-                  href={`/iptv/watch/${ep.id}?type=vod&media=series&ext=${ep.container_extension || 'mp4'}&name=${encodeURIComponent(`${name} — ${t('iptv_episode_short')}${ep.episode_num}`)}`}
-                  className="flex items-center gap-4 p-3 rounded-xl bg-yt-secondary hover:bg-yt-hover transition-colors border border-yt-border/30 group"
-                >
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-yt-hover group-hover:bg-yt-red flex items-center justify-center transition-colors">
-                    <Play className="w-4 h-4 text-yt-text fill-current" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-yt-text text-sm font-medium">
-                      {t('iptv_episode_short')}{ep.episode_num}
-                      {ep.title && ep.title !== String(ep.episode_num) ? ` — ${ep.title}` : ''}
-                    </p>
-                    {ep.info?.duration && (
-                      <p className="text-yt-text-muted text-xs">{ep.info.duration}</p>
-                    )}
-                  </div>
-                </Link>
-              ))}
+              .map(ep => {
+                const epName = `${name} — ${t('iptv_episode_short')}${ep.episode_num}${ep.title && ep.title !== String(ep.episode_num) ? ` — ${ep.title}` : ''}`
+                const href = `/tv/watch/${ep.id}?type=vod&media=series&ext=${ep.container_extension || 'mp4'}&name=${encodeURIComponent(epName)}&icon=${encodeURIComponent(icon || data.info.cover || '')}&series_id=${seriesId}&season=${selectedSeason}&series_name=${encodeURIComponent(name)}&series_icon=${encodeURIComponent(icon || data.info.cover || '')}`
+                return (
+                  <Link
+                    key={ep.id}
+                    href={href}
+                    className="flex items-center gap-4 p-3 rounded-xl bg-yt-secondary hover:bg-yt-hover transition-colors border border-yt-border/30 group"
+                  >
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-yt-hover group-hover:bg-yt-red flex items-center justify-center transition-colors">
+                      <Play className="w-4 h-4 text-yt-text fill-current" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-yt-text text-sm font-medium">
+                        {t('iptv_episode_short')}{ep.episode_num}
+                        {ep.title && ep.title !== String(ep.episode_num) ? ` — ${ep.title}` : ''}
+                      </p>
+                      {ep.info?.duration && <p className="text-yt-text-muted text-xs">{ep.info.duration}</p>}
+                    </div>
+                  </Link>
+                )
+              })}
           </div>
         </>
       ) : null}
