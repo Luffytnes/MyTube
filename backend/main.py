@@ -3882,19 +3882,79 @@ async def iptv_channels(category_id: Optional[str] = None):
     return data if isinstance(data, list) else []
 
 @app.get("/api/iptv/stream/{stream_id}")
-async def iptv_stream_url(stream_id: str):
+async def iptv_stream_url(stream_id: str, request: Request):
+    if not _xtream_cfg.get("server"):
+        raise HTTPException(status_code=400, detail="IPTV not configured")
+    base = str(request.base_url).rstrip("/")
+    return {"url": f"{base}/api/iptv/hls/{stream_id}"}
+
+@app.get("/api/iptv/hls/{stream_id}")
+async def iptv_hls_stream(stream_id: str, request: Request):
+    """Fetch IPTV HLS manifest and rewrite URLs through our proxy to fix CORS."""
     if not _xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
     s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
-    return {"url": f"{s}/live/{u}/{p}/{stream_id}.m3u8"}
+    m3u8_url = f"{s}/live/{u}/{p}/{stream_id}.m3u8"
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            resp = await client.get(m3u8_url)
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"Stream returned HTTP {resp.status_code}")
+        base = str(request.base_url).rstrip("/")
+        proxy_base = f"{base}/api/iptv/proxy"
+        rewritten = rewrite_hls_manifest(resp.text, str(resp.url), proxy_base)
+        return Response(
+            content=rewritten,
+            media_type="application/vnd.apple.mpegurl",
+            headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache, no-store"},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"HLS error: {e}")
+
+@app.get("/api/iptv/proxy")
+async def iptv_hls_proxy(url: str, request: Request):
+    """Proxy IPTV HLS sub-playlists and TS segments (no VPN, no CORS issues)."""
+    try:
+        decoded_url = base64.urlsafe_b64decode(url + "==").decode()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid URL encoding")
+    try:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            resp = await client.get(decoded_url)
+        ct = resp.headers.get("content-type", "")
+        if "mpegurl" in ct or decoded_url.split("?")[0].endswith(".m3u8"):
+            base = str(request.base_url).rstrip("/")
+            proxy_base = f"{base}/api/iptv/proxy"
+            rewritten = rewrite_hls_manifest(resp.text, decoded_url, proxy_base)
+            return Response(
+                content=rewritten,
+                media_type="application/vnd.apple.mpegurl",
+                headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache, no-store"},
+            )
+        return Response(
+            content=resp.content,
+            media_type=ct or "video/mp2t",
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Proxy error: {e}")
 
 @app.get("/api/iptv/icon")
 async def iptv_icon_proxy(url: str):
     if not url or not url.startswith("http"):
         raise HTTPException(status_code=400, detail="Invalid URL")
     try:
+        parsed = urlparse(url)
+        referer = f"{parsed.scheme}://{parsed.netloc}/"
         async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
-            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            resp = await client.get(url, headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Referer": referer,
+            })
         if resp.status_code != 200:
             raise HTTPException(status_code=404, detail="Icon not found")
         ct = resp.headers.get("content-type", "image/png")
