@@ -20,6 +20,8 @@ MyTube is a **self-hosted YouTube + IPTV frontend** that lets you browse, search
 
 **v1.5 adds MyTube TV** — a fully integrated IPTV player supporting live channels, films, and series via any Xtream Codes provider, with real-time transcoding so any format plays in your browser.
 
+**v1.5.1** brings TMDB-powered discovery, smart jacket matching, reliable VOD seeking, and a reworked TV home page.
+
 > **Why?** Because your viewing habits are yours. No recommendation algorithm, no targeted ads, no watch history sent to Google.
 
 ---
@@ -103,19 +105,29 @@ MyTube is a **self-hosted YouTube + IPTV frontend** that lets you browse, search
 
 - Dedicated **TV section** at `/tv` — separate from YouTube, its own sidebar and layout
 - **Live channels** — browse by category, watch with HLS via hls.js
-- **Films (VOD)** — browse, search, and play films in any container format (MKV, AVI, MP4…)
+- **Films (VOD)** — browse by category, click any jacket to reach the film detail page (TMDB poster, synopsis, cast, rating) before playing
 - **Series** — season/episode navigation, play any episode directly
 - **Real-time transcoding** — ffmpeg re-encodes on the fly to H.264 fMP4, so MKV/HEVC/AC3 content plays natively in every browser
   - VideoToolbox hardware encoder (macOS) with libx264 software fallback
   - Audio downmixed to stereo AAC — avoids Apple AudioToolbox multi-channel rejection in Firefox/Safari
   - Reconnecting HTTP downloader — transparently resumes with `Range: bytes=N-` when the provider closes the connection after 60 s
+- **VOD seeking** — 4-strategy cascade: direct HTTP Range seek (45 s window for MKV header parsing), byte-offset pipe (MP4 only), full-pipe fallback, VideoToolbox fallback; `sb.timestampOffset` corrects ffmpeg PTS reset on the MSE side
 - **Search** — unified search across live channels, films, and series
 - **Favorites** — star any channel, film, or series; pinned in the sidebar and on the Favorites page
-- **Continue watching** — resume films and episodes from where you left off (stored in `localStorage`)
+- **Continue watching** — position saved immediately on exit; home page and film detail page refresh on return; "Continuer · Xmin (X%)" button with progress bar + "Reprendre depuis le début" option
 - **Audio track selection** — switch between all audio tracks in a multi-audio file
 - **Subtitle support** — load embedded subtitle tracks from the source file
 - **Provider configuration** — enter Xtream Codes server URL, username, and password in Settings; credentials stored only on your server
-- **French free-to-air channels** — quick access to TNT channels on the TV home page
+
+#### 🎬 TMDB integration (new in v1.5.1)
+
+- Enter your [TMDB](https://www.themoviedb.org/) API key in **Settings → MyTube TV** — key is persisted across restarts
+- **TV home page** shows four discovery rows: *Films populaires*, *Séries populaires*, *Films les mieux notés*, *Séries les mieux notées* — powered by TMDB, works in any language
+- Clicking a card opens a detail modal (backdrop, poster, synopsis, rating, year); the **"Regarder" / "Voir les épisodes"** button is active if the title is found in your catalog, grayed out otherwise
+- **Smart jacket images** — each card first tries the IPTV provider icon, then falls back to the TMDB poster automatically
+- **Title cleaning** follows the Jellyfin/Plex convention: strip language prefixes (`FR |`, `VF |`…) and quality tags (`[1080p]`, `[MULTI]`…), extract year; year is passed as a separate TMDB search parameter for near-100 % match accuracy
+- **Catalog matching** uses `difflib.SequenceMatcher` (≥ 60 % similarity threshold) instead of substring search — prevents false positives like short titles matching unrelated content
+- Separate catalog search for movies vs series — series TMDB cards correctly resolve to series entries, not films
 - **Fully translated** in all 9 languages
 
 ### 🌍 Multilingual
@@ -369,8 +381,15 @@ Every request your browser makes goes through **your own backend**, never direct
 | `GET /api/iptv/series` | Series list |
 | `GET /api/iptv/series_info/{id}` | Series info + episode list |
 | `GET /api/iptv/search?q=...&type=vod` | Search live / VOD / series |
+| `GET /api/iptv/search_catalog?q=...&type=movie\|tv` | Catalog search with similarity matching |
 | `GET /api/iptv/icon?url=...` | Channel/content icon proxy |
 | `POST /api/iptv/config` | Save Xtream Codes credentials |
+| `GET /api/tmdb/discover?type=movie\|tv&list=popular\|top_rated` | TMDB discovery lists (30 min cache) |
+| `GET /api/tmdb/details?name=...&type=movie\|tv` | TMDB metadata + credits by title |
+| `GET /api/tmdb/poster?name=...&type=movie\|tv` | TMDB poster image by title (proxied) |
+| `GET /api/tmdb/image?path=/w500/xyz.jpg` | TMDB image proxy by path |
+| `GET /api/tmdb/key` | Read TMDB API key |
+| `POST /api/tmdb/key` | Save TMDB API key (persisted to disk) |
 | `GET /api/vpn/status` | VPN status |
 | `POST /api/vpn/upload` | Upload WireGuard .conf |
 | `POST /api/vpn/start` | Start VPN tunnel |
