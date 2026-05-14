@@ -51,6 +51,7 @@ export default function TvWatchPage() {
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const resumePositionRef = useRef<number>(0)
+  const audioChangePositionRef = useRef<number>(0)
 
   useEffect(() => { setFav(isTvFavorite(id, favType)) }, [id, favType])
 
@@ -109,8 +110,14 @@ export default function TvWatchPage() {
   }, [id, type, name, icon, ext, media])
 
   const handleSeekToSaved = useCallback(() => {
-    if (resumePositionRef.current > 30 && videoRef.current) {
-      videoRef.current.currentTime = resumePositionRef.current
+    const v = videoRef.current
+    if (!v) return
+    const pos = audioChangePositionRef.current > 0
+      ? audioChangePositionRef.current
+      : resumePositionRef.current > 30 ? resumePositionRef.current : 0
+    if (pos > 0) {
+      v.currentTime = pos
+      audioChangePositionRef.current = 0
       resumePositionRef.current = 0
     }
   }, [])
@@ -128,6 +135,7 @@ export default function TvWatchPage() {
     }
     function onReady() { clearLoadTimeout(); setLoading(false) }
     function onError() {
+      if (aborted) return
       clearLoadTimeout()
       const code = videoRef.current?.error?.code
       setError(code === 4 ? t('iptv_format_unsupported') : t('iptv_error'))
@@ -327,11 +335,12 @@ export default function TvWatchPage() {
     return () => {
       aborted = true
       clearLoadTimeout()
-      // Save position immediately on unmount instead of cancelling the timer
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       if (type !== 'live' && videoRef.current) {
         const pos = videoRef.current.currentTime
         const dur = videoRef.current.duration || 0
+        // Preserve position for audio-track switch (effect will restart and seek back here)
+        if (pos > 0) audioChangePositionRef.current = pos
         saveContinue({ id, type: 'vod', name, icon, position: pos, duration: dur, ext, media,
         ...(seriesId ? { seriesId, season: seriesSeason, seriesName, seriesIcon } : {}) })
       }
@@ -342,7 +351,7 @@ export default function TvWatchPage() {
       }
       if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null }
       const video = videoRef.current
-      if (video) { video.pause(); video.src = ''; video.load() }
+      if (video) { video.pause(); video.src = '' }
     }
   }, [id, type, ext, media, t, audioIdx, handleSeekToSaved])
 

@@ -163,6 +163,31 @@ export default function TvVideoPlayer({
     return () => document.removeEventListener('fullscreenchange', fn)
   }, [])
 
+  // Imperatively manage subtitle track — JSX <track> doesn't reliably set mode='showing'
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v) return
+    // Remove any existing subtitle tracks from a previous selection
+    Array.from(v.querySelectorAll('track[kind="subtitles"]')).forEach(t => t.remove())
+    Array.from(v.textTracks).forEach(t => { t.mode = 'disabled' })
+    if (!subUrl) return
+    const el = document.createElement('track')
+    el.kind = 'subtitles'
+    el.src = subUrl
+    el.default = true
+    v.appendChild(el)
+    const onLoad = () => { el.track.mode = 'showing' }
+    el.addEventListener('load', onLoad)
+    // Fallback: force mode after a short delay in case 'load' already fired
+    const timer = setTimeout(() => { el.track.mode = 'showing' }, 300)
+    return () => {
+      el.removeEventListener('load', onLoad)
+      clearTimeout(timer)
+      el.remove()
+      Array.from(v.textTracks).forEach(t => { t.mode = 'disabled' })
+    }
+  }, [subUrl, videoRef])
+
   // Scroll to active queue item when panel opens
   useEffect(() => {
     if (showQueue) activeQueueItemRef.current?.scrollIntoView({ block: 'nearest' })
@@ -250,9 +275,7 @@ export default function TvVideoPlayer({
       onTouchStart={revealControls}
     >
       {/* Video — no native controls */}
-      <video ref={videoRef} className="w-full h-full" playsInline onClick={togglePlay}>
-        {subUrl && <track kind="subtitles" src={subUrl} default />}
-      </video>
+      <video ref={videoRef} className="w-full h-full" playsInline crossOrigin="anonymous" onClick={togglePlay} />
 
       {/* Spinner (buffering/loading) */}
       {(loading || waiting) && !error && (

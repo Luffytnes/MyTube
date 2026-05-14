@@ -252,7 +252,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
 
   function handleExport() {
     const data: Record<string, unknown> = {}
-    const keys = ['mytube-history', 'mytube-search-history', 'mytube-watch-later', 'mytube-likes', 'mytube-queue', 'mytube-resume-positions', 'mytube-saved-playlists', 'mytube-subscriptions', 'mytube-playback-settings', 'mytube-music-playlists', 'mytube-music-search-history', 'mytube-podcast-subscriptions']
+    const keys = ['mytube-history', 'mytube-search-history', 'mytube-watch-later', 'mytube-likes', 'mytube-queue', 'mytube-resume-positions', 'mytube-saved-playlists', 'mytube-subscriptions', 'mytube-playback-settings', 'mytube-music-playlists', 'mytube-music-search-history', 'mytube-podcast-subscriptions', 'tv_favorites', 'tv_continue_watching']
     for (const k of keys) {
       const raw = localStorage.getItem(k)
       if (raw) data[k] = JSON.parse(raw)
