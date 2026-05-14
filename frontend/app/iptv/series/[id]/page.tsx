@@ -95,7 +95,7 @@ export default function SeriesInfoPage() {
 
           {/* Season selector */}
           {seasons.length > 1 && (
-            <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
+            <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-none">
               {seasons.map(s => (
                 <button
                   key={s}

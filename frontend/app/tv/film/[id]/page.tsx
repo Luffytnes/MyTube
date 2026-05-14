@@ -198,7 +198,7 @@ export default function TvFilmPage() {
           {tmdb?.credits?.cast?.length > 0 && (
             <div className="mt-8">
               <h2 className="text-yt-text font-semibold text-sm mb-3">Distribution</h2>
-              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
                 {tmdb.credits.cast.slice(0, 12).map((actor: {id: number; name: string; character: string; profile_path: string | null}) => (
                   <div key={actor.id} className="flex-shrink-0 w-20 text-center">
                     <div className="w-20 h-20 rounded-full overflow-hidden bg-yt-secondary mx-auto mb-1">

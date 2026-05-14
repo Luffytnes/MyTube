@@ -191,7 +191,7 @@ export default function IPTVPage() {
 
       {/* Category pills */}
       {!loadingCats && categories.length > 0 && (
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-none">
           {categories.map(cat => (
             <button
               key={cat.category_id}

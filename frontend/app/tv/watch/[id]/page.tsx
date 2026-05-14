@@ -103,7 +103,8 @@ export default function TvWatchPage() {
     const dur = videoRef.current.duration || 0
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(() => {
-      saveContinue({ id, type: 'vod', name, icon, position: pos, duration: dur, ext, media })
+      saveContinue({ id, type: 'vod', name, icon, position: pos, duration: dur, ext, media,
+        ...(seriesId ? { seriesId, season: seriesSeason, seriesName, seriesIcon } : {}) })
     }, 5000)
   }, [id, type, name, icon, ext, media])
 
@@ -331,7 +332,8 @@ export default function TvWatchPage() {
       if (type !== 'live' && videoRef.current) {
         const pos = videoRef.current.currentTime
         const dur = videoRef.current.duration || 0
-        saveContinue({ id, type: 'vod', name, icon, position: pos, duration: dur, ext, media })
+        saveContinue({ id, type: 'vod', name, icon, position: pos, duration: dur, ext, media,
+        ...(seriesId ? { seriesId, season: seriesSeason, seriesName, seriesIcon } : {}) })
       }
       controller.abort()
       hls?.destroy()

@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Layers, Play, Star } from 'lucide-react'
+import { ArrowLeft, Layers, Play, Star, Clock } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 import { toggleTvFavorite, isTvFavorite } from '@/lib/tvFavorites'
+import { getContinueWatching, type ContinueItem } from '@/lib/tvContinueWatching'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -36,8 +37,25 @@ export default function TvSeriesPage() {
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null)
   const [coverErr, setCoverErr] = useState(false)
   const [fav, setFav] = useState(false)
+  const [continueItem, setContinueItem] = useState<ContinueItem | null>(null)
 
   useEffect(() => { setFav(isTvFavorite(seriesId, 'series')) }, [seriesId])
+
+  useEffect(() => {
+    const refresh = () => {
+      const all = getContinueWatching()
+      // Find the most recently watched episode for this series
+      const match = all.find(c => c.seriesId === seriesId) ?? null
+      setContinueItem(match)
+    }
+    refresh()
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('focus', refresh)
+    return () => {
+      document.removeEventListener('visibilitychange', refresh)
+      window.removeEventListener('focus', refresh)
+    }
+  }, [seriesId])
 
   function toggleFav() {
     const next = toggleTvFavorite({ id: seriesId, type: 'series', name, icon })
@@ -106,13 +124,54 @@ export default function TvSeriesPage() {
               <h1 className="text-yt-text text-xl font-bold mb-1">{name}</h1>
               {data.info.genre && <p className="text-yt-text-muted text-sm mb-2">{data.info.genre}</p>}
               {data.info.rating && <p className="text-yt-text-muted text-xs mb-2">★ {data.info.rating}</p>}
-              {data.info.plot && <p className="text-yt-text-muted text-sm line-clamp-3">{data.info.plot}</p>}
+              {data.info.plot && <p className="text-yt-text-muted text-sm line-clamp-3 mb-3">{data.info.plot}</p>}
+
+              {continueItem ? (() => {
+                const pct = continueItem.duration > 0
+                  ? Math.min(99, Math.round((continueItem.position / continueItem.duration) * 100))
+                  : 0
+                const resumeHref = `/tv/watch/${continueItem.id}?type=vod&ext=${continueItem.ext}&media=${continueItem.media}&name=${encodeURIComponent(continueItem.name)}&icon=${encodeURIComponent(continueItem.icon)}&series_id=${seriesId}&season=${continueItem.season || ''}&series_name=${encodeURIComponent(name)}&series_icon=${encodeURIComponent(icon || data.info.cover || '')}`
+                return (
+                  <div className="space-y-1.5">
+                    {pct > 0 && (
+                      <div className="h-1 bg-yt-secondary rounded-full overflow-hidden">
+                        <div className="h-full bg-yt-red rounded-full" style={{ width: `${pct}%` }} />
+                      </div>
+                    )}
+                    <Link
+                      href={resumeHref}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-yt-red hover:bg-yt-red-hover text-white rounded-xl text-sm font-medium transition-colors"
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      Continuer
+                      {continueItem.season && <span className="opacity-75">· S{String(continueItem.season).padStart(2,'0')}</span>}
+                      {pct > 0 && <span className="opacity-75">· {pct}%</span>}
+                    </Link>
+                  </div>
+                )
+              })() : (() => {
+                const firstSeason = seasons[0]
+                if (!firstSeason) return null
+                const firstEp = [...(data.episodes[firstSeason] || [])].sort((a, b) => a.episode_num - b.episode_num)[0]
+                if (!firstEp) return null
+                const epName = `${name} — ${t('iptv_episode_short')}${firstEp.episode_num}${firstEp.title && firstEp.title !== String(firstEp.episode_num) ? ` — ${firstEp.title}` : ''}`
+                const firstHref = `/tv/watch/${firstEp.id}?type=vod&media=series&ext=${firstEp.container_extension || 'mp4'}&name=${encodeURIComponent(epName)}&icon=${encodeURIComponent(icon || data.info.cover || '')}&series_id=${seriesId}&season=${firstSeason}&series_name=${encodeURIComponent(name)}&series_icon=${encodeURIComponent(icon || data.info.cover || '')}`
+                return (
+                  <Link
+                    href={firstHref}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-yt-red hover:bg-yt-red-hover text-white rounded-xl text-sm font-medium transition-colors"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-white" />
+                    Regarder
+                  </Link>
+                )
+              })()}
             </div>
           </div>
 
           {/* Season selector */}
           {seasons.length > 1 && (
-            <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
+            <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-none">
               {seasons.map(s => (
                 <button
                   key={s}

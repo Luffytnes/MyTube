@@ -4018,13 +4018,20 @@ async def iptv_search_catalog(q: str = "", type: str = "movie", limit: int = 3):
         clean_item, year_item = _clean_title_for_tmdb(raw)
         clean_item_l = clean_item.lower()
 
-        # Use sequence similarity — prevents short titles like "Us" matching
-        # every word that contains "us" as a substring.
-        sim = difflib.SequenceMatcher(None, clean_q_l, clean_item_l).ratio()
-        if sim < 0.60:
+        # Word-level Jaccard: require at least one common word to avoid
+        # false positives like "michael" matching "chapel" via shared chars.
+        q_words = set(re.findall(r'\b\w{2,}\b', clean_q_l))
+        c_words = set(re.findall(r'\b\w{2,}\b', clean_item_l))
+        if not q_words or not c_words:
+            continue
+        intersection = q_words & c_words
+        if not intersection:
+            continue
+        jaccard = len(intersection) / len(q_words | c_words)
+        if jaccard < 0.45:
             continue
 
-        score: float = sim * 100
+        score: float = jaccard * 100
         if clean_item_l == clean_q_l:
             score += 50          # exact match bonus
         if year_q and year_item == year_q:
@@ -4334,6 +4341,19 @@ async def tmdb_poster(name: str = "", type: str = "movie"):
         raise
     except Exception:
         raise HTTPException(status_code=502, detail="TMDB image fetch failed")
+
+@app.get("/api/tmdb/meta")
+async def tmdb_meta(name: str = "", type: str = "movie"):
+    """Return poster_path and vote_average for a title (JSON). Uses _tmdb_search cache."""
+    if not name.strip():
+        return {"poster_path": None, "vote_average": None}
+    result = await _tmdb_search(name, type)
+    if not result:
+        return {"poster_path": None, "vote_average": None}
+    return {
+        "poster_path": result.get("poster_path"),
+        "vote_average": result.get("vote_average"),
+    }
 
 @app.get("/api/tmdb/image")
 async def tmdb_image(path: str = ""):

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Tv, Film, Layers, Radio, Star, Play, Clock, TrendingUp, X } from 'lucide-react'
+import { Tv, Film, Layers, Radio, Star, Play, Clock, TrendingUp, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 import Link from 'next/link'
 import { toggleTvFavorite, isTvFavorite, type TvFavoriteType } from '@/lib/tvFavorites'
@@ -86,6 +86,75 @@ function SmartCover({ src, name, type, fallback }: { src: string; name: string; 
   )
 }
 
+function TmdbGridCard({ name, type, href, favButton, fallbackIcon }: {
+  name: string
+  type: 'movie' | 'tv'
+  href: string
+  favButton?: React.ReactNode
+  fallbackIcon: React.ReactNode
+}) {
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [meta, setMeta] = useState<{ poster_path: string | null; vote_average: number | null } | null>(null)
+  const [status, setStatus] = useState<'idle' | 'loading' | 'done'>('idle')
+
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const obs = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting) {
+          obs.disconnect()
+          setStatus('loading')
+          fetch(`${API_BASE}/api/tmdb/meta?name=${encodeURIComponent(name)}&type=${type}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(d => { setMeta(d); setStatus('done') })
+            .catch(() => setStatus('done'))
+        }
+      },
+      { rootMargin: '250px' }
+    )
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [name, type])
+
+  const posterSrc = meta?.poster_path
+    ? `${API_BASE}/api/tmdb/image?path=/w342${meta.poster_path}`
+    : null
+  const rating = meta?.vote_average ? meta.vote_average.toFixed(1) : null
+  const noImage = status === 'done' && !posterSrc
+
+  return (
+    <div ref={wrapRef}>
+      <Card3D className="group relative">
+        <Link href={href} className="block relative w-full aspect-[2/3] rounded-xl overflow-hidden bg-yt-secondary shadow-lg">
+          {status !== 'done' ? (
+            <div className="w-full h-full bg-yt-secondary animate-pulse" />
+          ) : posterSrc ? (
+            <img src={posterSrc} alt={name} loading="lazy" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">{fallbackIcon}</div>
+          )}
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+              <Play className="w-5 h-5 text-white fill-white ml-0.5" />
+            </div>
+          </div>
+          {rating && (
+            <div className="absolute bottom-1.5 left-1.5 flex items-center gap-0.5 bg-black/70 rounded-md px-1.5 py-0.5">
+              <Star className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
+              <span className="text-[10px] text-white font-medium">{rating}</span>
+            </div>
+          )}
+          {favButton}
+        </Link>
+        {noImage && (
+          <p className="text-yt-text text-xs font-medium line-clamp-2 leading-tight mt-1.5 px-0.5">{name}</p>
+        )}
+      </Card3D>
+    </div>
+  )
+}
+
 function FavButton({ id, type, name, icon }: { id: string; type: TvFavoriteType; name: string; icon: string }) {
   const [fav, setFav] = useState(false)
   useEffect(() => { setFav(isTvFavorite(id, type)) }, [id, type])
@@ -112,6 +181,129 @@ function formatTime(sec: number): string {
   return h > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${m} min`
 }
 
+function Card3D({ children, className }: { children: React.ReactNode; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  function onMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+    const el = ref.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const x = (e.clientX - rect.left) / rect.width
+    const y = (e.clientY - rect.top) / rect.height
+    el.style.transition = 'transform 0.05s ease'
+    el.style.transform = `perspective(600px) rotateX(${(y - 0.5) * -18}deg) rotateY(${(x - 0.5) * 18}deg) scale3d(1.06,1.06,1.06)`
+  }
+
+  function onMouseLeave() {
+    const el = ref.current
+    if (!el) return
+    el.style.transition = 'transform 0.35s ease'
+    el.style.transform = 'perspective(600px) rotateX(0deg) rotateY(0deg) scale3d(1,1,1)'
+  }
+
+  return (
+    <div
+      ref={ref}
+      className={className}
+      onMouseMove={onMouseMove}
+      onMouseLeave={onMouseLeave}
+      style={{ transformStyle: 'preserve-3d', willChange: 'transform' }}
+    >
+      {children}
+    </div>
+  )
+}
+
+function CategoryBar({ categories, selectedCat, onSelect }: {
+  categories: Category[]
+  selectedCat: string | null
+  onSelect: (id: string) => void
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [canLeft, setCanLeft] = useState(false)
+  const [canRight, setCanRight] = useState(false)
+
+  const checkScroll = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    setCanLeft(el.scrollLeft > 4)
+    setCanRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4)
+  }, [])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    checkScroll()
+    el.addEventListener('scroll', checkScroll, { passive: true })
+    window.addEventListener('resize', checkScroll)
+    return () => {
+      el.removeEventListener('scroll', checkScroll)
+      window.removeEventListener('resize', checkScroll)
+    }
+  }, [checkScroll])
+
+  useEffect(() => { checkScroll() }, [categories, checkScroll])
+
+  const shift = (dir: 'left' | 'right') =>
+    scrollRef.current?.scrollBy({ left: dir === 'left' ? -300 : 300, behavior: 'smooth' })
+
+  return (
+    <div className="relative mb-6">
+      {canLeft && (
+        <button
+          onClick={() => shift('left')}
+          className="absolute left-0 top-0 bottom-0 z-10 w-12 flex items-center justify-center bg-gradient-to-r from-yt-bg via-yt-bg/80 to-transparent"
+          aria-label="Défiler à gauche"
+        >
+          <ChevronLeft className="w-6 h-6 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" />
+        </button>
+      )}
+      <div ref={scrollRef} className="flex gap-2 overflow-x-auto scrollbar-none">
+        {categories.map(cat => (
+          <button
+            key={cat.category_id}
+            onClick={() => onSelect(cat.category_id)}
+            className={`flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              selectedCat === cat.category_id
+                ? 'bg-yt-red text-white'
+                : 'bg-yt-secondary text-yt-text-secondary hover:bg-yt-hover'
+            }`}
+          >
+            {cat.category_name}
+          </button>
+        ))}
+      </div>
+      {canRight && (
+        <button
+          onClick={() => shift('right')}
+          className="absolute right-0 top-0 bottom-0 z-10 w-12 flex items-center justify-center bg-gradient-to-l from-yt-bg via-yt-bg/80 to-transparent"
+          aria-label="Défiler à droite"
+        >
+          <ChevronRight className="w-6 h-6 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" />
+        </button>
+      )}
+    </div>
+  )
+}
+
+function useColCount(): number {
+  const [cols, setCols] = useState(6)
+  useEffect(() => {
+    const update = () => {
+      const w = window.innerWidth
+      if (w >= 1280) setCols(6)
+      else if (w >= 1024) setCols(5)
+      else if (w >= 768) setCols(4)
+      else if (w >= 640) setCols(3)
+      else setCols(2)
+    }
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
+  return cols
+}
+
 function TmdbPoster({ path, title }: { path: string | null; title: string }) {
   const [err, setErr] = useState(false)
   if (!path || err) {
@@ -134,56 +326,79 @@ function TmdbPoster({ path, title }: { path: string | null; title: string }) {
 
 function TmdbCard({ item, type, onClick }: { item: TmdbItem; type: 'movie' | 'tv'; onClick: () => void }) {
   const title = item.title || item.name || ''
-  const year = (item.release_date || item.first_air_date || '').substring(0, 4)
   const rating = item.vote_average ? item.vote_average.toFixed(1) : null
   return (
-    <button
-      onClick={onClick}
-      className="flex-shrink-0 w-32 group text-left focus:outline-none"
-    >
-      <div className="relative w-full aspect-[2/3] rounded-xl overflow-hidden bg-yt-secondary border border-yt-border/30 group-hover:border-yt-red/50 transition-colors">
-        <TmdbPoster path={item.poster_path} title={title} />
-        <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-          <div className="w-8 h-8 rounded-full bg-yt-red/90 flex items-center justify-center">
-            <Play className="w-4 h-4 text-white fill-white ml-0.5" />
+    <Card3D className="w-full group">
+      <button onClick={onClick} className="block w-full text-left focus:outline-none">
+        <div className="relative w-full aspect-[2/3] rounded-xl overflow-hidden bg-yt-secondary shadow-lg">
+          <TmdbPoster path={item.poster_path} title={title} />
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="w-8 h-8 rounded-full bg-yt-red/90 flex items-center justify-center">
+              <Play className="w-4 h-4 text-white fill-white ml-0.5" />
+            </div>
           </div>
+          {rating && (
+            <div className="absolute bottom-1.5 left-1.5 flex items-center gap-0.5 bg-black/70 rounded-md px-1.5 py-0.5">
+              <Star className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
+              <span className="text-[10px] text-white font-medium">{rating}</span>
+            </div>
+          )}
         </div>
-        {rating && (
-          <div className="absolute bottom-1.5 left-1.5 flex items-center gap-0.5 bg-black/70 rounded-md px-1.5 py-0.5">
-            <Star className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
-            <span className="text-[10px] text-white font-medium">{rating}</span>
-          </div>
-        )}
-      </div>
-      <p className="text-yt-text text-xs font-medium line-clamp-2 leading-tight mt-1.5">{title}</p>
-      {year && <p className="text-yt-text-muted text-[10px] mt-0.5">{year}</p>}
-    </button>
+      </button>
+    </Card3D>
   )
 }
 
 function TmdbSectionRow({ section, onCardClick }: { section: TmdbSectionData; onCardClick: (item: TmdbItem) => void }) {
+  const cols = useColCount()
+  const [page, setPage] = useState(0)
+  const totalPages = Math.ceil(section.items.length / cols)
+  const pageItems = section.items.slice(page * cols, (page + 1) * cols)
+
+  useEffect(() => { setPage(0) }, [cols])
+
   return (
-    <div className="mb-8">
+    <div className="mb-10">
       <h2 className="text-yt-text text-base font-semibold flex items-center gap-2 mb-4">
         {section.icon}
         {section.label}
       </h2>
       {section.loading ? (
-        <div className="flex gap-3">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="flex-shrink-0 w-32 aspect-[2/3] rounded-xl bg-yt-secondary animate-pulse" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+          {Array.from({ length: cols }).map((_, i) => (
+            <div key={i} className="aspect-[2/3] rounded-xl bg-yt-secondary animate-pulse" />
           ))}
         </div>
       ) : section.items.length === 0 ? null : (
-        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-          {section.items.map(item => (
-            <TmdbCard
-              key={item.id}
-              item={item}
-              type={section.type}
-              onClick={() => onCardClick(item)}
-            />
-          ))}
+        <div className="relative">
+          {page > 0 && (
+            <button
+              onClick={() => setPage(p => p - 1)}
+              className="absolute left-0 top-0 bottom-0 z-10 w-14 flex items-center justify-center bg-gradient-to-r from-yt-bg via-yt-bg/80 to-transparent rounded-l-xl transition-opacity hover:from-yt-bg"
+              aria-label="Page précédente"
+            >
+              <ChevronLeft className="w-9 h-9 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]" />
+            </button>
+          )}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+            {pageItems.map(item => (
+              <TmdbCard
+                key={item.id}
+                item={item}
+                type={section.type}
+                onClick={() => onCardClick(item)}
+              />
+            ))}
+          </div>
+          {page < totalPages - 1 && (
+            <button
+              onClick={() => setPage(p => p + 1)}
+              className="absolute right-0 top-0 bottom-0 z-10 w-14 flex items-center justify-center bg-gradient-to-l from-yt-bg via-yt-bg/80 to-transparent rounded-r-xl transition-opacity hover:from-yt-bg"
+              aria-label="Page suivante"
+            >
+              <ChevronRight className="w-9 h-9 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]" />
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -317,32 +532,35 @@ function ContinueSection({ items, onRemove }: { items: ContinueItem[]; onRemove:
         <Clock className="w-5 h-5 text-yt-red" />
         Continuer à regarder
       </h2>
-      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
         {items.map(item => {
           const pct = item.duration > 0 ? Math.round((item.position / item.duration) * 100) : 0
           return (
-            <div key={item.id} className="flex-shrink-0 w-40 group relative">
+            <Card3D key={item.id} className="flex-shrink-0 w-36 group relative">
               <Link
-                href={`/tv/watch/${item.id}?type=vod&ext=${item.ext}&media=${item.media}&name=${encodeURIComponent(item.name)}&icon=${encodeURIComponent(item.icon)}`}
+                href={item.seriesId
+                  ? `/tv/watch/${item.id}?type=vod&ext=${item.ext}&media=${item.media}&name=${encodeURIComponent(item.name)}&icon=${encodeURIComponent(item.icon)}&series_id=${item.seriesId}&season=${item.season || ''}&series_name=${encodeURIComponent(item.seriesName || '')}&series_icon=${encodeURIComponent(item.seriesIcon || '')}`
+                  : `/tv/watch/${item.id}?type=vod&ext=${item.ext}&media=${item.media}&name=${encodeURIComponent(item.name)}&icon=${encodeURIComponent(item.icon)}`}
                 className="block"
               >
-                <div className="relative w-full aspect-[2/3] bg-yt-secondary rounded-xl overflow-hidden">
+                <div className="relative w-full aspect-[2/3] bg-yt-secondary rounded-xl overflow-hidden shadow-lg">
                   <CoverImage src={item.icon} name={item.name} fallback={<Film className="w-10 h-10 text-yt-text-muted" />} />
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
                       <Play className="w-5 h-5 text-white fill-white ml-0.5" />
                     </div>
                   </div>
+                  {item.position > 0 && (
+                    <div className="absolute bottom-6 left-0 right-0 px-2">
+                      <span className="text-[10px] text-white/80 font-medium drop-shadow">{formatTime(item.position)}{item.duration > 0 ? ` / ${formatTime(item.duration)}` : ''}</span>
+                    </div>
+                  )}
                   {pct > 0 && (
-                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
+                    <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-white/20">
                       <div className="h-full bg-yt-red" style={{ width: `${pct}%` }} />
                     </div>
                   )}
                 </div>
-                <p className="text-yt-text text-xs font-medium line-clamp-2 leading-tight mt-2">{item.name}</p>
-                {item.position > 0 && (
-                  <p className="text-yt-text-muted text-[10px] mt-0.5">{formatTime(item.position)} regardé{item.duration > 0 ? ` / ${formatTime(item.duration)}` : ''}</p>
-                )}
               </Link>
               <button
                 onClick={() => { removeContinue(item.id); onRemove() }}
@@ -351,7 +569,7 @@ function ContinueSection({ items, onRemove }: { items: ContinueItem[]; onRemove:
               >
                 ×
               </button>
-            </div>
+            </Card3D>
           )
         })}
       </div>
@@ -521,7 +739,7 @@ export default function TvPage() {
   /* ── Home page ─────────────────────────────────────────────── */
   if (isHome) {
     return (
-      <div className="px-4 py-6 max-w-7xl mx-auto">
+      <div className="px-4 py-6">
         {modal && (
           <TmdbModal
             item={modal.item}
@@ -552,24 +770,14 @@ export default function TvPage() {
 
   /* ── Section tabs: live / vod / series ─────────────────────── */
   return (
-    <div className="px-4 py-6 max-w-7xl mx-auto">
+    <div className="px-4 py-6">
       {/* Category pills */}
       {!loadingCats && categories.length > 0 && (
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
-          {categories.map(cat => (
-            <button
-              key={cat.category_id}
-              onClick={() => { setSelectedCat(cat.category_id); pushUrl(section, cat.category_id) }}
-              className={`flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                selectedCat === cat.category_id
-                  ? 'bg-yt-red text-white'
-                  : 'bg-yt-secondary text-yt-text-secondary hover:bg-yt-hover'
-              }`}
-            >
-              {cat.category_name}
-            </button>
-          ))}
-        </div>
+        <CategoryBar
+          categories={categories}
+          selectedCat={selectedCat}
+          onSelect={id => { setSelectedCat(id); pushUrl(section, id) }}
+        />
       )}
 
       {/* Content */}
@@ -610,33 +818,27 @@ export default function TvPage() {
       ) : section === 'vod' ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
           {(items as VodItem[]).map(v => (
-            <Link
+            <TmdbGridCard
               key={v.stream_id}
+              name={v.name}
+              type="movie"
               href={`/tv/film/${v.stream_id}?ext=${v.container_extension || 'mp4'}&name=${encodeURIComponent(v.name)}&icon=${encodeURIComponent(v.stream_icon || '')}&cat=${encodeURIComponent(selectedCat || '')}`}
-              className="group relative flex flex-col rounded-xl overflow-hidden bg-yt-secondary hover:bg-yt-hover transition-colors border border-yt-border/30"
-            >
-              <div className="relative w-full aspect-[2/3] bg-yt-bg">
-                <FavButton id={String(v.stream_id)} type="vod" name={v.name} icon={v.stream_icon || ''} />
-                <SmartCover src={v.stream_icon} name={v.name} type="movie" fallback={<Film className="w-10 h-10 text-yt-text-muted" />} />
-              </div>
-              <p className="text-yt-text text-xs font-medium line-clamp-2 leading-tight px-2 py-2">{v.name}</p>
-            </Link>
+              favButton={<FavButton id={String(v.stream_id)} type="vod" name={v.name} icon={v.stream_icon || ''} />}
+              fallbackIcon={<Film className="w-10 h-10 text-yt-text-muted" />}
+            />
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
           {(items as SeriesItem[]).map(s => (
-            <Link
+            <TmdbGridCard
               key={s.series_id}
+              name={s.name}
+              type="tv"
               href={`/tv/series/${s.series_id}?name=${encodeURIComponent(s.name)}&icon=${encodeURIComponent(s.cover || '')}`}
-              className="group relative flex flex-col rounded-xl overflow-hidden bg-yt-secondary hover:bg-yt-hover transition-colors border border-yt-border/30"
-            >
-              <div className="relative w-full aspect-[2/3] bg-yt-bg">
-                <FavButton id={String(s.series_id)} type="series" name={s.name} icon={s.cover || ''} />
-                <SmartCover src={s.cover} name={s.name} type="tv" fallback={<Layers className="w-10 h-10 text-yt-text-muted" />} />
-              </div>
-              <p className="text-yt-text text-xs font-medium line-clamp-2 leading-tight px-2 py-2">{s.name}</p>
-            </Link>
+              favButton={<FavButton id={String(s.series_id)} type="series" name={s.name} icon={s.cover || ''} />}
+              fallbackIcon={<Layers className="w-10 h-10 text-yt-text-muted" />}
+            />
           ))}
         </div>
       )}

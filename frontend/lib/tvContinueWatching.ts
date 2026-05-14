@@ -12,6 +12,11 @@ export interface ContinueItem {
   duration: number   // seconds (0 = unknown)
   ext: string
   media: string
+  // Series context — present only when the episode belongs to a series
+  seriesId?: string
+  season?: string
+  seriesName?: string
+  seriesIcon?: string
   updatedAt: number
 }
 
