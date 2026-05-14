@@ -330,7 +330,7 @@ export const translations: Record<Lang, Translations> = {
     nav_playlists: 'Mes playlists', playlists_title: 'Mes playlists', playlists_empty: 'Aucune playlist sauvegardée.', playlists_open_youtube: 'Ouvrir sur YouTube', playlists_remove: 'Retirer',
     autoplay_next: 'Lecture dans', autoplay_cancel: 'Annuler',
     nav_queue: 'File de lecture', queue_title: 'File de lecture', queue_empty: 'Votre file est vide', queue_empty_desc: 'Ajoutez des vidéos pour les regarder dans l\'ordre.', queue_clear: 'Vider la file', queue_play_all: 'Tout lire', queue_add: 'Ajouter à la file', queue_in_queue: 'Dans la file',
-    nav_news: 'Actualité',
+    nav_news: 'MyTube News',
     nav_iptv: 'MyTube TV',
     iptv_title: 'IPTV', iptv_live: 'En direct', iptv_all_channels: 'Toutes les chaînes',
     iptv_not_configured: 'IPTV non configuré', iptv_not_configured_desc: 'Ajoutez vos identifiants Xtream dans les Paramètres pour accéder à la TV en direct.',

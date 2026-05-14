@@ -133,8 +133,8 @@ export default function TvWatchPage() {
       setLoading(false)
     }
 
-    // MSE path: lets us set mediaSource.duration so the scrubber shows the total runtime.
-    // Falls back to video.src on any failure (sourceopen timeout, appendBuffer error, etc.)
+    // MSE path: sets mediaSource.duration for the scrubber and handles seeking.
+    // Falls back to video.src if MSE is unavailable or fails before first append.
     async function startMSE(video: HTMLVideoElement, url: string, duration: number | null): Promise<boolean> {
       mediaSource = new MediaSource()
       objectUrl = URL.createObjectURL(mediaSource)
@@ -146,7 +146,7 @@ export default function TvWatchPage() {
           setTimeout(() => reject(new Error('sourceopen timeout')), 8000)
         })
       } catch {
-        return false  // sourceopen timed out → caller falls back to video.src
+        return false
       }
       if (aborted) return true
 
@@ -163,37 +163,110 @@ export default function TvWatchPage() {
       video.addEventListener('canplay', () => { onReady(); video.play().catch(() => {}) }, { once: true })
       video.addEventListener('error', onError, { once: true })
 
-      const resp = await fetch(url, { signal: controller.signal })
-      if (aborted) return true
-      if (!resp.ok) { onError(); return true }
+      // Track the active reader so onSeeking can cancel it to unblock reader.read()
+      let readerRef: ReadableStreamDefaultReader<Uint8Array> | null = null
+      let nextSeek: number | null = null
 
-      const reader = resp.body!.getReader()
-      let bytesAppended = 0
-
-      while (true) {
-        if (aborted) break
-        const { done, value } = await reader.read()
-        if (aborted) break
-        if (done) {
-          if (mediaSource!.readyState === 'open') {
-            while (sb.updating) await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
-            try { mediaSource!.endOfStream() } catch {}
+      function onSeeking() {
+        const target = video.currentTime
+        let inBuffer = false
+        for (let i = 0; i < video.buffered.length; i++) {
+          if (target >= video.buffered.start(i) - 0.5 && target <= video.buffered.end(i) + 0.5) {
+            inBuffer = true; break
           }
-          break
         }
-        while (sb.updating) await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
-        try {
-          sb.appendBuffer(value)
-          bytesAppended += value.byteLength
-          await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
-        } catch {
-          // appendBuffer failed — revoke objectUrl so video.src falls back cleanly
-          if (mediaSource!.readyState === 'open') try { mediaSource!.endOfStream('decode') } catch {}
-          if (bytesAppended === 0) return false  // nothing appended yet → try video.src
-          break  // partial data appended, error event will fire via onError
+        if (!inBuffer) {
+          nextSeek = target
+          readerRef?.cancel().catch(() => {})
         }
       }
-      return true
+      video.addEventListener('seeking', onSeeking)
+
+      // Fetch from startSec (0=start, >0=seek). Returns false only on first-append failure.
+      // ffmpeg resets PTS to 0 after -ss seek, so we set timestampOffset to shift
+      // the MSE timeline to the correct position.
+      async function doFetch(startSec: number): Promise<boolean> {
+        const durParam = duration && duration > 0 ? `&duration=${Math.floor(duration)}` : ''
+        const fetchUrl = startSec > 0 ? `${url}&start=${Math.floor(startSec)}${durParam}` : url
+        const resp = await fetch(fetchUrl, { signal: controller.signal }).catch(() => null)
+        if (!resp || aborted) return true
+        if (!resp.ok) { onError(); return true }
+
+        const reader = resp.body!.getReader()
+        readerRef = reader
+        let bytesAppended = 0
+
+        // Shift MSE timeline: backend re-encodes from PTS=0, timestampOffset places it at startSec
+        while (sb.updating) await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
+        try { sb.timestampOffset = startSec } catch {}
+
+        while (true) {
+          if (aborted || nextSeek !== null) break
+          let done: boolean; let value: Uint8Array | undefined
+          try { ;({ done, value } = await reader.read()) } catch { break }
+          if (aborted || nextSeek !== null) break
+
+          if (done) {
+            if (mediaSource!.readyState === 'open') {
+              while (sb.updating) await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
+              try { mediaSource!.endOfStream() } catch {}
+            }
+            break
+          }
+
+          while (sb.updating) await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
+          if (aborted || nextSeek !== null) break
+
+          // Evict buffered data >30 s behind playhead to prevent QuotaExceededError
+          const ct = video.currentTime
+          if (sb.buffered.length > 0 && sb.buffered.start(0) < ct - 30) {
+            try {
+              sb.remove(sb.buffered.start(0), Math.max(sb.buffered.start(0) + 1, ct - 20))
+              await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
+            } catch {}
+          }
+
+          // Back-pressure: wait if buffered > 60 s ahead of playhead
+          while (!aborted && nextSeek === null && video.buffered.length > 0 &&
+                 video.buffered.end(video.buffered.length - 1) - video.currentTime > 60) {
+            await new Promise<void>(r => setTimeout(r, 1000))
+          }
+
+          if (aborted || nextSeek !== null) break
+          while (sb.updating) await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
+
+          try {
+            sb.appendBuffer(value!)
+            bytesAppended += value!.byteLength
+            await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
+          } catch {
+            if (mediaSource!.readyState === 'open') try { mediaSource!.endOfStream('decode') } catch {}
+            if (bytesAppended === 0 && startSec === 0) return false
+            break
+          }
+        }
+
+        readerRef = null
+        reader.cancel().catch(() => {})
+
+        if (!aborted && nextSeek !== null) {
+          const seekTo = nextSeek
+          nextSeek = null
+          while (sb.updating) await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
+          try {
+            if (sb.buffered.length > 0) {
+              sb.remove(0, Infinity)
+              await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
+            }
+          } catch {}
+          if (!aborted) return doFetch(seekTo)
+        }
+        return true
+      }
+
+      const ok = await doFetch(0)
+      video.removeEventListener('seeking', onSeeking)
+      return ok
     }
 
     async function startStream() {
@@ -253,7 +326,13 @@ export default function TvWatchPage() {
     return () => {
       aborted = true
       clearLoadTimeout()
+      // Save position immediately on unmount instead of cancelling the timer
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      if (type !== 'live' && videoRef.current) {
+        const pos = videoRef.current.currentTime
+        const dur = videoRef.current.duration || 0
+        saveContinue({ id, type: 'vod', name, icon, position: pos, duration: dur, ext, media })
+      }
       controller.abort()
       hls?.destroy()
       if (mediaSource && mediaSource.readyState === 'open') {

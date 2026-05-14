@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import difflib
 import html as html_lib
 import json
 import os
@@ -3983,6 +3984,56 @@ async def iptv_vod(category_id: Optional[str] = None):
     data = await _xtream_api("get_vod_streams", extra=extra, timeout=60.0)
     return data if isinstance(data, list) else []
 
+_vod_all_cache: tuple[float, list] = (0.0, [])
+_series_all_cache: tuple[float, list] = (0.0, [])
+
+@app.get("/api/iptv/search_catalog")
+async def iptv_search_catalog(q: str = "", type: str = "movie", limit: int = 3):
+    """Search VOD (movie) or series catalog by title using string similarity.
+    Returns matching items with their stream_id (VOD) or series_id (series)."""
+    global _vod_all_cache, _series_all_cache
+    if not q.strip():
+        return []
+
+    is_series = (type == "tv")
+
+    # Refresh cache every 10 min
+    if is_series:
+        if _time() - _series_all_cache[0] > 600:
+            data = await _xtream_api("get_series", timeout=60.0)
+            _series_all_cache = (_time(), data if isinstance(data, list) else [])
+        all_items = _series_all_cache[1]
+    else:
+        if _time() - _vod_all_cache[0] > 600:
+            data = await _xtream_api("get_vod_streams", timeout=60.0)
+            _vod_all_cache = (_time(), data if isinstance(data, list) else [])
+        all_items = _vod_all_cache[1]
+
+    clean_q, year_q = _clean_title_for_tmdb(q)
+    clean_q_l = clean_q.lower()
+
+    scored: list[tuple[float, dict]] = []
+    for item in all_items:
+        raw = item.get("name", "")
+        clean_item, year_item = _clean_title_for_tmdb(raw)
+        clean_item_l = clean_item.lower()
+
+        # Use sequence similarity — prevents short titles like "Us" matching
+        # every word that contains "us" as a substring.
+        sim = difflib.SequenceMatcher(None, clean_q_l, clean_item_l).ratio()
+        if sim < 0.60:
+            continue
+
+        score: float = sim * 100
+        if clean_item_l == clean_q_l:
+            score += 50          # exact match bonus
+        if year_q and year_item == year_q:
+            score += 30          # year match bonus
+        scored.append((score, item))
+
+    scored.sort(key=lambda x: -x[0])
+    return [item for _, item in scored[:limit]]
+
 @app.get("/api/iptv/vod_tracks/{stream_id}")
 async def iptv_vod_tracks(stream_id: str, ext: str = "mp4", media: str = "movie"):
     """List audio and subtitle tracks via ffprobe."""
@@ -4133,6 +4184,218 @@ async def iptv_vod_stream_url(stream_id: str, request: Request, ext: str = "mp4"
         "duration": duration_secs,
     }
 
+_TMDB_BASE = "https://api.themoviedb.org/3"
+_TMDB_IMG  = "https://image.tmdb.org/t/p"
+_tmdb_cache: Dict[str, tuple] = {}
+_tmdb_cfg_path = os.path.join(os.path.expanduser("~"), ".mytube", "tmdb.json")
+
+def _tmdb_load() -> str:
+    try:
+        with open(_tmdb_cfg_path) as f:
+            return json.load(f).get("key", "")
+    except Exception:
+        return ""
+
+def _tmdb_save(key: str) -> None:
+    try:
+        os.makedirs(os.path.dirname(_tmdb_cfg_path), exist_ok=True)
+        with open(_tmdb_cfg_path, "w") as f:
+            json.dump({"key": key}, f)
+    except Exception:
+        pass
+
+_TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "") or _tmdb_load()
+
+_RE_IPTV_PREFIX = re.compile(
+    r"^(?:(?:FR|VF|VOF|VO|EN|DE|ES|IT|AR|NL|PT|PL|RU|TR|US|UK)"
+    r"(?:\s*[\|:\-]\s*|\s+))+",
+    re.IGNORECASE,
+)
+_RE_IPTV_SUFFIX = re.compile(
+    r"\s*[\[\(](?:\d{4}|4K|2160p|1080p|720p|480p|HDTV|BluRay|WEB(?:-?DL)?|REMUX"
+    r"|HDR|DV|HEVC|H\.?264|x264|x265|MULTI|TRUEFRENCH|FRENCH|VF|VO|VOSTFR"
+    r"|S\d{1,2}E\d{1,2}|SAISON\s*\d+|SEASON\s*\d+)[^\]\)]*[\]\)].*$",
+    re.IGNORECASE,
+)
+_RE_YEAR = re.compile(r"\b(19[5-9]\d|20[0-3]\d)\b")
+
+def _clean_title_for_tmdb(name: str) -> tuple[str, str | None]:
+    """Strip IPTV-style prefixes/tags. Returns (clean_title, year_or_None).
+    Matches the Jellyfin/Plex approach: extract year before stripping so it
+    can be passed as a separate TMDB search parameter for accurate matching."""
+    # Extract year BEFORE stripping (brackets may contain the year)
+    year_m = _RE_YEAR.search(name)
+    year = year_m.group(1) if year_m else None
+
+    name = _RE_IPTV_PREFIX.sub("", name).strip()
+    name = _RE_IPTV_SUFFIX.sub("", name).strip()
+    # Remove trailing junk after " - " if it looks like a tag (all caps / digits)
+    parts = name.rsplit(" - ", 1)
+    if len(parts) == 2 and re.match(r"^[A-Z0-9 _/]+$", parts[1]):
+        name = parts[0].strip()
+    # Also strip bare 4-digit year at the end (e.g. "Film Title 2023")
+    name = re.sub(r"\s+\d{4}$", "", name).strip()
+    return name, year
+
+async def _tmdb_search(name: str, media_type: str) -> dict | None:
+    """Search TMDB for a movie or TV show by name. Returns first result or None."""
+    if not _TMDB_API_KEY:
+        return None
+    cache_key = f"tmdb:{media_type}:{name.lower()}"
+    if cache_key in _tmdb_cache:
+        ts, data = _tmdb_cache[cache_key]
+        if _time() - ts < 3600:
+            return data
+    endpoint = "tv" if media_type == "tv" else "movie"
+    year_param = "first_air_date_year" if media_type == "tv" else "year"
+    clean, year = _clean_title_for_tmdb(name)
+    try:
+        async with httpx_client(timeout=8.0) as client:
+            # Strategy (Jellyfin/Plex approach):
+            # 1. cleaned title + year  → most precise
+            # 2. cleaned title alone   → catches year-less titles
+            # 3. original name         → last resort if cleaning went wrong
+            queries: list[tuple[str, str | None]] = [(clean, year), (clean, None)]
+            if name != clean:
+                queries.append((name, None))
+            for query, yr in dict.fromkeys(queries):  # deduplicate preserving order
+                params: dict = {"api_key": _TMDB_API_KEY, "query": query,
+                                "language": "fr-FR", "page": 1}
+                if yr:
+                    params[year_param] = yr
+                r = await client.get(f"{_TMDB_BASE}/search/{endpoint}", params=params)
+                if r.status_code != 200:
+                    continue
+                results = r.json().get("results") or []
+                if results:
+                    result = results[0]
+                    _tmdb_cache[cache_key] = (_time(), result)
+                    return result
+        _tmdb_cache[cache_key] = (_time(), None)
+        return None
+    except Exception:
+        return None
+
+async def _tmdb_details(tmdb_id: int, media_type: str) -> dict | None:
+    """Fetch full TMDB details (with credits) for a movie or TV show."""
+    if not _TMDB_API_KEY:
+        return None
+    cache_key = f"tmdb:detail:{media_type}:{tmdb_id}"
+    if cache_key in _tmdb_cache:
+        ts, data = _tmdb_cache[cache_key]
+        if _time() - ts < 3600:
+            return data
+    endpoint = "tv" if media_type == "tv" else "movie"
+    try:
+        async with httpx_client(timeout=8.0) as client:
+            r = await client.get(f"{_TMDB_BASE}/{endpoint}/{tmdb_id}",
+                                 params={"api_key": _TMDB_API_KEY, "language": "fr-FR",
+                                         "append_to_response": "credits"})
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        _tmdb_cache[cache_key] = (_time(), data)
+        return data
+    except Exception:
+        return None
+
+@app.get("/api/tmdb/details")
+async def tmdb_details(name: str = "", type: str = "movie"):
+    """Return TMDB details JSON for a movie or TV show."""
+    if not _TMDB_API_KEY or not name.strip():
+        raise HTTPException(status_code=503, detail="TMDB not configured")
+    result = await _tmdb_search(name, type)
+    if not result:
+        raise HTTPException(status_code=404, detail="Not found")
+    tmdb_id = result.get("id")
+    if not tmdb_id:
+        raise HTTPException(status_code=404, detail="Not found")
+    details = await _tmdb_details(tmdb_id, type)
+    return details or result
+
+@app.get("/api/tmdb/poster")
+async def tmdb_poster(name: str = "", type: str = "movie"):
+    """Return poster image for a movie or TV show (proxied from TMDB)."""
+    if not _TMDB_API_KEY or not name.strip():
+        raise HTTPException(status_code=404, detail="Not found")
+    result = await _tmdb_search(name, type)
+    poster_path = result.get("poster_path") if result else None
+    if not poster_path:
+        raise HTTPException(status_code=404, detail="No poster")
+    try:
+        async with httpx_client(timeout=10.0) as client:
+            img = await client.get(f"{_TMDB_IMG}/w500{poster_path}")
+        if img.status_code != 200:
+            raise HTTPException(status_code=404, detail="Image not found")
+        return Response(content=img.content, media_type=img.headers.get("content-type", "image/jpeg"),
+                        headers={"Cache-Control": "public, max-age=86400",
+                                 "Access-Control-Allow-Origin": "*"})
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=502, detail="TMDB image fetch failed")
+
+@app.get("/api/tmdb/image")
+async def tmdb_image(path: str = ""):
+    """Proxy a TMDB image by path (e.g. /w500/xyz.jpg)."""
+    if not path:
+        raise HTTPException(status_code=400, detail="path required")
+    if not path.startswith("/"):
+        path = "/" + path
+    try:
+        async with httpx_client(timeout=10.0) as client:
+            img = await client.get(f"{_TMDB_IMG}{path}")
+        if img.status_code != 200:
+            raise HTTPException(status_code=404, detail="Image not found")
+        return Response(content=img.content, media_type=img.headers.get("content-type", "image/jpeg"),
+                        headers={"Cache-Control": "public, max-age=86400",
+                                 "Access-Control-Allow-Origin": "*"})
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=502, detail="TMDB image fetch failed")
+
+
+@app.get("/api/tmdb/discover")
+async def tmdb_discover(type: str = "movie", list: str = "popular", page: int = 1):
+    """Return a TMDB discover list (popular/top_rated/upcoming/now_playing)."""
+    if not _TMDB_API_KEY:
+        raise HTTPException(status_code=503, detail="TMDB not configured")
+    endpoint = "tv" if type == "tv" else "movie"
+    cache_key = f"tmdb:discover:{endpoint}:{list}:{page}"
+    if cache_key in _tmdb_cache:
+        ts, data = _tmdb_cache[cache_key]
+        if _time() - ts < 1800:
+            return data
+    try:
+        async with httpx_client(timeout=10.0) as client:
+            r = await client.get(f"{_TMDB_BASE}/{endpoint}/{list}",
+                                 params={"api_key": _TMDB_API_KEY, "language": "fr-FR", "page": page})
+        if r.status_code != 200:
+            raise HTTPException(status_code=r.status_code, detail="TMDB error")
+        data = r.json()
+        _tmdb_cache[cache_key] = (_time(), data)
+        return data
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.get("/api/tmdb/key")
+async def tmdb_get_key():
+    return {"key": _TMDB_API_KEY}
+
+
+@app.post("/api/tmdb/key")
+async def tmdb_set_key(body: dict):
+    global _TMDB_API_KEY
+    key = body.get("key", "")
+    _TMDB_API_KEY = key
+    _tmdb_save(key)
+    return {"ok": True}
+
+
 @app.get("/api/iptv/vod_hls/{stream_id}")
 async def iptv_vod_hls(stream_id: str, request: Request, media: str = "movie"):
     """Proxy VOD HLS manifest + rewrite segment URLs through our proxy."""
@@ -4175,16 +4438,16 @@ async def _log_stderr(stderr: asyncio.StreamReader) -> None:
         pass
 
 
-async def _download_reconnecting(url: str, stdin: asyncio.StreamWriter) -> None:
+async def _download_reconnecting(url: str, stdin: asyncio.StreamWriter, initial_offset: int = 0) -> None:
     """Download *url* sequentially, reconnecting with Range requests whenever
     the provider closes the connection mid-file (common rate-limit pattern).
 
+    initial_offset: start downloading from this byte position (Range: bytes=N-).
     Writes each received byte directly to *stdin* (ffmpeg's stdin pipe).
     Stops cleanly when stdin closes (ffmpeg exited) or all data is received.
     """
-    print(f"[downloader] start url={url[-40:]}", flush=True)
-    offset = 0
-    # Allow up to 300 reconnects — enough for a 5-hour film at 60-second chunks.
+    print(f"[downloader] start url={url[-40:]} initial_offset={initial_offset}", flush=True)
+    offset = initial_offset
     for attempt in range(300):
         headers: dict[str, str] = {}
         if offset > 0:
@@ -4198,18 +4461,24 @@ async def _download_reconnecting(url: str, stdin: asyncio.StreamWriter) -> None:
                 async with client.stream("GET", url, headers=headers) as resp:
                     print(f"[downloader] HTTP {resp.status_code} offset={offset}", flush=True)
                     if resp.status_code == 416:
-                        break  # Range not satisfiable → we already have everything
+                        break  # Range not satisfiable → already have everything
                     if resp.status_code not in (200, 206):
                         break
+                    if resp.status_code == 200 and offset > 0:
+                        # Provider ignored Range header — would re-send from byte 0,
+                        # corrupting the pipe stream.  Stop so ffmpeg sees clean EOF.
+                        print(f"[downloader] Range not honoured (200 at offset={offset}), stopping", flush=True)
+                        break
                     async for chunk in resp.aiter_bytes(65536):
+                        if stdin.is_closing():
+                            return
                         try:
                             stdin.write(chunk)
                             await stdin.drain()
                         except Exception as e:
                             print(f"[downloader] stdin closed at offset={offset}: {e}", flush=True)
-                            return  # ffmpeg stdin closed (process killed or done)
+                            return
                         offset += len(chunk)
-            # Server closed cleanly — loop to reconnect from current offset.
             print(f"[downloader] server EOF at offset={offset}, reconnecting...", flush=True)
             if offset == 0:
                 print("[downloader] no data received, giving up", flush=True)
@@ -4218,7 +4487,6 @@ async def _download_reconnecting(url: str, stdin: asyncio.StreamWriter) -> None:
             print(f"[downloader] exception at offset={offset}: {exc}", flush=True)
             if offset == 0 and attempt >= 2:
                 break
-            # Brief pause before reconnect
             await asyncio.sleep(0.2)
     print(f"[downloader] done, total={offset} bytes", flush=True)
     try:
@@ -4259,69 +4527,148 @@ async def _start_ffmpeg(cmd: list, timeout: float = 25.0) -> tuple[asyncio.subpr
 
 
 @app.get("/api/iptv/vod_proxy/{stream_id}")
-async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", media: str = "movie", audio_idx: int = 0):
+async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", media: str = "movie",
+                         audio_idx: int = 0, start: int = 0, duration: float = 0.0):
     """Transcode VOD/series → fragmented H.264 MP4.
 
-    The source is piped into ffmpeg via stdin (pipe:0) through a reconnecting
-    downloader. This bypasses providers that rate-limit HTTP connections to
-    ~60 seconds of data per request: our downloader transparently reconnects
-    with a Range: bytes=N- header so ffmpeg sees an uninterrupted stream.
-
-    Tries VideoToolbox (hardware) first; falls back to libx264 (software).
+    start=0  : pipe source into ffmpeg via stdin through the reconnecting downloader.
+    start>0  : seek to that position (seconds).  Tries 4 strategies in order:
+               1) ffmpeg direct URL seek with -seekable 1 (instant if server supports Range)
+               2) pipe with estimated byte offset (fast when Content-Range is available)
+               3) pipe from byte 0 with ffmpeg -ss (always works, slow for large files)
+               4) same as 3 but with VideoToolbox encoder
     """
     if not _xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
     s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
     src = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
 
-    # Feed source via stdin so the MKV demuxer runs in sequential (non-seekable)
-    # mode and our reconnect loop can transparently restart the HTTP download.
-    base = [_FFMPEG, "-loglevel", "error",
-            "-probesize", "2097152",        # 2 MB (vs défaut 5 MB) → sonde plus rapide
-            "-analyzeduration", "2000000",  # 2 s  (vs défaut 5 s)
-            "-i", "pipe:0",
-            "-map", "0:v:0?", "-map", f"0:a:{audio_idx}?"]
+    vargs_x264 = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+                  "-profile:v", "high", "-level", "4.1"]
+    vargs_vtb  = ["-c:v", "h264_videotoolbox", "-b:v", "3M",
+                  "-profile:v", "high", "-level", "4.1"]
+
+    def _cmd(input_args: list, video_args: list, fast_probe: bool = False) -> list:
+        probesize = "131072" if fast_probe else "2097152"
+        analyzedur = "500000" if fast_probe else "2000000"
+        return [_FFMPEG, "-loglevel", "error",
+                "-probesize", probesize, "-analyzeduration", analyzedur,
+                *input_args,
+                "-map", "0:v:0?", "-map", f"0:a:{audio_idx}?",
+                *video_args, *_OUTPUT_ARGS]
+
+    # For seeks: estimate byte offset so the pipe downloader can jump directly
+    # to approximately the right position (much faster than reading from byte 0).
+    # Try HEAD first; if no Content-Length, probe with a tiny Range GET instead.
+    byte_offset = 0
+    if start > 0 and duration > 0:
+        try:
+            async with httpx_client(
+                timeout=httpx.Timeout(connect=5.0, read=5.0, write=None, pool=None),
+                follow_redirects=True,
+            ) as client:
+                head = await client.head(src)
+                cl = int(head.headers.get("content-length", 0) or 0)
+                if cl <= 0:
+                    # HEAD gave no Content-Length; probe with Range: bytes=0-1
+                    async with client.stream("GET", src, headers={"Range": "bytes=0-1"}) as rng:
+                        if rng.status_code == 206:
+                            cr = rng.headers.get("content-range", "")
+                            if "/" in cr and not cr.endswith("/*"):
+                                cl = int(cr.rsplit("/", 1)[-1])
+                        elif rng.status_code == 200:
+                            cl = int(rng.headers.get("content-length", 0) or 0)
+            if cl > 0:
+                byte_offset = int(0.90 * start / duration * cl)
+                print(f"[seek] byte_offset={byte_offset} ({start}s / {duration:.0f}s, size={cl})", flush=True)
+            else:
+                print(f"[seek] no Content-Length from HEAD/Range-probe, byte_offset=0", flush=True)
+        except Exception as e:
+            print(f"[seek] probe failed: {e}, byte_offset=0", flush=True)
+
+    if start > 0:
+        # +ignidx: ignore MKV SeekHead index so ffmpeg reads linearly through
+        # the pipe without trying to jump to referenced byte positions.
+        pipe_ss = ["-fflags", "+ignidx", "-ss", str(start), "-i", "pipe:0"]
+        # For MKV/AVI/TS: byte-offset pipe (attempt 2) is useless because the
+        # container header lives at offset 0 — starting mid-file breaks parsing.
+        non_seekable_pipe = ext.lower() in ("mkv", "avi", "ts", "m2ts", "mts")
+        attempts = [
+            # 1. Fast: direct URL seek — ffmpeg sends a Range request to jump to
+            #    the target keyframe.  Timeout is generous (45s) because MKV header
+            #    + seek-table parsing can take 10-20s on large remote files.
+            {"cmd": _cmd(["-reconnect", "1", "-reconnect_delay_max", "5",
+                          "-seekable", "1",
+                          "-ss", str(start), "-i", src], vargs_x264, fast_probe=True),
+             "use_pipe": False, "timeout": 45.0, "min_chunk": 1, "initial_offset": 0},
+            # 2. Pipe with estimated byte offset — only viable for self-contained
+            #    formats (MP4) where a mid-file slice is still parseable.
+            *([{"cmd": _cmd(pipe_ss, vargs_x264, fast_probe=True),
+                "use_pipe": True, "timeout": 60.0, "min_chunk": 1, "initial_offset": byte_offset}]
+              if byte_offset > 0 and not non_seekable_pipe else []),
+            # 3. Pipe from byte 0 — always works, slow for large seeks
+            {"cmd": _cmd(pipe_ss, vargs_x264),
+             "use_pipe": True, "timeout": 300.0, "min_chunk": 1, "initial_offset": 0},
+            # 4. VideoToolbox hardware encoder fallback
+            {"cmd": _cmd(pipe_ss, vargs_vtb),
+             "use_pipe": True, "timeout": 300.0, "min_chunk": 1, "initial_offset": 0},
+        ]
+    else:
+        attempts = [
+            {"cmd": _cmd(["-i", "pipe:0"], vargs_x264), "use_pipe": True, "timeout": 45.0, "min_chunk": 1, "initial_offset": 0},
+            {"cmd": _cmd(["-i", "pipe:0"], vargs_vtb),  "use_pipe": True, "timeout": 15.0, "min_chunk": 1, "initial_offset": 0},
+        ]
 
     process: asyncio.subprocess.Process | None = None
     first_chunk: bytes = b""
     last_err = "transcoding failed"
 
-    for video_args, timeout in (
-        # libx264 first: standard-compliant H.264, compatible with all browsers
-        (["-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-          "-profile:v", "high", "-level", "4.1"], 45.0),
-        # VideoToolbox as fallback (faster on macOS but less browser-compatible)
-        (["-c:v", "h264_videotoolbox", "-b:v", "3M",
-          "-profile:v", "high", "-level", "4.1"], 15.0),
-    ):
-        cmd = base + video_args + _OUTPUT_ARGS
+    async def _kill_attempt(proc: asyncio.subprocess.Process, dl: "asyncio.Task | None") -> None:
+        if dl is not None:
+            dl.cancel()
+            try: await dl
+            except BaseException: pass  # CancelledError is BaseException, not Exception
+        try: proc.kill()
+        except Exception: pass
+        await proc.wait()
+
+    for attempt in attempts:
+        cmd, use_pipe = attempt["cmd"], attempt["use_pipe"]
+        timeout, min_chunk = attempt["timeout"], attempt["min_chunk"]
+        initial_offset = attempt.get("initial_offset", 0)
+        dl_task: "asyncio.Task | None" = None
         try:
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
-                stdin=asyncio.subprocess.PIPE,
+                stdin=asyncio.subprocess.PIPE if use_pipe else asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
             asyncio.ensure_future(_log_stderr(proc.stderr))
-            asyncio.ensure_future(_download_reconnecting(src, proc.stdin))
+            if use_pipe:
+                dl_task = asyncio.ensure_future(
+                    _download_reconnecting(src, proc.stdin, initial_offset))
             try:
                 first_chunk = await asyncio.wait_for(proc.stdout.read(4096), timeout=timeout)
             except asyncio.TimeoutError:
-                try: proc.kill()
-                except Exception: pass
-                await proc.wait()
+                await _kill_attempt(proc, dl_task)
+                dl_task = None
                 last_err = f"timeout ({timeout:.0f}s)"
                 process = None
                 continue
-            if not first_chunk:
-                rc = await proc.wait()
-                last_err = f"source inaccessible ou format non supporté (exit {rc})"
+            if not first_chunk or len(first_chunk) < min_chunk:
+                print(f"[seek] attempt failed ({len(first_chunk)}B < {min_chunk}B), trying next", flush=True)
+                await _kill_attempt(proc, dl_task)
+                dl_task = None
+                last_err = f"output insuffisant ({len(first_chunk)}B)"
+                first_chunk = b""
                 process = None
                 continue
             process = proc
             break
         except Exception as e:
             last_err = str(e)
+            if dl_task: dl_task.cancel()
             process = None
 
     if process is None or not first_chunk:
@@ -4331,16 +4678,12 @@ async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", med
         assert process is not None
         total = len(first_chunk)
         yield first_chunk
-        print(f"[stream] started, first_chunk={len(first_chunk)}B", flush=True)
         try:
             while True:
                 chunk = await process.stdout.read(65536)
                 if not chunk:
-                    print(f"[stream] ffmpeg EOF, total={total//1024}KB", flush=True)
                     break
                 total += len(chunk)
-                if total % (4 * 1024 * 1024) < 65536:
-                    print(f"[stream] {total//1024//1024}MB streamed", flush=True)
                 yield chunk
         finally:
             print(f"[stream] ended, total={total//1024}KB", flush=True)
@@ -4353,6 +4696,7 @@ async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", med
         media_type="video/mp4",
         headers={"Access-Control-Allow-Origin": "*"},
     )
+
 
 @app.get("/api/iptv/series_categories")
 async def iptv_series_categories():
