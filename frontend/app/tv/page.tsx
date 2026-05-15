@@ -441,7 +441,7 @@ function TmdbModal({ item, type, onClose }: { item: TmdbItem; type: 'movie' | 't
     ? type === 'tv' && match.series_id
       ? `/tv/series/${match.series_id}?name=${encodeURIComponent(match.name)}&icon=${encodeURIComponent(match.cover || '')}`
       : match.stream_id
-        ? `/tv/watch/${match.stream_id}?type=vod&ext=${match.container_extension || 'mp4'}&media=movie&name=${encodeURIComponent(match.name)}&icon=${encodeURIComponent(match.stream_icon || '')}`
+        ? `/tv/film/${match.stream_id}?ext=${match.container_extension || 'mp4'}&name=${encodeURIComponent(match.name)}&icon=${encodeURIComponent(match.stream_icon || '')}`
         : null
     : null
 
@@ -510,7 +510,7 @@ function TmdbModal({ item, type, onClose }: { item: TmdbItem; type: 'movie' | 't
               className="w-full py-2.5 bg-yt-red hover:bg-yt-red-hover text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2"
             >
               <Play className="w-4 h-4 fill-white" />
-              {type === 'tv' ? 'Voir les épisodes' : 'Regarder'}
+              {type === 'tv' ? 'Voir la série' : 'Voir le film'}
             </Link>
           ) : (
             <div className="w-full py-2.5 bg-yt-secondary rounded-xl text-sm text-yt-text-muted flex items-center justify-center gap-2 cursor-not-allowed opacity-60">

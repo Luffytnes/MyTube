@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { UserCheck, UserPlus } from 'lucide-react'
 import type { ChannelSearchResult } from '@/lib/api'
-import { isSubscribed, toggleSubscription } from '@/lib/subscriptions'
 import { useRegion } from '@/lib/regionContext'
+import { useSubscriptions } from '@/lib/subscriptionsContext'
 
 interface Props {
   channel: ChannelSearchResult
@@ -13,21 +13,17 @@ interface Props {
 
 export default function ChannelCard({ channel }: Props) {
   const { t } = useRegion()
-  const [subscribed, setSubscribed] = useState(false)
-
-  useEffect(() => {
-    setSubscribed(isSubscribed(channel.id))
-  }, [channel.id])
+  const { isSubscribed, toggle } = useSubscriptions()
+  const subscribed = isSubscribed(channel.id)
 
   function handleSubscribe(e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
-    const next = toggleSubscription({
+    toggle({
       id: channel.id,
       name: channel.name,
       thumbnail: channel.thumbnail,
     })
-    setSubscribed(next)
   }
 
   return (

@@ -28,13 +28,24 @@ export interface VideoFormat {
   abr?: number
 }
 
+export interface RelatedChannel {
+  type: 'channel'
+  id: string
+  title: string
+  thumbnail: string | null
+  duration: string
+  views: string
+  published: string
+  channel: VideoChannel
+}
+
 export interface VideoDetail extends VideoCard {
   description: string
   likes: string
   viewCount: number
   uploadDate: string
   formats: VideoFormat[]
-  related: VideoCard[]
+  related: (VideoCard | RelatedChannel)[]
   isLive?: boolean
 }
 
@@ -140,7 +151,7 @@ export async function getVideo(id: string): Promise<VideoDetail> {
   return {
     ...data,
     thumbnail: buildThumbnailUrl(id),
-    related: data.related.map(normalizeThumbnail),
+    related: data.related.map(item => (item as RelatedChannel).type === 'channel' ? item : normalizeThumbnail(item as VideoCard)),
   }
 }
 

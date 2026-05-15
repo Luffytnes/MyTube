@@ -199,7 +199,7 @@ export default function MusicHomePage() {
   }, [lang])
 
   return (
-    <div className="px-4 py-6 max-w-5xl mx-auto">
+    <div className="px-4 py-6">
       <div className="space-y-10">
 
         {/* My playlists */}

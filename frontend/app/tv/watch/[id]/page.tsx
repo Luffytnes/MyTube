@@ -52,6 +52,8 @@ export default function TvWatchPage() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const resumePositionRef = useRef<number>(0)
   const audioChangePositionRef = useRef<number>(0)
+  const positionRef = useRef<number>(0)   // last known currentTime — survives ref detach on unmount
+  const durationRef = useRef<number>(0)
 
   useEffect(() => { setFav(isTvFavorite(id, favType)) }, [id, favType])
 
@@ -102,9 +104,11 @@ export default function TvWatchPage() {
     if (type === 'live' || !videoRef.current) return
     const pos = videoRef.current.currentTime
     const dur = videoRef.current.duration || 0
+    positionRef.current = pos
+    durationRef.current = dur
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(() => {
-      saveContinue({ id, type: 'vod', name, icon, position: pos, duration: dur, ext, media,
+      saveContinue({ id, type: 'vod', name, icon, position: positionRef.current, duration: durationRef.current, ext, media,
         ...(seriesId ? { seriesId, season: seriesSeason, seriesName, seriesIcon } : {}) })
     }, 5000)
   }, [id, type, name, icon, ext, media])
@@ -336,10 +340,9 @@ export default function TvWatchPage() {
       aborted = true
       clearLoadTimeout()
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-      if (type !== 'live' && videoRef.current) {
-        const pos = videoRef.current.currentTime
-        const dur = videoRef.current.duration || 0
-        // Preserve position for audio-track switch (effect will restart and seek back here)
+      if (type !== 'live') {
+        const pos = positionRef.current
+        const dur = durationRef.current
         if (pos > 0) audioChangePositionRef.current = pos
         saveContinue({ id, type: 'vod', name, icon, position: pos, duration: dur, ext, media,
         ...(seriesId ? { seriesId, season: seriesSeason, seriesName, seriesIcon } : {}) })

@@ -46,7 +46,7 @@ export default function MusicPlaylistsPage() {
   }
 
   return (
-    <div className="px-4 py-6 max-w-3xl mx-auto min-h-screen">
+    <div className="px-4 py-6 min-h-screen">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-yt-text text-2xl font-bold flex items-center gap-3">
           <ListMusic className="w-7 h-7 text-yt-red" />

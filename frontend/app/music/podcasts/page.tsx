@@ -85,7 +85,7 @@ export default function PodcastsPage() {
   }, [])
 
   return (
-    <div className="px-4 py-6 max-w-5xl mx-auto min-h-screen space-y-8">
+    <div className="px-4 py-6 min-h-screen space-y-8">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Mic2 className="w-6 h-6 text-yt-red flex-shrink-0" />

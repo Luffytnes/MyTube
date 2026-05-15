@@ -42,7 +42,7 @@ export default function MusicArtistPage() {
     return (
       <div className="min-h-screen">
         <div className="h-64 bg-yt-secondary animate-pulse" />
-        <div className="px-4 py-6 space-y-4 max-w-5xl mx-auto">
+        <div className="px-4 py-6 space-y-4">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="h-14 bg-yt-secondary rounded-xl animate-pulse" />
           ))}
@@ -79,7 +79,7 @@ export default function MusicArtistPage() {
         </div>
       </div>
 
-      <div className="px-4 py-6 max-w-5xl mx-auto space-y-10">
+      <div className="px-4 py-6 space-y-10">
         {/* Play button */}
         {artist.songs.length > 0 && (
           <button

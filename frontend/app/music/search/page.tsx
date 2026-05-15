@@ -108,7 +108,7 @@ function MusicSearchContent() {
   }))
 
   return (
-    <div className="px-4 py-6 max-w-5xl mx-auto min-h-screen">
+    <div className="px-4 py-6 min-h-screen">
       {/* Filter chips */}
       <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
         {FILTERS.map(({ key, labelKey, icon: Icon }) => (

@@ -20,7 +20,7 @@ export default function PodcastSubscriptionsPage() {
   }
 
   return (
-    <div className="px-4 py-6 max-w-3xl mx-auto min-h-screen">
+    <div className="px-4 py-6 min-h-screen">
       <div className="flex items-center gap-3 mb-6">
         <Bell className="w-6 h-6 text-yt-red flex-shrink-0" />
         <h1 className="text-yt-text text-2xl font-bold">{t('podcast_my_subscriptions')}</h1>

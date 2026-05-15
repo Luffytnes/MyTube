@@ -157,7 +157,7 @@ export default function RadioPage() {
   }
 
   return (
-    <div className="px-4 py-6 max-w-5xl mx-auto min-h-screen space-y-6">
+    <div className="px-4 py-6 min-h-screen space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Radio className="w-6 h-6 text-yt-red flex-shrink-0" />

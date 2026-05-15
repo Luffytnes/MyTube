@@ -35,7 +35,7 @@ export default function MusicPlaylistPage() {
   }
 
   return (
-    <div className="px-4 py-6 max-w-4xl mx-auto min-h-screen">
+    <div className="px-4 py-6 min-h-screen">
       {/* Header */}
       <div className="flex flex-col sm:flex-row gap-6 mb-8">
         <div className="w-48 h-48 rounded-2xl overflow-hidden bg-yt-secondary flex-shrink-0 shadow-2xl self-center sm:self-start">

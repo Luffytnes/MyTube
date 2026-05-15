@@ -86,6 +86,36 @@ function ChannelAvatar({
   )
 }
 
+function RelatedChannelCard({ id, name }: { id: string; name: string }) {
+  return (
+    <Link
+      href={`/channel/${id}`}
+      className="flex items-center gap-3 p-2.5 rounded-xl bg-yt-secondary hover:bg-yt-hover transition-colors group"
+    >
+      <div className="flex-shrink-0 w-12 h-12 rounded-full overflow-hidden bg-yt-hover">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`${API_BASE}/api/channel_thumbnail/${id}`}
+          alt={name}
+          className="w-full h-full object-cover"
+          onError={(e) => {
+            const el = e.target as HTMLImageElement
+            el.style.display = 'none'
+            el.nextElementSibling?.classList.remove('hidden')
+          }}
+        />
+        <div className="hidden w-full h-full items-center justify-center text-yt-text-muted font-bold text-lg">
+          {name[0]?.toUpperCase()}
+        </div>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-yt-text text-sm font-medium truncate group-hover:text-yt-red transition-colors">{name}</p>
+        <p className="text-yt-text-muted text-xs mt-0.5">Chaîne</p>
+      </div>
+    </Link>
+  )
+}
+
 function parseChapters(description: string): Chapter[] {
   const lines = description.split('\n')
   const chapters: Chapter[] = []
@@ -631,9 +661,13 @@ function WatchContent({ params }: WatchPageProps) {
 
           {video.related.length > 0 ? (
             <div className="flex flex-col gap-3">
-              {video.related.map((related) => (
-                <VideoCard key={related.id} video={related} layout="list" />
-              ))}
+              {video.related.map((related) =>
+                (related as { type?: string }).type === 'channel' ? (
+                  <RelatedChannelCard key={related.id} id={related.id} name={related.title} />
+                ) : (
+                  <VideoCard key={related.id} video={related as import('@/lib/api').VideoCard} layout="list" />
+                )
+              )}
             </div>
           ) : (
             <div className="text-center py-8">

@@ -39,7 +39,7 @@ export default function MusicAlbumPage() {
 
   if (loading) {
     return (
-      <div className="px-4 py-6 max-w-4xl mx-auto min-h-screen space-y-4">
+      <div className="px-4 py-6 min-h-screen space-y-4">
         <div className="flex gap-6">
           <div className="w-48 h-48 rounded-2xl bg-yt-secondary animate-pulse flex-shrink-0" />
           <div className="flex-1 space-y-3 py-4">
@@ -65,7 +65,7 @@ export default function MusicAlbumPage() {
   const artistNames = album.artists.map((a) => a.name).join(', ')
 
   return (
-    <div className="px-4 py-6 max-w-4xl mx-auto min-h-screen">
+    <div className="px-4 py-6 min-h-screen">
       {/* Header */}
       <div className="flex flex-col sm:flex-row gap-6 mb-8">
         <div className="w-48 h-48 rounded-2xl overflow-hidden bg-yt-secondary flex-shrink-0 shadow-2xl self-center sm:self-start">

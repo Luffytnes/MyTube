@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { Home, Search, Tv, Film, Layers, Star, ChevronLeft, MoreHorizontal, X, Settings, Radio } from 'lucide-react'
+import { Home, Search, Tv, Film, Layers, Star, Music2, Newspaper, MoreHorizontal, X, Settings, Radio } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useRegion } from '@/lib/regionContext'
 import type { Translations } from '@/lib/translations'
@@ -132,15 +132,22 @@ export default function TvSidebar() {
         )}
 
         <div className="border-t border-yt-border/40 my-3 mx-3" />
-        <nav className="px-2">
-          <Link
-            href="/"
-            title={t('tv_back')}
-            className="flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text transition-colors group"
-          >
-            <ChevronLeft className="w-5 h-5 flex-shrink-0 group-hover:text-yt-text transition-colors" />
-            <span className="hidden xl:block truncate">{t('tv_back')}</span>
-          </Link>
+        <nav className="px-2 flex flex-col gap-0.5">
+          {([
+            { icon: Home, label: 'MyTube', href: '/' },
+            { icon: Music2, label: 'MyTube Music', href: '/music' },
+            { icon: Newspaper, label: 'MyTube News', href: '/news' },
+          ] as const).map(({ icon: Icon, label, href }) => (
+            <Link
+              key={href}
+              href={href}
+              title={label}
+              className="flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text transition-colors group"
+            >
+              <Icon className="w-5 h-5 flex-shrink-0 group-hover:text-yt-text transition-colors" />
+              <span className="hidden xl:block truncate">{label}</span>
+            </Link>
+          ))}
         </nav>
       </aside>
 
@@ -250,13 +257,20 @@ export default function TvSidebar() {
                 <Settings className="w-5 h-5 flex-shrink-0" />
                 {t('settings_title')}
               </button>
-              <Link
-                href="/"
-                className="flex items-center gap-4 px-4 py-3 text-sm text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text transition-colors"
-              >
-                <ChevronLeft className="w-5 h-5 flex-shrink-0" />
-                {t('tv_back')}
-              </Link>
+              {([
+                { icon: Home, label: 'MyTube', href: '/' },
+                { icon: Music2, label: 'MyTube Music', href: '/music' },
+                { icon: Newspaper, label: 'MyTube News', href: '/news' },
+              ] as const).map(({ icon: Icon, label, href }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className="flex items-center gap-4 px-4 py-3 text-sm text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text transition-colors"
+                >
+                  <Icon className="w-5 h-5 flex-shrink-0" />
+                  {label}
+                </Link>
+              ))}
             </div>
           </div>
         </>

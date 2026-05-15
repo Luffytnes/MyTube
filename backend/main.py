@@ -1172,9 +1172,38 @@ async def get_video(video_id: str):
 
         # Related videos — try metadata first, then fallback to channel search
         related: List[Dict[str, Any]] = []
+
+        def _is_channel_entry(e: Dict[str, Any]) -> bool:
+            ie_key = e.get("ie_key", "")
+            if ie_key in ("YoutubeChannel", "YoutubeTab"):
+                return True
+            # No duration and no view count → likely a channel suggestion
+            if not e.get("duration") and not e.get("view_count") and not e.get("viewCount"):
+                eid = e.get("id", "")
+                if eid.startswith("UC") or eid.startswith("@"):
+                    return True
+            return False
+
+        def _make_channel_entry(e: Dict[str, Any]) -> Dict[str, Any]:
+            cid = e.get("id", "")
+            cname = e.get("author") or e.get("channel") or e.get("uploader") or e.get("title", "")
+            return {
+                "type": "channel",
+                "id": cid,
+                "title": cname,
+                "thumbnail": f"/api/channel_thumbnail/{cid}" if cid else None,
+                "duration": "",
+                "views": "",
+                "published": "",
+                "channel": {"id": cid, "name": cname, "thumbnail": f"/api/channel_thumbnail/{cid}" if cid else None},
+            }
+
         for entry in info.get("related_videos", [])[:10]:
             if entry and entry.get("id"):
-                related.append(extract_video_card(entry))
+                if _is_channel_entry(entry):
+                    related.append(_make_channel_entry(entry))
+                else:
+                    related.append(extract_video_card(entry))
 
         if len(related) < 5:
             channel_name_for_search = info.get("channel") or info.get("uploader") or ""
@@ -1192,7 +1221,10 @@ async def get_video(video_id: str):
                         existing_ids = {r["id"] for r in related} | {video_id}
                         for entry in rel_info["entries"]:
                             if entry and entry.get("id") and entry["id"] not in existing_ids:
-                                related.append(extract_video_card(entry))
+                                if _is_channel_entry(entry):
+                                    related.append(_make_channel_entry(entry))
+                                else:
+                                    related.append(extract_video_card(entry))
                                 existing_ids.add(entry["id"])
                                 if len(related) >= 12:
                                     break
@@ -1684,6 +1716,106 @@ async def stream_video(video_id: str, request: Request, itag: Optional[str] = No
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Streaming failed: {str(e)}")
+
+
+@app.get("/api/trailer/{video_id}")
+async def stream_trailer(video_id: str, request: Request):
+    """Stream a YouTube video as a combined audio+video stream (optimised for trailers).
+
+    Uses best[height<=720][ext=mp4] which YouTube always provides as a single
+    merged stream (no DASH splitting), so no FFmpeg merging is required.
+    """
+    try:
+        cache_key = f"stream:{video_id}:trailer"
+        cached = stream_url_cache_get(cache_key)
+
+        if cached:
+            direct_url, ext = cached
+        else:
+            opts = get_ydl_opts()
+            loop = asyncio.get_event_loop()
+
+            def _get_trailer_url():
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(
+                        f"https://www.youtube.com/watch?v={video_id}", download=False
+                    )
+                    if not info:
+                        return None, None
+
+                    formats = info.get("formats", [])
+
+                    # Find combined (pre-merged) formats: vcodec and acodec both present
+                    combined = [
+                        f for f in formats
+                        if f.get("url")
+                        and f.get("vcodec") not in (None, "none")
+                        and f.get("acodec") not in (None, "none")
+                    ]
+
+                    if combined:
+                        # Prefer mp4 at ≤720p, fall back to any combined
+                        pool = [f for f in combined if (f.get("height") or 999) <= 720 and f.get("ext") == "mp4"]
+                        if not pool:
+                            pool = [f for f in combined if (f.get("height") or 999) <= 720]
+                        if not pool:
+                            pool = [f for f in combined if f.get("ext") == "mp4"]
+                        if not pool:
+                            pool = combined
+                        chosen = max(pool, key=lambda f: (f.get("height") or 0, f.get("tbr") or 0))
+                        return chosen["url"], chosen.get("ext", "mp4")
+
+                    # No combined format found
+                    return None, None
+
+            direct_url, ext = await loop.run_in_executor(None, _get_trailer_url)
+            if direct_url:
+                stream_url_cache_set(cache_key, direct_url, ext or "mp4")
+
+        if not direct_url:
+            raise HTTPException(status_code=404, detail="Trailer not available")
+
+        range_header = request.headers.get("range")
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": "https://www.youtube.com/",
+        }
+        if range_header:
+            headers["Range"] = range_header
+
+        content_type = "video/mp4" if ext in ("mp4", "m4v") else f"video/{ext}"
+
+        async def stream_generator():
+            async with httpx_client(timeout=None, follow_redirects=True) as client:
+                async with client.stream("GET", direct_url, headers=headers) as response:
+                    async for chunk in response.aiter_bytes(chunk_size=65536):
+                        yield chunk
+
+        async with httpx_client(timeout=10.0, follow_redirects=True) as client:
+            head_resp = await client.head(direct_url, headers=headers)
+            response_headers = {
+                "Content-Type": content_type,
+                "Accept-Ranges": "bytes",
+                "Cache-Control": "no-cache",
+            }
+            content_length = head_resp.headers.get("content-length")
+            content_range = head_resp.headers.get("content-range")
+            if content_length:
+                response_headers["Content-Length"] = content_length
+            if content_range:
+                response_headers["Content-Range"] = content_range
+
+        return StreamingResponse(
+            stream_generator(),
+            status_code=206 if range_header else 200,
+            headers=response_headers,
+            media_type=content_type,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Trailer stream failed: {str(e)}")
 
 
 @app.get("/api/dash/{video_id}.mpd")
@@ -4054,7 +4186,7 @@ async def iptv_vod_tracks(stream_id: str, ext: str = "mp4", media: str = "movie"
             "/opt/homebrew/bin/ffprobe",
             "-v", "quiet", "-print_format", "json",
             "-seekable", "0",
-            "-analyzeduration", "3000000", "-probesize", "10000000",
+            "-analyzeduration", "8000000", "-probesize", "20000000",
             "-show_streams",
             src_url,
             stdin=asyncio.subprocess.DEVNULL,
@@ -4063,7 +4195,7 @@ async def iptv_vod_tracks(stream_id: str, ext: str = "mp4", media: str = "movie"
             cwd="/tmp",
         )
         try:
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10.0)
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=20.0)
             streams = json.loads(stdout).get("streams", [])
         except (asyncio.TimeoutError, Exception):
             try: proc.kill()
@@ -4400,6 +4532,95 @@ async def tmdb_discover(type: str = "movie", list: str = "popular", page: int = 
         raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.get("/api/tmdb/videos")
+async def tmdb_videos(name: str = "", type: str = "movie"):
+    """Return TMDB videos (trailers) for a movie or TV show."""
+    if not _TMDB_API_KEY or not name.strip():
+        return {"results": []}
+    result = await _tmdb_search(name, type)
+    if not result:
+        return {"results": []}
+    tmdb_id = result.get("id")
+    if not tmdb_id:
+        return {"results": []}
+    cache_key = f"tmdb:videos:{type}:{tmdb_id}"
+    if cache_key in _tmdb_cache:
+        ts, data = _tmdb_cache[cache_key]
+        if _time() - ts < 3600:
+            return data
+    endpoint = "tv" if type == "tv" else "movie"
+    try:
+        async with httpx_client(timeout=8.0) as client:
+            r = await client.get(f"{_TMDB_BASE}/{endpoint}/{tmdb_id}/videos",
+                                 params={"api_key": _TMDB_API_KEY, "language": "fr-FR"})
+        data = r.json() if r.status_code == 200 else {"results": []}
+        # Fallback to English if no French results
+        if not data.get("results"):
+            async with httpx_client(timeout=8.0) as client:
+                r2 = await client.get(f"{_TMDB_BASE}/{endpoint}/{tmdb_id}/videos",
+                                      params={"api_key": _TMDB_API_KEY, "language": "en-US"})
+            data = r2.json() if r2.status_code == 200 else {"results": []}
+        _tmdb_cache[cache_key] = (_time(), data)
+        return data
+    except Exception:
+        return {"results": []}
+
+
+@app.get("/api/tmdb/recommendations")
+async def tmdb_recommendations(name: str = "", type: str = "movie"):
+    """Return TMDB recommendations for a movie or TV show."""
+    if not _TMDB_API_KEY or not name.strip():
+        return {"results": []}
+    result = await _tmdb_search(name, type)
+    if not result:
+        return {"results": []}
+    tmdb_id = result.get("id")
+    if not tmdb_id:
+        return {"results": []}
+    cache_key = f"tmdb:reco:{type}:{tmdb_id}"
+    if cache_key in _tmdb_cache:
+        ts, data = _tmdb_cache[cache_key]
+        if _time() - ts < 3600:
+            return data
+    endpoint = "tv" if type == "tv" else "movie"
+    try:
+        async with httpx_client(timeout=8.0) as client:
+            r = await client.get(f"{_TMDB_BASE}/{endpoint}/{tmdb_id}/recommendations",
+                                 params={"api_key": _TMDB_API_KEY, "language": "fr-FR", "page": 1})
+        data = r.json() if r.status_code == 200 else {"results": []}
+        _tmdb_cache[cache_key] = (_time(), data)
+        return data
+    except Exception:
+        return {"results": []}
+
+
+@app.get("/api/tmdb/tv_season")
+async def tmdb_tv_season(name: str = "", season: int = 1):
+    """Return TMDB season details (episodes with stills) for a TV show."""
+    if not _TMDB_API_KEY or not name.strip():
+        return {"episodes": []}
+    result = await _tmdb_search(name, "tv")
+    if not result:
+        return {"episodes": []}
+    tmdb_id = result.get("id")
+    if not tmdb_id:
+        return {"episodes": []}
+    cache_key = f"tmdb:season:{tmdb_id}:{season}"
+    if cache_key in _tmdb_cache:
+        ts, data = _tmdb_cache[cache_key]
+        if _time() - ts < 3600:
+            return data
+    try:
+        async with httpx_client(timeout=8.0) as client:
+            r = await client.get(f"{_TMDB_BASE}/tv/{tmdb_id}/season/{season}",
+                                 params={"api_key": _TMDB_API_KEY, "language": "fr-FR"})
+        data = r.json() if r.status_code == 200 else {"episodes": []}
+        _tmdb_cache[cache_key] = (_time(), data)
+        return data
+    except Exception:
+        return {"episodes": []}
 
 
 @app.get("/api/tmdb/key")

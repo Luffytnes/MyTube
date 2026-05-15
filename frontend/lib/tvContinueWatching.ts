@@ -1,6 +1,6 @@
 const KEY = 'tv_continue_watching'
 const MAX_ITEMS = 20
-const MIN_POSITION_SEC = 60      // don't save before 1 min
+const MIN_POSITION_SEC = 1       // save after 1 second
 const COMPLETE_RATIO = 0.95      // considered finished at 95%
 
 export interface ContinueItem {
