@@ -551,8 +551,8 @@ function ContinueSection({ items, onRemove }: { items: ContinueItem[]; onRemove:
             <Card3D key={item.id} className="flex-shrink-0 w-36 group relative">
               <Link
                 href={item.seriesId
-                  ? `/tv/watch/${item.id}?type=vod&ext=${item.ext}&media=${item.media}&name=${encodeURIComponent(item.name)}&icon=${encodeURIComponent(item.icon)}&series_id=${item.seriesId}&season=${item.season || ''}&series_name=${encodeURIComponent(item.seriesName || '')}&series_icon=${encodeURIComponent(item.seriesIcon || '')}`
-                  : `/tv/watch/${item.id}?type=vod&ext=${item.ext}&media=${item.media}&name=${encodeURIComponent(item.name)}&icon=${encodeURIComponent(item.icon)}`}
+                  ? `/tv/series/${item.seriesId}?name=${encodeURIComponent(item.seriesName || '')}&icon=${encodeURIComponent(item.seriesIcon || '')}`
+                  : `/tv/film/${item.id}?ext=${item.ext}&name=${encodeURIComponent(item.name)}&icon=${encodeURIComponent(item.icon)}`}
                 className="block"
               >
                 <div className="relative w-full aspect-[2/3] bg-yt-secondary rounded-xl overflow-hidden shadow-lg">

@@ -362,6 +362,7 @@ export default function TvSeriesPage() {
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null)
   const [fav, setFav] = useState(false)
   const [continueItem, setContinueItem] = useState<ContinueItem | null>(null)
+  const [continueMap, setContinueMap] = useState<Record<string, { position: number; duration: number }>>({})
   const [imgErr, setImgErr] = useState(false)
 
   useEffect(() => { setFav(isTvFavorite(seriesId, 'series')) }, [seriesId])
@@ -370,6 +371,9 @@ export default function TvSeriesPage() {
     const refresh = () => {
       const all = getContinueWatching()
       setContinueItem(all.find(c => c.seriesId === seriesId) ?? null)
+      const map: Record<string, { position: number; duration: number }> = {}
+      all.filter(c => c.seriesId === seriesId).forEach(c => { map[c.id] = { position: c.position, duration: c.duration } })
+      setContinueMap(map)
     }
     refresh()
     document.addEventListener('visibilitychange', refresh)
@@ -600,6 +604,14 @@ export default function TvSeriesPage() {
                           <Play className="w-4 h-4 text-white fill-white ml-0.5" />
                         </div>
                       </div>
+                      {continueMap[ep.id] && continueMap[ep.id].duration > 0 && (
+                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
+                          <div
+                            className="h-full bg-yt-red"
+                            style={{ width: `${Math.min(99, Math.round((continueMap[ep.id].position / continueMap[ep.id].duration) * 100))}%` }}
+                          />
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex-1 min-w-0 py-0.5">
