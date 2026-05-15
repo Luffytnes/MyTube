@@ -452,6 +452,8 @@ export default function TvSeriesPage() {
     ? `/tv/watch/${firstEp.id}?type=vod&media=series&ext=${firstEp.container_extension || 'mp4'}&name=${encodeURIComponent(firstEpName)}&icon=${encodeURIComponent(icon || data?.info.cover || '')}&series_id=${seriesId}&season=${firstSeason}&series_name=${encodeURIComponent(name)}&series_icon=${encodeURIComponent(icon || data?.info.cover || '')}`
     : ''
 
+  const continueEpNum = continueItem?.name.match(/[ÉEe]p[.\s]*(\d+)/i)?.[1]
+
   const continuePct = continueItem && continueItem.duration > 0
     ? Math.min(99, Math.round((continueItem.position / continueItem.duration) * 100))
     : 0
@@ -519,7 +521,7 @@ export default function TvSeriesPage() {
                   <Clock className="w-4 h-4" />
                   Continuer
                   {continueItem.season && <span className="opacity-75">· S{String(continueItem.season).padStart(2, '0')}</span>}
-                  {continuePct > 0 && <span className="opacity-75">· {continuePct}%</span>}
+                  {continueEpNum && <span className="opacity-75">· Ép.{continueEpNum}</span>}
                 </Link>
               ) : firstHref ? (
                 <Link
