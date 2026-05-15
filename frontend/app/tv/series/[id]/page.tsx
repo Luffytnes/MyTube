@@ -4,10 +4,11 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import type { ReactNode } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Play, Plus, Check, Clock, Star, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Play, Plus, Check, Clock, Star, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 import { toggleTvFavorite, isTvFavorite } from '@/lib/tvFavorites'
 import { getContinueWatching, type ContinueItem } from '@/lib/tvContinueWatching'
+import TrailerModal from '@/components/tv/TrailerModal'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -22,6 +23,18 @@ interface Episode {
 interface SeriesInfo {
   info: { name: string; cover: string; genre: string; plot: string; rating: string; releaseDate?: string }
   episodes: Record<string, Episode[]>
+}
+
+interface TmdbRecoItem {
+  id: number
+  title?: string
+  name?: string
+  poster_path: string | null
+  backdrop_path?: string | null
+  vote_average?: number
+  overview?: string
+  release_date?: string
+  first_air_date?: string
 }
 
 function Card3D({ children, className }: { children: ReactNode; className?: string }) {
@@ -97,7 +110,165 @@ function SeasonTabs({ seasons, selected, onSelect, label }: {
   )
 }
 
-function RecoRow({ items }: { items: { id: number; title?: string; name?: string; poster_path: string | null; vote_average?: number }[] }) {
+function TrailerRow({ videos }: { videos: { key: string; name: string; type: string; site: string }[] }) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [canLeft, setCanLeft] = useState(false)
+  const [canRight, setCanRight] = useState(false)
+  const [active, setActive] = useState<{ key: string; name: string } | null>(null)
+
+  const check = () => {
+    const el = scrollRef.current; if (!el) return
+    setCanLeft(el.scrollLeft > 4)
+    setCanRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4)
+  }
+  useEffect(() => {
+    const el = scrollRef.current; if (!el) return
+    check()
+    el.addEventListener('scroll', check, { passive: true })
+    window.addEventListener('resize', check)
+    return () => { el.removeEventListener('scroll', check); window.removeEventListener('resize', check) }
+  })
+
+  const shift = (dir: 'left' | 'right') =>
+    scrollRef.current?.scrollBy({ left: dir === 'left' ? -300 : 300, behavior: 'smooth' })
+
+  const ytVideos = videos.filter(v => v.site === 'YouTube').slice(0, 8)
+  if (!ytVideos.length) return null
+
+  return (
+    <>
+      <div className="mt-8">
+        <h2 className="text-yt-text font-semibold text-base mb-3">Vidéos</h2>
+        <div className="relative">
+          {canLeft && (
+            <button onClick={() => shift('left')} className="absolute left-0 top-0 bottom-0 z-10 w-10 flex items-center justify-center bg-gradient-to-r from-yt-bg via-yt-bg/80 to-transparent">
+              <ChevronLeft className="w-5 h-5 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" />
+            </button>
+          )}
+          <div ref={scrollRef} className="flex gap-3 overflow-x-auto scrollbar-none pb-1">
+            {ytVideos.map(v => (
+              <button
+                key={v.key}
+                onClick={() => setActive({ key: v.key, name: v.name })}
+                className="flex-shrink-0 w-56 group text-left"
+              >
+                <div className="relative rounded-xl overflow-hidden aspect-video bg-yt-secondary mb-1.5">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`https://img.youtube.com/vi/${v.key}/mqdefault.jpg`} alt={v.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center group-hover:bg-yt-red transition-colors">
+                      <Play className="w-4 h-4 text-white fill-white ml-0.5" />
+                    </div>
+                  </div>
+                  <span className="absolute top-1.5 left-1.5 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded font-medium">{v.type}</span>
+                </div>
+                <p className="text-yt-text text-xs font-medium line-clamp-2 leading-tight">{v.name}</p>
+              </button>
+            ))}
+          </div>
+          {canRight && (
+            <button onClick={() => shift('right')} className="absolute right-0 top-0 bottom-0 z-10 w-10 flex items-center justify-center bg-gradient-to-l from-yt-bg via-yt-bg/80 to-transparent">
+              <ChevronRight className="w-5 h-5 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {active && (
+        <TrailerModal
+          videoId={active.key}
+          title={active.name}
+          onClose={() => setActive(null)}
+        />
+      )}
+    </>
+  )
+}
+
+function SeriesRecoModal({ item, onClose }: { item: TmdbRecoItem; onClose: () => void }) {
+  const title = item.title || item.name || ''
+  const year = (item.release_date || item.first_air_date || '').substring(0, 4)
+  const rating = item.vote_average ? item.vote_average.toFixed(1) : null
+  const [match, setMatch] = useState<{ series_id?: number; cover?: string; name: string } | null | 'loading'>('loading')
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  useEffect(() => {
+    const query = year ? `${title} (${year})` : title
+    fetch(`${API_BASE}/api/iptv/search_catalog?q=${encodeURIComponent(query)}&type=tv`)
+      .then(r => r.ok ? r.json() : [])
+      .then((results: { series_id?: number; cover?: string; name: string }[]) => setMatch(results[0] ?? null))
+      .catch(() => setMatch(null))
+  }, [title, year])
+
+  const watchHref = match && match !== 'loading' && match.series_id
+    ? `/tv/series/${match.series_id}?name=${encodeURIComponent(match.name)}&icon=${encodeURIComponent(match.cover || '')}`
+    : null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div className="relative w-full sm:max-w-lg bg-yt-bg border border-yt-border rounded-t-2xl sm:rounded-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        {item.backdrop_path && (
+          <div className="relative w-full h-36 sm:h-48 flex-shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`${API_BASE}/api/tmdb/image?path=/w780${item.backdrop_path}`} alt={title} className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-yt-bg via-yt-bg/30 to-transparent" />
+          </div>
+        )}
+        <button onClick={onClose} className="absolute top-3 right-3 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors">
+          <X className="w-4 h-4" />
+        </button>
+        <div className="flex gap-3 p-4 flex-shrink-0">
+          <div className="flex-shrink-0 w-20 aspect-[2/3] rounded-lg overflow-hidden bg-yt-secondary">
+            {item.poster_path ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={`${API_BASE}/api/tmdb/image?path=/w342${item.poster_path}`} alt={title} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-yt-text-muted text-xs text-center px-1">{title}</div>
+            )}
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-yt-text font-semibold text-base leading-tight">{title}</h3>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              {year && <span className="text-yt-text-muted text-xs">{year}</span>}
+              {rating && <span className="flex items-center gap-0.5 text-xs text-yellow-400"><Star className="w-3 h-3 fill-yellow-400" />{rating}</span>}
+              <span className="text-yt-text-muted text-xs">Série</span>
+            </div>
+          </div>
+        </div>
+        {item.overview && (
+          <div className="px-4 pb-4 overflow-y-auto flex-1">
+            <p className="text-yt-text-muted text-sm leading-relaxed">{item.overview}</p>
+          </div>
+        )}
+        <div className="px-4 pb-5 pt-2 flex-shrink-0 border-t border-yt-border/30">
+          {match === 'loading' ? (
+            <div className="w-full py-2.5 flex items-center justify-center gap-2 bg-yt-secondary rounded-xl">
+              <div className="w-4 h-4 border-2 border-yt-text-muted border-t-transparent rounded-full animate-spin" />
+              <span className="text-yt-text-muted text-sm">Vérification…</span>
+            </div>
+          ) : watchHref ? (
+            <Link href={watchHref} onClick={onClose} className="w-full py-2.5 bg-yt-red hover:bg-yt-red-hover text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2">
+              <Play className="w-4 h-4 fill-white" />
+              Voir la série
+            </Link>
+          ) : (
+            <div className="w-full py-2.5 bg-yt-secondary rounded-xl text-sm text-yt-text-muted flex items-center justify-center gap-2 cursor-not-allowed opacity-60">
+              <Play className="w-4 h-4" />
+              Non disponible dans votre bibliothèque
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RecoRow({ items, onCardClick }: { items: TmdbRecoItem[]; onCardClick: (item: TmdbRecoItem) => void }) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [canLeft, setCanLeft] = useState(false)
   const [canRight, setCanRight] = useState(false)
@@ -132,25 +303,28 @@ function RecoRow({ items }: { items: { id: number; title?: string; name?: string
           {items.map(item => {
             const title = item.title || item.name || ''
             return (
-              <Card3D key={item.id} className="flex-shrink-0 w-40 cursor-default">
-                <div className="relative rounded-xl overflow-hidden aspect-[2/3] bg-yt-secondary shadow-lg">
-                  {item.poster_path ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={`${API_BASE}/api/tmdb/image?path=/w342${item.poster_path}`}
-                      alt={title}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-yt-text-muted text-xs text-center px-2">{title}</div>
-                  )}
-                  {item.vote_average ? (
-                    <span className="absolute top-1.5 right-1.5 bg-black/75 text-yellow-400 text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-                      <Star className="w-2.5 h-2.5 fill-current" />{item.vote_average.toFixed(1)}
-                    </span>
-                  ) : null}
-                </div>
-                <p className="text-yt-text-muted text-[11px] line-clamp-2 leading-tight mt-1.5 px-0.5">{title}</p>
+              <Card3D key={item.id} className="flex-shrink-0 w-40 group cursor-pointer">
+                <button onClick={() => onCardClick(item)} className="w-full text-left focus:outline-none">
+                  <div className="relative rounded-xl overflow-hidden aspect-[2/3] bg-yt-secondary shadow-lg">
+                    {item.poster_path ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={`${API_BASE}/api/tmdb/image?path=/w342${item.poster_path}`} alt={title} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-yt-text-muted text-xs text-center px-2">{title}</div>
+                    )}
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="w-8 h-8 rounded-full bg-yt-red/90 flex items-center justify-center">
+                        <Play className="w-4 h-4 text-white fill-white ml-0.5" />
+                      </div>
+                    </div>
+                    {item.vote_average ? (
+                      <span className="absolute top-1.5 right-1.5 bg-black/75 text-yellow-400 text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                        <Star className="w-2.5 h-2.5 fill-current" />{item.vote_average.toFixed(1)}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="text-yt-text-muted text-[11px] line-clamp-2 leading-tight mt-1.5 px-0.5">{title}</p>
+                </button>
               </Card3D>
             )
           })}
@@ -180,7 +354,9 @@ export default function TvSeriesPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [tmdbSeason, setTmdbSeason] = useState<any>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [recos, setRecos] = useState<any[]>([])
+  const [videos, setVideos] = useState<any[]>([])
+  const [recos, setRecos] = useState<TmdbRecoItem[]>([])
+  const [recoModal, setRecoModal] = useState<TmdbRecoItem | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedSeason, setSelectedSeason] = useState<string | null>(null)
@@ -224,9 +400,15 @@ export default function TvSeriesPage() {
       const seasons = Object.keys(iptvData.episodes || {}).sort((a, b) => Number(a) - Number(b))
       if (seasons.length > 0) setSelectedSeason(seasons[0])
       if (tmdbData) {
-        fetch(`${API_BASE}/api/tmdb/recommendations?name=${encodeURIComponent(name)}&type=tv`)
-          .then(r => r.ok ? r.json() : null).catch(() => null)
-          .then(d => setRecos(d?.results ?? []))
+        Promise.all([
+          fetch(`${API_BASE}/api/tmdb/videos?name=${encodeURIComponent(name)}&type=tv`)
+            .then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch(`${API_BASE}/api/tmdb/recommendations?name=${encodeURIComponent(name)}&type=tv`)
+            .then(r => r.ok ? r.json() : null).catch(() => null),
+        ]).then(([vids, recs]) => {
+          setVideos(vids?.results ?? [])
+          setRecos(recs?.results ?? [])
+        })
       }
     }).catch(() => setError(t('iptv_error')))
       .finally(() => setLoading(false))
@@ -289,11 +471,9 @@ export default function TvSeriesPage() {
           />
         ) : null}
 
-        {/* Gradient: top stays fully visible, darkens from bottom */}
         <div className="absolute inset-x-0 bottom-0 h-3/4 bg-gradient-to-t from-yt-bg via-yt-bg/70 to-transparent pointer-events-none" />
         <div className="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-black/25 to-transparent pointer-events-none" />
 
-        {/* Back button */}
         <button
           onClick={() => router.back()}
           className="absolute top-4 left-4 z-20 p-2 rounded-full bg-black/40 hover:bg-black/65 text-white transition-colors"
@@ -301,7 +481,6 @@ export default function TvSeriesPage() {
           <ArrowLeft className="w-5 h-5" />
         </button>
 
-        {/* Hero bottom content — centered */}
         {!loading && !error && data && (
           <div className="absolute bottom-0 left-0 right-0 z-10 flex flex-col items-center text-center px-6 pb-8">
             <h1 className="text-white text-2xl md:text-4xl font-bold leading-tight mb-2 drop-shadow-lg">{title}</h1>
@@ -317,7 +496,6 @@ export default function TvSeriesPage() {
               )}
             </div>
 
-            {/* Buttons: Ma liste  |  Regarder/Continuer */}
             <div className="flex items-center gap-3 flex-wrap justify-center">
               <button
                 onClick={toggleFav}
@@ -383,6 +561,9 @@ export default function TvSeriesPage() {
             </div>
           )}
 
+          {/* Trailers & Videos */}
+          <TrailerRow videos={videos} />
+
           {/* Season tabs + episodes */}
           <div className="mt-8">
             <SeasonTabs seasons={seasons} selected={selectedSeason} onSelect={setSelectedSeason} label={t('iptv_season')} />
@@ -402,22 +583,13 @@ export default function TvSeriesPage() {
                     href={href}
                     className="flex gap-3 p-3 rounded-xl bg-yt-secondary hover:bg-yt-hover transition-colors border border-yt-border/30 group"
                   >
-                    {/* Thumbnail */}
                     <div className="flex-shrink-0 w-36 aspect-video rounded-lg overflow-hidden bg-yt-hover relative">
                       {stillPath ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={`${API_BASE}/api/tmdb/image?path=/w300${stillPath}`}
-                          alt={ep.title}
-                          className="w-full h-full object-cover"
-                        />
+                        <img src={`${API_BASE}/api/tmdb/image?path=/w300${stillPath}`} alt={ep.title} className="w-full h-full object-cover" />
                       ) : ep.info?.movie_image ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={`${API_BASE}/api/iptv/icon?url=${encodeURIComponent(ep.info.movie_image)}`}
-                          alt={ep.title}
-                          className="w-full h-full object-cover"
-                        />
+                        <img src={`${API_BASE}/api/iptv/icon?url=${encodeURIComponent(ep.info.movie_image)}`} alt={ep.title} className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <Play className="w-6 h-6 text-yt-text-muted" />
@@ -430,7 +602,6 @@ export default function TvSeriesPage() {
                       </div>
                     </div>
 
-                    {/* Info */}
                     <div className="flex-1 min-w-0 py-0.5">
                       <p className="text-yt-text text-sm font-medium mb-0.5">
                         {t('iptv_episode_short')}{ep.episode_num}
@@ -469,7 +640,8 @@ export default function TvSeriesPage() {
           )}
 
           {/* Recommendations */}
-          <RecoRow items={recos} />
+          <RecoRow items={recos} onCardClick={setRecoModal} />
+          {recoModal && <SeriesRecoModal item={recoModal} onClose={() => setRecoModal(null)} />}
         </div>
       ) : null}
     </div>

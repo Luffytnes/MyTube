@@ -385,6 +385,13 @@ export default function TvWatchPage() {
 
   const queueTitle = isLive ? 'Chaînes' : seriesSeason ? `Saison ${seriesSeason}` : 'Épisodes'
 
+  const handleEnded = useCallback(() => {
+    if (isLive || !queue.length) return
+    const idx = queue.findIndex(q => q.id === id)
+    const next = queue[idx + 1]
+    if (next) router.push(next.href)
+  }, [isLive, queue, id, router])
+
   return (
     <div className="min-h-screen bg-yt-bg">
       {/* Header */}
@@ -432,6 +439,7 @@ export default function TvWatchPage() {
           queue={queue}
           currentQueueId={isLive ? id : id}
           queueTitle={queueTitle}
+          onEnded={handleEnded}
         />
       </div>
     </div>

@@ -95,6 +95,7 @@ export interface TvVideoPlayerProps {
   queue?: QueueItem[]
   currentQueueId?: string
   queueTitle?: string
+  onEnded?: () => void
 }
 
 export default function TvVideoPlayer({
@@ -104,6 +105,7 @@ export default function TvVideoPlayer({
   onAudioChange, onSubChange,
   onTimeUpdate,
   queue = [], currentQueueId, queueTitle = 'Liste de lecture',
+  onEnded,
 }: TvVideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [playing, setPlaying] = useState(false)
@@ -134,6 +136,7 @@ export default function TvVideoPlayer({
     const onProg = () => { if (v.buffered.length) setBuffered(v.buffered.end(v.buffered.length - 1)) }
     const onWait = () => setWaiting(true)
     const onCanPlay = () => setWaiting(false)
+    const onEnd = () => onEnded?.()
     v.addEventListener('timeupdate', onTime)
     v.addEventListener('durationchange', onDur)
     v.addEventListener('loadedmetadata', onDur)
@@ -143,6 +146,7 @@ export default function TvVideoPlayer({
     v.addEventListener('progress', onProg)
     v.addEventListener('waiting', onWait)
     v.addEventListener('canplay', onCanPlay)
+    v.addEventListener('ended', onEnd)
     return () => {
       v.removeEventListener('timeupdate', onTime)
       v.removeEventListener('durationchange', onDur)
@@ -153,8 +157,9 @@ export default function TvVideoPlayer({
       v.removeEventListener('progress', onProg)
       v.removeEventListener('waiting', onWait)
       v.removeEventListener('canplay', onCanPlay)
+      v.removeEventListener('ended', onEnd)
     }
-  }, [videoRef, onTimeUpdate])
+  }, [videoRef, onTimeUpdate, onEnded])
 
   // Fullscreen listener
   useEffect(() => {
