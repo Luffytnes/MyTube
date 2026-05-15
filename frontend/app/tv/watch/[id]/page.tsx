@@ -385,12 +385,21 @@ export default function TvWatchPage() {
 
   const queueTitle = isLive ? 'Chaînes' : seriesSeason ? `Saison ${seriesSeason}` : 'Épisodes'
 
+  const currentQueueIdx = queue.findIndex(q => q.id === id)
+
   const handleEnded = useCallback(() => {
     if (isLive || !queue.length) return
-    const idx = queue.findIndex(q => q.id === id)
-    const next = queue[idx + 1]
+    const next = queue[currentQueueIdx + 1]
     if (next) router.push(next.href)
-  }, [isLive, queue, id, router])
+  }, [isLive, queue, currentQueueIdx, router])
+
+  const handlePrev = !isLive && currentQueueIdx > 0
+    ? () => router.push(queue[currentQueueIdx - 1].href)
+    : undefined
+
+  const handleNext = !isLive && currentQueueIdx < queue.length - 1
+    ? () => router.push(queue[currentQueueIdx + 1].href)
+    : undefined
 
   return (
     <div className="min-h-screen bg-yt-bg">
@@ -440,6 +449,8 @@ export default function TvWatchPage() {
           currentQueueId={isLive ? id : id}
           queueTitle={queueTitle}
           onEnded={handleEnded}
+          onPrev={handlePrev}
+          onNext={handleNext}
         />
       </div>
     </div>

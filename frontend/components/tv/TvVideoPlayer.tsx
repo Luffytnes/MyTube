@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, RefObject } from 'react'
-import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, ChevronUp, Loader2, List, X } from 'lucide-react'
+import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, ChevronUp, Loader2, List, X, SkipBack, SkipForward } from 'lucide-react'
 
 function fmt(sec: number): string {
   if (!isFinite(sec) || isNaN(sec) || sec < 0) return '0:00'
@@ -96,6 +96,8 @@ export interface TvVideoPlayerProps {
   currentQueueId?: string
   queueTitle?: string
   onEnded?: () => void
+  onPrev?: () => void
+  onNext?: () => void
 }
 
 export default function TvVideoPlayer({
@@ -105,7 +107,7 @@ export default function TvVideoPlayer({
   onAudioChange, onSubChange,
   onTimeUpdate,
   queue = [], currentQueueId, queueTitle = 'Liste de lecture',
-  onEnded,
+  onEnded, onPrev, onNext,
 }: TvVideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [playing, setPlaying] = useState(false)
@@ -382,12 +384,26 @@ export default function TvVideoPlayer({
 
             {/* Buttons */}
             <div className="flex items-center gap-1 sm:gap-2">
+              {/* Prev episode */}
+              {onPrev && (
+                <button onClick={onPrev} className="text-white/70 hover:text-white transition-colors p-1 flex-shrink-0" title="Épisode précédent">
+                  <SkipBack className="w-5 h-5 fill-current" />
+                </button>
+              )}
+
               {/* Play/Pause */}
               <button onClick={togglePlay} className="text-white hover:text-yt-red transition-colors p-1 flex-shrink-0">
                 {playing
                   ? <Pause className="w-6 h-6 fill-current" />
                   : <Play className="w-6 h-6 fill-current translate-x-0.5" />}
               </button>
+
+              {/* Next episode */}
+              {onNext && (
+                <button onClick={onNext} className="text-white/70 hover:text-white transition-colors p-1 flex-shrink-0" title="Épisode suivant">
+                  <SkipForward className="w-5 h-5 fill-current" />
+                </button>
+              )}
 
               {/* Time */}
               <span className="text-white/80 text-xs font-mono flex-shrink-0 tabular-nums">
