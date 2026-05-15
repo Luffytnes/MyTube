@@ -525,7 +525,19 @@ function TmdbModal({ item, type, onClose }: { item: TmdbItem; type: 'movie' | 't
 }
 
 function ContinueSection({ items, onRemove }: { items: ContinueItem[]; onRemove: () => void }) {
-  if (items.length === 0) return null
+  // Keep only the most recent episode per series — deduplicate by seriesId
+  const deduped = items.reduce<ContinueItem[]>((acc, item) => {
+    if (item.seriesId) {
+      const existing = acc.find(i => i.seriesId === item.seriesId)
+      if (!existing || item.updatedAt > existing.updatedAt) {
+        return [...acc.filter(i => i.seriesId !== item.seriesId), item]
+      }
+      return acc
+    }
+    return [...acc, item]
+  }, []).sort((a, b) => b.updatedAt - a.updatedAt)
+
+  if (deduped.length === 0) return null
   return (
     <div className="mb-8">
       <h2 className="text-yt-text text-base font-semibold flex items-center gap-2 mb-4">
@@ -533,7 +545,7 @@ function ContinueSection({ items, onRemove }: { items: ContinueItem[]; onRemove:
         Continuer à regarder
       </h2>
       <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
-        {items.map(item => {
+        {deduped.map(item => {
           const pct = item.duration > 0 ? Math.round((item.position / item.duration) * 100) : 0
           return (
             <Card3D key={item.id} className="flex-shrink-0 w-36 group relative">
