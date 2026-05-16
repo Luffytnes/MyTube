@@ -6,7 +6,7 @@ import { Tv, Film, Layers, Radio, Star, Play, Clock, TrendingUp, X, ChevronLeft,
 import { useRegion } from '@/lib/regionContext'
 import Link from 'next/link'
 import { toggleTvFavorite, isTvFavorite, type TvFavoriteType } from '@/lib/tvFavorites'
-import { getContinueWatching, removeContinue, type ContinueItem } from '@/lib/tvContinueWatching'
+import { getContinueWatching, removeContinue, removeContinueSeries, type ContinueItem } from '@/lib/tvContinueWatching'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -524,8 +524,114 @@ function TmdbModal({ item, type, onClose }: { item: TmdbItem; type: 'movie' | 't
   )
 }
 
+function ContinueCard({ item, onRemove }: { item: ContinueItem; onRemove: () => void }) {
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [meta, setMeta] = useState<{ poster_path: string | null; vote_average: number | null } | null>(null)
+  const [status, setStatus] = useState<'idle' | 'loading' | 'done'>('idle')
+  const [totalEps, setTotalEps] = useState<number | null>(null)
+
+  const displayName = item.seriesId ? (item.seriesName || item.name) : item.name
+  const tmdbType: 'movie' | 'tv' = item.seriesId ? 'tv' : 'movie'
+  const href = item.seriesId
+    ? `/tv/series/${item.seriesId}?name=${encodeURIComponent(item.seriesName || '')}&icon=${encodeURIComponent(item.seriesIcon || '')}`
+    : `/tv/film/${item.id}?ext=${item.ext}&name=${encodeURIComponent(item.name)}&icon=${encodeURIComponent(item.icon)}`
+
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const obs = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) {
+        obs.disconnect()
+        setStatus('loading')
+        fetch(`${API_BASE}/api/tmdb/meta?name=${encodeURIComponent(displayName)}&type=${tmdbType}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(d => { setMeta(d); setStatus('done') })
+          .catch(() => setStatus('done'))
+      }
+    }, { rootMargin: '250px' })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [displayName, tmdbType])
+
+  useEffect(() => {
+    if (!item.seriesId) return
+    fetch(`${API_BASE}/api/iptv/series_info/${item.seriesId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data?.episodes) return
+        const count = (Object.values(data.episodes) as unknown[][]).reduce((s, eps) => s + eps.length, 0)
+        setTotalEps(count)
+      })
+      .catch(() => {})
+  }, [item.seriesId])
+
+  const posterSrc = meta?.poster_path ? `${API_BASE}/api/tmdb/image?path=/w342${meta.poster_path}` : null
+  const rating = meta?.vote_average ? meta.vote_average.toFixed(1) : null
+  const noImage = status === 'done' && !posterSrc
+
+  let pct = 0
+  if (item.seriesId && totalEps) {
+    const completed = getContinueWatching().filter(c => c.seriesId === item.seriesId && c.duration > 0 && c.position / c.duration >= 0.95).length
+    pct = Math.round((completed / totalEps) * 100)
+  } else if (!item.seriesId && item.duration > 0) {
+    pct = Math.min(100, Math.round((item.position / item.duration) * 100))
+  }
+
+  function handleRemove(e: React.MouseEvent) {
+    e.preventDefault(); e.stopPropagation()
+    if (item.seriesId) removeContinueSeries(item.seriesId)
+    else removeContinue(item.id)
+    onRemove()
+  }
+
+  return (
+    <div ref={wrapRef}>
+      <Card3D className="group relative">
+        <Link href={href} className="block relative w-full aspect-[2/3] rounded-xl overflow-hidden bg-yt-secondary shadow-lg">
+          {status !== 'done' ? (
+            <div className="w-full h-full bg-yt-secondary animate-pulse" />
+          ) : posterSrc ? (
+            <img src={posterSrc} alt={displayName} loading="lazy" className="w-full h-full object-cover" />
+          ) : (
+            <CoverImage
+              src={item.seriesId ? (item.seriesIcon || item.icon) : item.icon}
+              name={displayName}
+              fallback={<Film className="w-8 h-8 text-yt-text-muted" />}
+            />
+          )}
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+              <Play className="w-5 h-5 text-white fill-white ml-0.5" />
+            </div>
+          </div>
+          {rating && (
+            <div className={`absolute left-1.5 flex items-center gap-0.5 bg-black/70 rounded-md px-1.5 py-0.5 ${pct > 0 ? 'bottom-3' : 'bottom-1.5'}`}>
+              <Star className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
+              <span className="text-[10px] text-white font-medium">{rating}</span>
+            </div>
+          )}
+          {pct > 0 && (
+            <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-white/20">
+              <div className="h-full bg-yt-red" style={{ width: `${pct}%` }} />
+            </div>
+          )}
+        </Link>
+        {noImage && (
+          <p className="text-yt-text text-xs font-medium line-clamp-2 leading-tight mt-1.5 px-0.5">{displayName}</p>
+        )}
+        <button
+          onClick={handleRemove}
+          className="absolute top-1.5 right-1.5 z-10 p-1 rounded-full bg-black/50 text-white/70 hover:bg-red-600 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
+          title="Retirer"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      </Card3D>
+    </div>
+  )
+}
+
 function ContinueSection({ items, onRemove }: { items: ContinueItem[]; onRemove: () => void }) {
-  // Keep only the most recent episode per series — deduplicate by seriesId
   const deduped = items.reduce<ContinueItem[]>((acc, item) => {
     if (item.seriesId) {
       const existing = acc.find(i => i.seriesId === item.seriesId)
@@ -539,51 +645,15 @@ function ContinueSection({ items, onRemove }: { items: ContinueItem[]; onRemove:
 
   if (deduped.length === 0) return null
   return (
-    <div className="mb-8">
+    <div className="mb-10">
       <h2 className="text-yt-text text-base font-semibold flex items-center gap-2 mb-4">
         <Clock className="w-5 h-5 text-yt-red" />
         Continuer à regarder
       </h2>
-      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
-        {deduped.map(item => {
-          const pct = item.duration > 0 ? Math.round((item.position / item.duration) * 100) : 0
-          return (
-            <Card3D key={item.id} className="flex-shrink-0 w-36 group relative">
-              <Link
-                href={item.seriesId
-                  ? `/tv/series/${item.seriesId}?name=${encodeURIComponent(item.seriesName || '')}&icon=${encodeURIComponent(item.seriesIcon || '')}`
-                  : `/tv/film/${item.id}?ext=${item.ext}&name=${encodeURIComponent(item.name)}&icon=${encodeURIComponent(item.icon)}`}
-                className="block"
-              >
-                <div className="relative w-full aspect-[2/3] bg-yt-secondary rounded-xl overflow-hidden shadow-lg">
-                  <CoverImage src={item.icon} name={item.name} fallback={<Film className="w-10 h-10 text-yt-text-muted" />} />
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-                      <Play className="w-5 h-5 text-white fill-white ml-0.5" />
-                    </div>
-                  </div>
-                  {item.position > 0 && (
-                    <div className="absolute bottom-6 left-0 right-0 px-2">
-                      <span className="text-[10px] text-white/80 font-medium drop-shadow">{formatTime(item.position)}{item.duration > 0 ? ` / ${formatTime(item.duration)}` : ''}</span>
-                    </div>
-                  )}
-                  {pct > 0 && (
-                    <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-white/20">
-                      <div className="h-full bg-yt-red" style={{ width: `${pct}%` }} />
-                    </div>
-                  )}
-                </div>
-              </Link>
-              <button
-                onClick={() => { removeContinue(item.id); onRemove() }}
-                className="absolute top-1.5 right-1.5 z-10 p-1 rounded-full bg-black/50 text-white/70 hover:bg-red-600 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
-                title="Retirer"
-              >
-                ×
-              </button>
-            </Card3D>
-          )
-        })}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+        {deduped.map(item => (
+          <ContinueCard key={item.seriesId ?? item.id} item={item} onRemove={onRemove} />
+        ))}
       </div>
     </div>
   )
@@ -810,21 +880,29 @@ export default function TvPage() {
       ) : section === 'live' ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
           {(items as Channel[]).map(ch => (
-            <Link
-              key={ch.stream_id}
-              href={`/tv/watch/${ch.stream_id}?type=live&cat=${encodeURIComponent(selectedCat || '')}&name=${encodeURIComponent(ch.name)}&icon=${encodeURIComponent(ch.stream_icon || '')}`}
-              className="group relative flex flex-col items-center gap-2 p-3 rounded-xl bg-yt-secondary hover:bg-yt-hover transition-colors border border-yt-border/30"
-            >
-              <FavButton id={String(ch.stream_id)} type="live" name={ch.name} icon={ch.stream_icon || ''} />
-              <div className="w-16 h-16 rounded-xl bg-yt-bg flex items-center justify-center overflow-hidden">
-                <IptvIcon src={ch.stream_icon} name={ch.name} />
-              </div>
-              <p className="text-yt-text text-xs font-medium text-center line-clamp-2 leading-tight">{ch.name}</p>
-              <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-[10px] text-yt-text-muted">{t('iptv_live')}</span>
-              </div>
-            </Link>
+            <Card3D key={ch.stream_id} className="group relative">
+              <Link
+                href={`/tv/watch/${ch.stream_id}?type=live&cat=${encodeURIComponent(selectedCat || '')}&name=${encodeURIComponent(ch.name)}&icon=${encodeURIComponent(ch.stream_icon || '')}`}
+                className="block rounded-xl overflow-hidden shadow-md border border-yt-border/40"
+              >
+                {/* Zone logo — fond blanc pour que les logos se fondent */}
+                <div className="relative w-full aspect-[4/3] bg-white flex items-center justify-center p-4">
+                  <IptvIcon src={ch.stream_icon} name={ch.name} />
+                  {/* Hover overlay */}
+                  <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="w-9 h-9 rounded-full bg-black/40 flex items-center justify-center">
+                      <Play className="w-4 h-4 text-white fill-white ml-0.5" />
+                    </div>
+                  </div>
+                  <FavButton id={String(ch.stream_id)} type="live" name={ch.name} icon={ch.stream_icon || ''} />
+                </div>
+                {/* Bande inférieure — nom + indicateur live */}
+                <div className="flex items-center gap-2 px-2.5 py-2 bg-yt-secondary border-t border-yt-border/40">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
+                  <p className="text-yt-text text-xs font-medium line-clamp-1">{ch.name}</p>
+                </div>
+              </Link>
+            </Card3D>
           ))}
         </div>
       ) : section === 'vod' ? (

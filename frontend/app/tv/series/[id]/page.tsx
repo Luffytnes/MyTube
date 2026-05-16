@@ -452,13 +452,40 @@ export default function TvSeriesPage() {
     ? `/tv/watch/${firstEp.id}?type=vod&media=series&ext=${firstEp.container_extension || 'mp4'}&name=${encodeURIComponent(firstEpName)}&icon=${encodeURIComponent(icon || data?.info.cover || '')}&series_id=${seriesId}&season=${firstSeason}&series_name=${encodeURIComponent(name)}&series_icon=${encodeURIComponent(icon || data?.info.cover || '')}`
     : ''
 
-  const continueEpNum = continueItem?.name.match(/[ÉEe]p[.\s]*(\d+)/i)?.[1]
+  // If the most recent episode is complete, advance the "Continuer" pointer to the next one
+  let effectiveContinue: ContinueItem | null = continueItem
+  if (continueItem && data && continueItem.duration > 0 && continueItem.position / continueItem.duration >= 0.95) {
+    const sortedSeasons = Object.keys(data.episodes || {}).sort((a, b) => Number(a) - Number(b))
+    const allEps: { seasonKey: string; ep: Episode }[] = []
+    for (const s of sortedSeasons)
+      for (const ep of [...(data.episodes[s] || [])].sort((a, b) => a.episode_num - b.episode_num))
+        allEps.push({ seasonKey: s, ep })
+    const idx = allEps.findIndex(({ ep }) => ep.id === continueItem.id)
+    if (idx !== -1 && idx < allEps.length - 1) {
+      const { seasonKey, ep: next } = allEps[idx + 1]
+      const nextName = `${name} — ${t('iptv_episode_short')}${next.episode_num}${next.title && next.title !== String(next.episode_num) ? ` — ${next.title}` : ''}`
+      effectiveContinue = {
+        ...continueItem,
+        id: next.id,
+        name: nextName,
+        ext: next.container_extension || 'mp4',
+        media: 'series',
+        season: seasonKey,
+        position: continueMap[next.id]?.position ?? 0,
+        duration: continueMap[next.id]?.duration ?? 0,
+      }
+    } else {
+      effectiveContinue = null
+    }
+  }
 
-  const continuePct = continueItem && continueItem.duration > 0
-    ? Math.min(99, Math.round((continueItem.position / continueItem.duration) * 100))
+  const continueEpNum = effectiveContinue?.name.match(/[ÉEe]p[.\s]*(\d+)/i)?.[1]
+
+  const continuePct = effectiveContinue && effectiveContinue.duration > 0
+    ? Math.min(100, Math.round((effectiveContinue.position / effectiveContinue.duration) * 100))
     : 0
-  const resumeHref = continueItem && data
-    ? `/tv/watch/${continueItem.id}?type=vod&ext=${continueItem.ext}&media=${continueItem.media}&name=${encodeURIComponent(continueItem.name)}&icon=${encodeURIComponent(continueItem.icon)}&series_id=${seriesId}&season=${continueItem.season || ''}&series_name=${encodeURIComponent(name)}&series_icon=${encodeURIComponent(icon || data.info.cover || '')}`
+  const resumeHref = effectiveContinue && data
+    ? `/tv/watch/${effectiveContinue.id}?type=vod&ext=${effectiveContinue.ext}&media=${effectiveContinue.media}&name=${encodeURIComponent(effectiveContinue.name)}&icon=${encodeURIComponent(effectiveContinue.icon)}&series_id=${seriesId}&season=${effectiveContinue.season || ''}&series_name=${encodeURIComponent(name)}&series_icon=${encodeURIComponent(icon || data.info.cover || '')}`
     : ''
 
   return (
@@ -513,14 +540,14 @@ export default function TvSeriesPage() {
                 Ma liste
               </button>
 
-              {continueItem ? (
+              {effectiveContinue ? (
                 <Link
                   href={resumeHref}
                   className="flex items-center gap-2 px-7 py-2.5 bg-yt-red hover:bg-yt-red-hover text-white rounded-xl font-semibold text-sm transition-colors shadow-xl"
                 >
                   <Clock className="w-4 h-4" />
                   Continuer
-                  {continueItem.season && <span className="opacity-75">· S{String(continueItem.season).padStart(2, '0')}</span>}
+                  {effectiveContinue.season && <span className="opacity-75">· S{String(effectiveContinue.season).padStart(2, '0')}</span>}
                   {continueEpNum && <span className="opacity-75">· Ép.{continueEpNum}</span>}
                 </Link>
               ) : firstHref ? (
@@ -610,7 +637,7 @@ export default function TvSeriesPage() {
                         <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
                           <div
                             className="h-full bg-yt-red"
-                            style={{ width: `${Math.min(99, Math.round((continueMap[ep.id].position / continueMap[ep.id].duration) * 100))}%` }}
+                            style={{ width: `${Math.min(100, Math.round((continueMap[ep.id].position / continueMap[ep.id].duration) * 100))}%` }}
                           />
                         </div>
                       )}

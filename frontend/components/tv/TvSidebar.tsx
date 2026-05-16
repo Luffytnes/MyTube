@@ -75,6 +75,25 @@ export default function TvSidebar() {
           })}
         </nav>
 
+        <div className="border-t border-yt-border/40 my-3 mx-3" />
+        <nav className="px-2 flex flex-col gap-0.5">
+          {([
+            { icon: Home, label: 'MyTube', href: '/' },
+            { icon: Music2, label: 'MyTube Music', href: '/music' },
+            { icon: Newspaper, label: 'MyTube News', href: '/news' },
+          ] as const).map(({ icon: Icon, label, href }) => (
+            <Link
+              key={href}
+              href={href}
+              title={label}
+              className="flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text transition-colors group"
+            >
+              <Icon className="w-5 h-5 flex-shrink-0 group-hover:text-yt-text transition-colors" />
+              <span className="hidden xl:block truncate">{label}</span>
+            </Link>
+          ))}
+        </nav>
+
         {/* Favorites section — films/séries seulement (pas les chaînes) */}
         {favorites.filter(f => f.type !== 'live').length > 0 && (
           <>
@@ -130,25 +149,6 @@ export default function TvSidebar() {
             </div>
           </>
         )}
-
-        <div className="border-t border-yt-border/40 my-3 mx-3" />
-        <nav className="px-2 flex flex-col gap-0.5">
-          {([
-            { icon: Home, label: 'MyTube', href: '/' },
-            { icon: Music2, label: 'MyTube Music', href: '/music' },
-            { icon: Newspaper, label: 'MyTube News', href: '/news' },
-          ] as const).map(({ icon: Icon, label, href }) => (
-            <Link
-              key={href}
-              href={href}
-              title={label}
-              className="flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text transition-colors group"
-            >
-              <Icon className="w-5 h-5 flex-shrink-0 group-hover:text-yt-text transition-colors" />
-              <span className="hidden xl:block truncate">{label}</span>
-            </Link>
-          ))}
-        </nav>
       </aside>
 
       {/* ── Mobile bottom nav — floating pill ───────────────── */}

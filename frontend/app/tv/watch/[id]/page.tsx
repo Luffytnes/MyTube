@@ -5,7 +5,7 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Radio, Film, Star } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 import { toggleTvFavorite, isTvFavorite, type TvFavoriteType } from '@/lib/tvFavorites'
-import { saveContinue, getContinueWatching } from '@/lib/tvContinueWatching'
+import { saveContinue, getContinueWatching, cleanSeriesIfComplete } from '@/lib/tvContinueWatching'
 import TvVideoPlayer from '@/components/tv/TvVideoPlayer'
 import Hls from 'hls.js'
 
@@ -50,6 +50,7 @@ export default function TvWatchPage() {
   const [queueChannels, setQueueChannels] = useState<QueueChannel[]>([])
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const allSeriesEpisodeIdsRef = useRef<string[]>([])
   const resumePositionRef = useRef<number>(0)
   const audioChangePositionRef = useRef<number>(0)
   const positionRef = useRef<number>(0)   // last known currentTime — survives ref detach on unmount
@@ -90,6 +91,8 @@ export default function TvWatchPage() {
       .then(data => {
         const eps: Episode[] = data?.episodes?.[seriesSeason] || []
         setEpisodes(eps)
+        const allIds = Object.values(data?.episodes || {}).flat().map((e: unknown) => (e as Episode).id)
+        allSeriesEpisodeIdsRef.current = allIds
       })
       .catch(() => {})
   }, [seriesId, seriesSeason])
@@ -108,8 +111,12 @@ export default function TvWatchPage() {
     durationRef.current = dur
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(() => {
-      saveContinue({ id, type: 'vod', name, icon, position: positionRef.current, duration: durationRef.current, ext, media,
+      const pos = positionRef.current
+      const dur = durationRef.current
+      saveContinue({ id, type: 'vod', name, icon, position: pos, duration: dur, ext, media,
         ...(seriesId ? { seriesId, season: seriesSeason, seriesName, seriesIcon } : {}) })
+      if (seriesId && dur > 0 && pos / dur > 0.95)
+        cleanSeriesIfComplete(seriesId, allSeriesEpisodeIdsRef.current)
     }, 5000)
   }, [id, type, name, icon, ext, media])
 
@@ -172,13 +179,19 @@ export default function TvWatchPage() {
         : 'video/mp4'
       const sb = mediaSource!.addSourceBuffer(mimeType)
 
-      video.addEventListener('loadedmetadata', () => { onReady(); handleSeekToSaved() }, { once: true })
-      video.addEventListener('canplay', () => { onReady(); video.play().catch(() => {}) }, { once: true })
-      video.addEventListener('error', onError, { once: true })
-
-      // Track the active reader so onSeeking can cancel it to unblock reader.read()
+      let eos = false
       let readerRef: ReadableStreamDefaultReader<Uint8Array> | null = null
       let nextSeek: number | null = null
+
+      // SourceBuffer async decode errors: suppress the cascading video 'error' event
+      sb.addEventListener('error', () => {
+        eos = true
+        readerRef?.cancel().catch(() => {})
+      })
+
+      video.addEventListener('loadedmetadata', () => { onReady(); handleSeekToSaved() }, { once: true })
+      video.addEventListener('canplay', () => { onReady(); video.play().catch(() => {}) }, { once: true })
+      video.addEventListener('error', () => { if (!eos) onError() }, { once: true })
 
       function onSeeking() {
         const target = video.currentTime
@@ -220,8 +233,18 @@ export default function TvWatchPage() {
           if (aborted || nextSeek !== null) break
 
           if (done) {
+            // If the backend stream ended before the episode is fully buffered,
+            // continue fetching from the current buffer end without clearing the buffer.
+            // This handles: long pause → TCP timeout, ffmpeg early exit, IPTV server EOF.
+            const buffEnd = sb.buffered.length > 0 ? sb.buffered.end(sb.buffered.length - 1) : startSec
+            const epEnd = duration && duration > 0 ? duration : 0
+            if (!aborted && epEnd > 0 && buffEnd < epEnd - 30) {
+              readerRef = null
+              return doFetch(Math.floor(buffEnd))
+            }
             if (mediaSource!.readyState === 'open') {
               while (sb.updating) await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
+              eos = true
               try { mediaSource!.endOfStream() } catch {}
             }
             break
@@ -239,12 +262,6 @@ export default function TvWatchPage() {
             } catch {}
           }
 
-          // Back-pressure: wait if buffered > 60 s ahead of playhead
-          while (!aborted && nextSeek === null && video.buffered.length > 0 &&
-                 video.buffered.end(video.buffered.length - 1) - video.currentTime > 60) {
-            await new Promise<void>(r => setTimeout(r, 1000))
-          }
-
           if (aborted || nextSeek !== null) break
           while (sb.updating) await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
 
@@ -253,8 +270,12 @@ export default function TvWatchPage() {
             bytesAppended += value!.byteLength
             await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
           } catch {
-            if (mediaSource!.readyState === 'open') try { mediaSource!.endOfStream('decode') } catch {}
-            if (bytesAppended === 0 && startSec === 0) return false
+            if (bytesAppended === 0 && startSec === 0) {
+              // Nothing appended yet — genuine start failure, fall back to direct src
+              if (mediaSource!.readyState === 'open') try { mediaSource!.endOfStream('decode') } catch {}
+              return false
+            }
+            // Data was already streaming — stop silently (video stalls, no error overlay)
             break
           }
         }
@@ -346,6 +367,8 @@ export default function TvWatchPage() {
         if (pos > 0) audioChangePositionRef.current = pos
         saveContinue({ id, type: 'vod', name, icon, position: pos, duration: dur, ext, media,
         ...(seriesId ? { seriesId, season: seriesSeason, seriesName, seriesIcon } : {}) })
+        if (seriesId && dur > 0 && pos / dur > 0.95)
+          cleanSeriesIfComplete(seriesId, allSeriesEpisodeIdsRef.current)
       }
       controller.abort()
       hls?.destroy()

@@ -3454,6 +3454,7 @@ async def _vpn_watchdog():
 @app.on_event("startup")
 async def start_vpn_watchdog():
     asyncio.create_task(_vpn_watchdog())
+    asyncio.create_task(_vod_cache_cleanup_loop())
 
 
 def _list_all_confs() -> List[str]:
@@ -4317,6 +4318,9 @@ async def iptv_vod_stream_url(stream_id: str, request: Request, ext: str = "mp4"
     except Exception:
         pass
 
+    # Pre-start the file download so vod_proxy can reuse it immediately
+    asyncio.create_task(_ensure_vod_download(f"{stream_id}.{ext}", src_url))
+
     return {
         "url": f"{base}/api/iptv/vod_proxy/{stream_id}?ext={ext}&media={media}&audio_idx={audio_idx}",
         "hls": False,
@@ -4679,6 +4683,136 @@ async def _log_stderr(stderr: asyncio.StreamReader) -> None:
         pass
 
 
+# ---------------------------------------------------------------------------
+# VOD file cache: download each stream to a temp file once, shared across
+# all ffmpeg instances (seeks, re-fetches).  Avoids restarting the download
+# from byte 0 on every seek.
+# ---------------------------------------------------------------------------
+
+_vod_dl_cache: dict[str, dict] = {}
+
+
+async def _download_to_file(url: str, path: str, entry: dict) -> None:
+    """Download *url* with reconnection and write to *path*."""
+    offset = 0
+    try:
+        with open(path, 'wb') as f:
+            for _ in range(300):
+                headers: dict[str, str] = {}
+                if offset > 0:
+                    headers["Range"] = f"bytes={offset}-"
+                try:
+                    async with httpx_client(
+                        timeout=httpx.Timeout(connect=15.0, read=120.0, write=None, pool=None),
+                        follow_redirects=True,
+                    ) as client:
+                        async with client.stream("GET", url, headers=headers) as resp:
+                            if resp.status_code == 416:
+                                break
+                            if resp.status_code not in (200, 206):
+                                break
+                            if resp.status_code == 200 and offset > 0:
+                                break
+                            async for chunk in resp.aiter_bytes(65536):
+                                f.write(chunk)
+                                f.flush()
+                                entry["written"] += len(chunk)
+                                offset += len(chunk)
+                                entry["event"].set()
+                                entry["event"].clear()
+                    await asyncio.sleep(0.2)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    print(f"[vod_cache] dl error at {offset}: {exc}", flush=True)
+                    if offset == 0:
+                        break
+                    await asyncio.sleep(0.2)
+        print(f"[vod_cache] done, total={offset} bytes, path={path}", flush=True)
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        print(f"[vod_cache] unexpected: {e}", flush=True)
+    finally:
+        entry["done"] = True
+        entry["event"].set()
+
+
+async def _ensure_vod_download(cache_key: str, url: str) -> dict:
+    """Return the cache entry for *cache_key*, starting a download if needed."""
+    if cache_key in _vod_dl_cache:
+        entry = _vod_dl_cache[cache_key]
+        task = entry.get("task")
+        if task and not task.done():
+            return entry
+        if entry["done"] and entry["written"] > 0 and os.path.exists(entry["path"]):
+            return entry
+    import tempfile as _tempfile
+    path = os.path.join(_tempfile.gettempdir(), f"mytube_{cache_key}")
+    entry: dict = {"path": path, "written": 0, "done": False, "event": asyncio.Event(), "task": None}
+    _vod_dl_cache[cache_key] = entry
+    entry["task"] = asyncio.create_task(_download_to_file(url, path, entry))
+    return entry
+
+
+async def _pipe_from_vod_cache(entry: dict, stdin: asyncio.StreamWriter, start_byte: int = 0) -> None:
+    """Read from a growing cached temp file and pipe to ffmpeg stdin."""
+    pos = start_byte
+    cancelled = False
+    try:
+        with open(entry["path"], "rb") as f:
+            if pos > 0:
+                f.seek(pos)
+            while True:
+                if stdin.is_closing():
+                    return
+                chunk = f.read(65536)
+                if not chunk:
+                    if entry["done"]:
+                        break
+                    await asyncio.sleep(0.05)
+                    continue
+                try:
+                    stdin.write(chunk)
+                    await stdin.drain()
+                except Exception:
+                    return
+                pos += len(chunk)
+    except asyncio.CancelledError:
+        cancelled = True
+        raise
+    except Exception as e:
+        print(f"[vod_cache] pipe error: {e}", flush=True)
+    finally:
+        if not cancelled:
+            try:
+                if not stdin.is_closing():
+                    stdin.close()
+                    await stdin.wait_closed()
+            except Exception:
+                pass
+
+
+async def _vod_cache_cleanup_loop() -> None:
+    """Delete temp files that are done and older than 1 hour."""
+    while True:
+        await asyncio.sleep(1800)
+        now = _time()
+        to_remove = []
+        for key, entry in list(_vod_dl_cache.items()):
+            if not entry["done"]:
+                continue
+            try:
+                if now - os.path.getmtime(entry["path"]) > 3600:
+                    os.unlink(entry["path"])
+                    to_remove.append(key)
+                    print(f"[vod_cache] cleaned {key}", flush=True)
+            except Exception:
+                to_remove.append(key)
+        for key in to_remove:
+            _vod_dl_cache.pop(key, None)
+
+
 async def _download_reconnecting(url: str, stdin: asyncio.StreamWriter, initial_offset: int = 0) -> None:
     """Download *url* sequentially, reconnecting with Range requests whenever
     the provider closes the connection mid-file (common rate-limit pattern).
@@ -4687,6 +4821,13 @@ async def _download_reconnecting(url: str, stdin: asyncio.StreamWriter, initial_
     Writes each received byte directly to *stdin* (ffmpeg's stdin pipe).
     Stops cleanly when stdin closes (ffmpeg exited) or all data is received.
     """
+    try:
+        await _download_reconnecting_inner(url, stdin, initial_offset)
+    except Exception as e:
+        print(f"[downloader] unexpected exception: {e}", flush=True)
+
+
+async def _download_reconnecting_inner(url: str, stdin: asyncio.StreamWriter, initial_offset: int = 0) -> None:
     print(f"[downloader] start url={url[-40:]} initial_offset={initial_offset}", flush=True)
     offset = initial_offset
     for attempt in range(300):
@@ -4835,22 +4976,15 @@ async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", med
         # container header lives at offset 0 — starting mid-file breaks parsing.
         non_seekable_pipe = ext.lower() in ("mkv", "avi", "ts", "m2ts", "mts")
         attempts = [
-            # 1. Fast: direct URL seek — ffmpeg sends a Range request to jump to
-            #    the target keyframe.  Timeout is generous (45s) because MKV header
-            #    + seek-table parsing can take 10-20s on large remote files.
-            {"cmd": _cmd(["-reconnect", "1", "-reconnect_delay_max", "5",
-                          "-seekable", "1",
-                          "-ss", str(start), "-i", src], vargs_x264, fast_probe=True),
-             "use_pipe": False, "timeout": 45.0, "min_chunk": 1, "initial_offset": 0},
-            # 2. Pipe with estimated byte offset — only viable for self-contained
+            # 1. Pipe with estimated byte offset — only viable for self-contained
             #    formats (MP4) where a mid-file slice is still parseable.
             *([{"cmd": _cmd(pipe_ss, vargs_x264, fast_probe=True),
                 "use_pipe": True, "timeout": 60.0, "min_chunk": 1, "initial_offset": byte_offset}]
               if byte_offset > 0 and not non_seekable_pipe else []),
-            # 3. Pipe from byte 0 — always works, slow for large seeks
+            # 2. Pipe from byte 0 — always works, slow for large seeks
             {"cmd": _cmd(pipe_ss, vargs_x264),
              "use_pipe": True, "timeout": 300.0, "min_chunk": 1, "initial_offset": 0},
-            # 4. VideoToolbox hardware encoder fallback
+            # 3. VideoToolbox hardware encoder fallback
             {"cmd": _cmd(pipe_ss, vargs_vtb),
              "use_pipe": True, "timeout": 300.0, "min_chunk": 1, "initial_offset": 0},
         ]
@@ -4859,6 +4993,9 @@ async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", med
             {"cmd": _cmd(["-i", "pipe:0"], vargs_x264), "use_pipe": True, "timeout": 45.0, "min_chunk": 1, "initial_offset": 0},
             {"cmd": _cmd(["-i", "pipe:0"], vargs_vtb),  "use_pipe": True, "timeout": 15.0, "min_chunk": 1, "initial_offset": 0},
         ]
+
+    # Get (or start) the shared file download for this stream
+    vod_cache_entry = await _ensure_vod_download(f"{stream_id}.{ext}", src)
 
     process: asyncio.subprocess.Process | None = None
     first_chunk: bytes = b""
@@ -4888,7 +5025,7 @@ async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", med
             asyncio.ensure_future(_log_stderr(proc.stderr))
             if use_pipe:
                 dl_task = asyncio.ensure_future(
-                    _download_reconnecting(src, proc.stdin, initial_offset))
+                    _pipe_from_vod_cache(vod_cache_entry, proc.stdin, initial_offset))
             try:
                 first_chunk = await asyncio.wait_for(proc.stdout.read(4096), timeout=timeout)
             except asyncio.TimeoutError:
@@ -4928,6 +5065,10 @@ async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", med
                 yield chunk
         finally:
             print(f"[stream] ended, total={total//1024}KB", flush=True)
+            if dl_task is not None:
+                dl_task.cancel()
+                try: await dl_task
+                except BaseException: pass
             try: process.kill()
             except Exception: pass
             await process.wait()
