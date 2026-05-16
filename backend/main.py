@@ -4184,7 +4184,7 @@ async def iptv_vod_tracks(stream_id: str, ext: str = "mp4", media: str = "movie"
     streams = []
     try:
         proc = await asyncio.create_subprocess_exec(
-            "/opt/homebrew/bin/ffprobe",
+            _FFPROBE,
             "-v", "quiet", "-print_format", "json",
             "-seekable", "0",
             "-analyzeduration", "8000000", "-probesize", "20000000",
@@ -4229,7 +4229,7 @@ async def iptv_vod_subtitle(stream_id: str, ext: str = "mp4", media: str = "movi
     s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
     url = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
     cmd = [
-        "/opt/homebrew/bin/ffmpeg", "-loglevel", "error",
+        _FFMPEG, "-loglevel", "error",
         "-seekable", "0", "-i", url,
         "-map", f"0:s:{sub_idx}",
         "-vn", "-an",  # skip video/audio decoding — subtitle only
@@ -4274,7 +4274,7 @@ async def iptv_vod_stream_url(stream_id: str, request: Request, ext: str = "mp4"
     duration_secs: float | None = None
     try:
         proc = await asyncio.create_subprocess_exec(
-            "/opt/homebrew/bin/ffprobe",
+            _FFPROBE,
             "-v", "quiet", "-print_format", "json",
             "-seekable", "0",
             "-analyzeduration", "3000000", "-probesize", "10000000",
@@ -4660,7 +4660,9 @@ async def iptv_vod_hls(stream_id: str, request: Request, media: str = "movie"):
         headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache, no-store"},
     )
 
-_FFMPEG = "/opt/homebrew/bin/ffmpeg"
+import shutil as _shutil
+_FFMPEG = _shutil.which("ffmpeg") or "/opt/homebrew/bin/ffmpeg"
+_FFPROBE = _shutil.which("ffprobe") or "/opt/homebrew/bin/ffprobe"
 _OUTPUT_ARGS = [
     # Disable subtitle/data streams (fMP4 can't mux most subtitle codecs)
     "-sn", "-dn",
