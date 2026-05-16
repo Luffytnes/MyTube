@@ -238,7 +238,11 @@ export default function TvWatchPage() {
             // This handles: long pause → TCP timeout, ffmpeg early exit, IPTV server EOF.
             const buffEnd = sb.buffered.length > 0 ? sb.buffered.end(sb.buffered.length - 1) : startSec
             const epEnd = duration && duration > 0 ? duration : 0
-            if (!aborted && epEnd > 0 && buffEnd < epEnd - 30) {
+            // Re-fetch when: duration known + far from end, OR duration unknown + got significant data
+            const shouldRefetch = !aborted && bytesAppended > 512 * 1024 && (
+              epEnd > 0 ? buffEnd < epEnd - 30 : buffEnd > startSec + 30
+            )
+            if (shouldRefetch) {
               readerRef = null
               return doFetch(Math.floor(buffEnd))
             }
