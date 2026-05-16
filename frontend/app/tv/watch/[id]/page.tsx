@@ -352,7 +352,7 @@ export default function TvWatchPage() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         if (aborted) return
-        const url: string = data.url
+        const url: string = data.url.startsWith('/') ? `${API_BASE}${data.url}` : data.url
         const duration: number | null = data.duration ?? null
         const useHls = type === 'live' || data.hls !== false
 

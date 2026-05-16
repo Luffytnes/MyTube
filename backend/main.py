@@ -4322,7 +4322,7 @@ async def iptv_vod_stream_url(stream_id: str, request: Request, ext: str = "mp4"
     asyncio.create_task(_ensure_vod_download(f"{stream_id}.{ext}", src_url))
 
     return {
-        "url": f"{base}/api/iptv/vod_proxy/{stream_id}?ext={ext}&media={media}&audio_idx={audio_idx}",
+        "url": f"/api/iptv/vod_proxy/{stream_id}?ext={ext}&media={media}&audio_idx={audio_idx}",
         "hls": False,
         "duration": duration_secs,
     }
