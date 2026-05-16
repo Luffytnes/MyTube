@@ -65,12 +65,14 @@ function MusicSearchContent() {
   const [results, setResults] = useState<Result[]>([])
   const [radioResults, setRadioResults] = useState<RadioStation[]>([])
   const [loading, setLoading] = useState(false)
+  const [podcastNotConfigured, setPodcastNotConfigured] = useState(false)
 
   const doSearch = useCallback(async (q: string, f: FilterType) => {
     if (!q.trim()) return
     setLoading(true)
     setResults([])
     setRadioResults([])
+    setPodcastNotConfigured(false)
     try {
       if (f === 'radio') {
         const res = await fetch(`${API_BASE}/api/radio/stations?q=${encodeURIComponent(q)}&limit=48`)
@@ -81,6 +83,7 @@ function MusicSearchContent() {
         })) : [])
       } else if (f === 'podcasts') {
         const res = await fetch(`${API_BASE}/api/podcasts/search?q=${encodeURIComponent(q)}`)
+        if (res.status === 503) { setPodcastNotConfigured(true); return }
         const data = await res.json()
         setResults(Array.isArray(data) ? data : [])
       } else {
@@ -126,7 +129,15 @@ function MusicSearchContent() {
         ))}
       </div>
 
-      {loading ? (
+      {podcastNotConfigured ? (
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-sm">
+          <Mic2 className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium mb-1">{t('podcast_not_configured_title')}</p>
+            <p className="text-xs opacity-80">{t('podcast_not_configured_desc')}</p>
+          </div>
+        </div>
+      ) : loading ? (
         <div className="space-y-2">
           {Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="h-14 bg-yt-secondary rounded-xl animate-pulse" />
@@ -198,7 +209,7 @@ function MusicSearchContent() {
                     <div className="aspect-square rounded-xl overflow-hidden bg-yt-secondary shadow">
                       {r.thumbnail ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={r.thumbnail} alt={r.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <img src={r.thumbnail.startsWith('/') ? `${API_BASE}${r.thumbnail}` : r.thumbnail} alt={r.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <Mic2 className="w-10 h-10 text-yt-text-muted" />

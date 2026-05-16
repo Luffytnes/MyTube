@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 import Link from 'next/link'
 import { Bell, Mic2, Trash2 } from 'lucide-react'
 import {
@@ -46,7 +48,7 @@ export default function PodcastSubscriptionsPage() {
                 <div className="w-14 h-14 rounded-xl overflow-hidden bg-yt-hover flex-shrink-0">
                   {p.thumbnail ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.thumbnail} alt={p.title} className="w-full h-full object-cover" />
+                    <img src={p.thumbnail.startsWith('/') ? `${API_BASE}${p.thumbnail}` : p.thumbnail} alt={p.title} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <Mic2 className="w-6 h-6 text-yt-text-muted" />

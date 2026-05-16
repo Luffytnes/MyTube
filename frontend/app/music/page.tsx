@@ -355,7 +355,7 @@ export default function MusicHomePage() {
                     <div className="aspect-square rounded-xl overflow-hidden bg-yt-secondary shadow">
                       {p.thumbnail ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={p.thumbnail} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <img src={p.thumbnail.startsWith('/') ? `${API_BASE}${p.thumbnail}` : p.thumbnail} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <Mic2 className="w-8 h-8 text-yt-text-muted" />

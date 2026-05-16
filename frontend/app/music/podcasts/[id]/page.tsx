@@ -112,7 +112,7 @@ export default function PodcastPage() {
         <div className="w-48 h-48 rounded-2xl overflow-hidden bg-yt-secondary flex-shrink-0 shadow-2xl self-center sm:self-start">
           {podcast.thumbnail ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={podcast.thumbnail} alt={podcast.title} className="w-full h-full object-cover" />
+            <img src={podcast.thumbnail.startsWith('/') ? `${API_BASE}${podcast.thumbnail}` : podcast.thumbnail} alt={podcast.title} className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
               <Mic2 className="w-16 h-16 text-yt-text-muted" />
@@ -193,7 +193,7 @@ export default function PodcastPage() {
                 <div className="w-14 h-14 rounded-lg overflow-hidden bg-yt-secondary flex-shrink-0 relative">
                   {ep.thumbnail || podcast.thumbnail ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={ep.thumbnail || podcast.thumbnail!} alt={ep.title} className="w-full h-full object-cover" />
+                    <img src={(ep.thumbnail || podcast.thumbnail!).startsWith('/') ? `${API_BASE}${ep.thumbnail || podcast.thumbnail}` : (ep.thumbnail || podcast.thumbnail!)} alt={ep.title} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <Mic2 className="w-6 h-6 text-yt-text-muted" />
