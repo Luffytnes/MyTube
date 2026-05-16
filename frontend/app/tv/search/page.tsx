@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Search, Film, Layers, Radio, Star, Play } from 'lucide-react'
@@ -117,7 +117,7 @@ function TmdbGridCard({ name, type, href, fallbackIcon }: {
   )
 }
 
-export default function TvSearchPage() {
+function TvSearchContent() {
   const { t } = useRegion()
   const searchParams = useSearchParams()
   const q = searchParams.get('q') || ''
@@ -245,4 +245,8 @@ export default function TvSearchPage() {
       )}
     </div>
   )
+}
+
+export default function TvSearchPage() {
+  return <Suspense><TvSearchContent /></Suspense>
 }

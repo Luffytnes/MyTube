@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Search, Tv, Radio, Film, Layers } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
@@ -43,7 +43,7 @@ function CoverImage({ src, name, fallback }: { src: string; name: string; fallba
   )
 }
 
-export default function IPTVPage() {
+function IPTVContent() {
   const { t } = useRegion()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -275,4 +275,8 @@ export default function IPTVPage() {
       )}
     </div>
   )
+}
+
+export default function IPTVPage() {
+  return <Suspense><IPTVContent /></Suspense>
 }

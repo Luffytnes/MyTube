@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Tv, Film, Layers, Radio, Star, Play, Clock, TrendingUp, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
@@ -666,7 +666,7 @@ const TMDB_SECTIONS: Pick<TmdbSectionData, 'key' | 'label' | 'type' | 'list' | '
   { key: 'tv_top_rated',    label: 'Séries les mieux notées',   type: 'tv',    list: 'top_rated', icon: <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" /> },
 ]
 
-export default function TvPage() {
+function TvPageContent() {
   const { t } = useRegion()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -934,4 +934,8 @@ export default function TvPage() {
       )}
     </div>
   )
+}
+
+export default function TvPage() {
+  return <Suspense><TvPageContent /></Suspense>
 }
