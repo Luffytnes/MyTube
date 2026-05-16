@@ -4974,12 +4974,12 @@ async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", med
         # +ignidx: ignore MKV SeekHead index so ffmpeg reads linearly through
         # the pipe without trying to jump to referenced byte positions.
         pipe_ss = ["-fflags", "+ignidx", "-ss", str(start), "-i", "pipe:0"]
-        # For MKV/AVI/TS: byte-offset pipe (attempt 2) is useless because the
-        # container header lives at offset 0 — starting mid-file breaks parsing.
-        non_seekable_pipe = ext.lower() in ("mkv", "avi", "ts", "m2ts", "mts")
+        # MP4/MKV/AVI/TS: the container header lives at offset 0 — starting
+        # mid-file always breaks parsing, so skip the byte-offset attempt.
+        non_seekable_pipe = ext.lower() in ("mp4", "mkv", "avi", "ts", "m2ts", "mts")
         attempts = [
-            # 1. Pipe with estimated byte offset — only viable for self-contained
-            #    formats (MP4) where a mid-file slice is still parseable.
+            # 1. Pipe with estimated byte offset — skipped for all common formats
+            #    because the moov/header atom is always at the start of the file.
             *([{"cmd": _cmd(pipe_ss, vargs_x264, fast_probe=True),
                 "use_pipe": True, "timeout": 60.0, "min_chunk": 1, "initial_offset": byte_offset}]
               if byte_offset > 0 and not non_seekable_pipe else []),
