@@ -209,8 +209,10 @@ export default function TvWatchPage() {
       video.addEventListener('seeking', onSeeking)
 
       // Fetch from startSec (0=start, >0=seek). Returns false only on first-append failure.
-      // ffmpeg resets PTS to 0 after -ss seek, so we set timestampOffset to shift
-      // the MSE timeline to the correct position.
+      // Two-loop design: download loop fills an in-memory queue as fast as possible
+      // (keeping the HTTP connection alive); append loop drains the queue into SourceBuffer.
+      // Eviction is reactive (only on QuotaExceededError) so as much video stays buffered
+      // as possible, allowing near-complete pre-buffering of the full film/episode.
       async function doFetch(startSec: number): Promise<boolean> {
         const durParam = duration && duration > 0 ? `&duration=${Math.floor(duration)}` : ''
         const fetchUrl = startSec > 0 ? `${url}&start=${Math.floor(startSec)}${durParam}` : url
@@ -222,82 +224,112 @@ export default function TvWatchPage() {
         readerRef = reader
         let bytesAppended = 0
 
+        // In-memory queue between download and SourceBuffer (max 80 MB)
+        const chunkQueue: Uint8Array[] = []
+        let queueBytes = 0
+        let dlDone = false
+        const MAX_QUEUE = 80 * 1024 * 1024
+
+        // Download loop: reads HTTP as fast as possible without blocking on SourceBuffer
+        const dlTask = (async () => {
+          try {
+            while (true) {
+              if (aborted || nextSeek !== null) break
+              while (queueBytes > MAX_QUEUE && !aborted && nextSeek === null)
+                await new Promise(r => setTimeout(r, 100))
+              if (aborted || nextSeek !== null) break
+              let done: boolean; let value: Uint8Array | undefined
+              try { ;({ done, value } = await reader.read()) } catch { break }
+              if (done || aborted || nextSeek !== null) break
+              chunkQueue.push(value!)
+              queueBytes += value!.byteLength
+            }
+          } finally { dlDone = true }
+        })()
+
+        const waitUpdate = () => new Promise<void>(r => sb.addEventListener('updateend', () => r(), { once: true }))
+
         // Shift MSE timeline: backend re-encodes from PTS=0, timestampOffset places it at startSec
-        while (sb.updating) await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
+        while (sb.updating) await waitUpdate()
         try { sb.timestampOffset = startSec } catch {}
 
+        // Append loop: drains queue into SourceBuffer at its own pace
         while (true) {
           if (aborted || nextSeek !== null) break
-          let done: boolean; let value: Uint8Array | undefined
-          try { ;({ done, value } = await reader.read()) } catch { break }
-          if (aborted || nextSeek !== null) break
-
-          if (done) {
-            // If the backend stream ended before the episode is fully buffered,
-            // continue fetching from the current buffer end without clearing the buffer.
-            // This handles: long pause → TCP timeout, ffmpeg early exit, IPTV server EOF.
-            const buffEnd = sb.buffered.length > 0 ? sb.buffered.end(sb.buffered.length - 1) : startSec
-            const epEnd = duration && duration > 0 ? duration : 0
-            // Re-fetch when: duration known + far from end, OR duration unknown + got significant data
-            const shouldRefetch = !aborted && bytesAppended > 512 * 1024 && (
-              epEnd > 0 ? buffEnd < epEnd - 30 : buffEnd > startSec + 30
-            )
-            if (shouldRefetch) {
-              readerRef = null
-              return doFetch(Math.floor(buffEnd))
-            }
-            if (mediaSource!.readyState === 'open') {
-              while (sb.updating) await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
-              eos = true
-              try { mediaSource!.endOfStream() } catch {}
-            }
-            break
+          if (chunkQueue.length === 0) {
+            if (dlDone) break
+            await new Promise(r => setTimeout(r, 20))
+            continue
           }
+          const chunk = chunkQueue.shift()!
+          queueBytes -= chunk.byteLength
 
-          while (sb.updating) await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
+          while (sb.updating) await waitUpdate()
           if (aborted || nextSeek !== null) break
 
-          // Evict buffered data >30 s behind playhead to prevent QuotaExceededError
-          const ct = video.currentTime
-          if (sb.buffered.length > 0 && sb.buffered.start(0) < ct - 30) {
-            try {
-              sb.remove(sb.buffered.start(0), Math.max(sb.buffered.start(0) + 1, ct - 20))
-              await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
-            } catch {}
-          }
-
-          if (aborted || nextSeek !== null) break
-          while (sb.updating) await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
-
+          let appended = false
           try {
-            sb.appendBuffer(value!)
-            bytesAppended += value!.byteLength
-            await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
-          } catch {
-            if (bytesAppended === 0 && startSec === 0) {
-              // Nothing appended yet — genuine start failure, fall back to direct src
-              if (mediaSource!.readyState === 'open') try { mediaSource!.endOfStream('decode') } catch {}
-              return false
+            sb.appendBuffer(chunk as unknown as ArrayBuffer)
+            bytesAppended += chunk.byteLength
+            await waitUpdate()
+            appended = true
+          } catch (err) {
+            // Reactive eviction: only evict when the quota is actually exceeded
+            if (err instanceof DOMException && err.name === 'QuotaExceededError' && sb.buffered.length > 0) {
+              const ct = video.currentTime
+              while (sb.updating) await waitUpdate()
+              try {
+                sb.remove(sb.buffered.start(0), Math.max(sb.buffered.start(0) + 1, ct - 10))
+                await waitUpdate()
+              } catch {}
+              while (sb.updating) await waitUpdate()
+              try {
+                sb.appendBuffer(chunk as unknown as ArrayBuffer)
+                bytesAppended += chunk.byteLength
+                await waitUpdate()
+                appended = true
+              } catch { /* quota still exceeded after eviction: drop chunk */ }
             }
-            // Data was already streaming — stop silently (video stalls, no error overlay)
-            break
+          }
+          if (!appended && bytesAppended === 0 && startSec === 0) {
+            // Nothing ever appended — genuine start failure, fall back to direct src
+            if (mediaSource!.readyState === 'open') try { mediaSource!.endOfStream('decode') } catch {}
+            reader.cancel().catch(() => {})
+            await dlTask
+            return false
           }
         }
 
-        readerRef = null
         reader.cancel().catch(() => {})
+        await dlTask
+        readerRef = null
 
         if (!aborted && nextSeek !== null) {
           const seekTo = nextSeek
           nextSeek = null
-          while (sb.updating) await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
+          while (sb.updating) await waitUpdate()
           try {
             if (sb.buffered.length > 0) {
               sb.remove(0, Infinity)
-              await new Promise(r => sb.addEventListener('updateend', r, { once: true }))
+              await waitUpdate()
             }
           } catch {}
           if (!aborted) return doFetch(seekTo)
+        }
+
+        // Stream ended: re-fetch to continue buffering, or signal end-of-stream
+        if (!aborted) {
+          const buffEnd = sb.buffered.length > 0 ? sb.buffered.end(sb.buffered.length - 1) : startSec
+          const epEnd = duration && duration > 0 ? duration : 0
+          const shouldRefetch = bytesAppended > 512 * 1024 && (
+            epEnd > 0 ? buffEnd < epEnd - 30 : buffEnd > startSec + 30
+          )
+          if (shouldRefetch) return doFetch(Math.floor(buffEnd))
+          if (mediaSource!.readyState === 'open') {
+            while (sb.updating) await waitUpdate()
+            eos = true
+            try { mediaSource!.endOfStream() } catch {}
+          }
         }
         return true
       }
