@@ -617,16 +617,21 @@ export default function TvSeriesPage() {
                     className="flex gap-3 p-3 rounded-xl bg-yt-secondary hover:bg-yt-hover transition-colors border border-yt-border/30 group"
                   >
                     <div className="flex-shrink-0 w-36 aspect-video rounded-lg overflow-hidden bg-yt-hover relative">
-                      {stillPath ? (
+                      {/* Play icon always present as base fallback */}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <Play className="w-6 h-6 text-yt-text-muted" />
+                      </div>
+                      {/* Image overlays the icon; hides itself on load error */}
+                      {(stillPath || ep.info?.movie_image) && (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={`${API_BASE}/api/tmdb/image?path=/w300${stillPath}`} alt={ep.title} className="w-full h-full object-cover" />
-                      ) : ep.info?.movie_image ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={`${API_BASE}/api/iptv/icon?url=${encodeURIComponent(ep.info.movie_image)}`} alt={ep.title} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Play className="w-6 h-6 text-yt-text-muted" />
-                        </div>
+                        <img
+                          src={stillPath
+                            ? `${API_BASE}/api/tmdb/image?path=/w300${stillPath}`
+                            : `${API_BASE}/api/iptv/icon?url=${encodeURIComponent(ep.info!.movie_image!)}`}
+                          alt={ep.title}
+                          className="absolute inset-0 w-full h-full object-cover"
+                          onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+                        />
                       )}
                       <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
                         <div className="w-8 h-8 rounded-full bg-yt-red flex items-center justify-center">

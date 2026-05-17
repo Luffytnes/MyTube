@@ -4528,8 +4528,42 @@ def _clean_title_for_tmdb(name: str) -> tuple[str, str | None]:
     name = re.sub(r"\s+\d{4}$", "", name).strip()
     return name, year
 
+_ANIMATION_GENRE_ID = 16
+
+def _pick_best_tmdb_result(results: list[dict], clean_name: str) -> dict | None:
+    """Among TMDB results, prefer well-established animated series over
+    recent live-action remakes when both share the same title.
+    Example: One Piece anime >> Netflix live-action, Avatar animated >> Netflix remake."""
+    if not results:
+        return None
+    if len(results) == 1:
+        return results[0]
+
+    top = results[0]
+    if _ANIMATION_GENRE_ID in top.get("genre_ids", []):
+        return top  # Already animation, keep it
+
+    top_votes = top.get("vote_count", 0)
+    qlow = clean_name.lower()
+
+    for r in results[1:5]:
+        if _ANIMATION_GENRE_ID not in r.get("genre_ids", []):
+            continue
+        t = (r.get("title") or r.get("name") or "").lower()
+        ot = (r.get("original_title") or r.get("original_name") or "").lower()
+        if not (qlow in t or qlow in ot or t in qlow or ot in qlow):
+            continue
+        # Prefer animated version if it has at least 30% of the top result's votes.
+        # Animated originals (One Piece, Avatar) typically have far more votes than
+        # recent live-action remakes, so this threshold is conservative enough to avoid
+        # accidentally preferring obscure animations over popular live-action series.
+        if r.get("vote_count", 0) >= top_votes * 0.3:
+            return r
+
+    return top
+
 async def _tmdb_search(name: str, media_type: str) -> dict | None:
-    """Search TMDB for a movie or TV show by name. Returns first result or None."""
+    """Search TMDB for a movie or TV show by name. Returns best result or None."""
     if not _TMDB_API_KEY:
         return None
     cache_key = f"tmdb:{media_type}:{name.lower()}"
@@ -4559,7 +4593,7 @@ async def _tmdb_search(name: str, media_type: str) -> dict | None:
                     continue
                 results = r.json().get("results") or []
                 if results:
-                    result = results[0]
+                    result = _pick_best_tmdb_result(results, clean)
                     _tmdb_cache[cache_key] = (_time(), result)
                     return result
         _tmdb_cache[cache_key] = (_time(), None)
