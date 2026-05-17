@@ -1639,6 +1639,154 @@ async def hls_stop(video_id: str, itag: str):
     return {"ok": True}
 
 
+# ---------------------------------------------------------------------------
+# IPTV VOD — HLS session management (Shaka Player backend)
+# Each session transcodes an IPTV VOD file to HLS segments via ffmpeg.
+# Sessions are keyed by stream_id:ext:media:audio_idx:start so that a new
+# seek position always creates a fresh session.
+# ---------------------------------------------------------------------------
+
+_iptv_vod_hls_sessions: Dict[str, Dict[str, Any]] = {}
+_iptv_vod_hls_lock = asyncio.Lock()
+
+
+async def _start_iptv_vod_hls_session(
+    stream_id: str, ext: str, media: str, audio_idx: int, start: int
+) -> Dict[str, Any]:
+    session_key = f"{stream_id}:{ext}:{media}:{audio_idx}:{start}"
+    async with _iptv_vod_hls_lock:
+        if session_key in _iptv_vod_hls_sessions:
+            return _iptv_vod_hls_sessions[session_key]
+
+        s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
+        src = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
+
+        vod_entry = await _ensure_vod_download(f"{stream_id}.{ext}", src)
+        cache_path = vod_entry.get("path", "")
+        cache_done = vod_entry.get("done", False) and bool(cache_path) and os.path.exists(cache_path)
+
+        tmpdir = tempfile.mkdtemp(prefix="mytube_iptv_hls_")
+
+        seek = ["-ss", str(start)] if start > 0 else []
+        if cache_done:
+            input_args = [*seek, "-i", cache_path]
+            use_pipe = False
+        else:
+            input_args = ["-fflags", "+ignidx", *seek, "-i", "pipe:0"]
+            use_pipe = True
+
+        cmd = [
+            _FFMPEG, "-loglevel", "error",
+            "-probesize", "2097152", "-analyzeduration", "2000000",
+            *input_args,
+            "-map", "0:v:0?", "-map", f"0:a:{audio_idx}?",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+            "-profile:v", "high", "-level", "4.1",
+            "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-ar", "48000",
+            "-sn", "-dn",
+            "-f", "hls",
+            "-hls_time", "20",
+            "-hls_list_size", "0",
+            "-hls_flags", "append_list",
+            "-hls_segment_filename", str(Path(tmpdir) / "seg%05d.ts"),
+            str(Path(tmpdir) / "playlist.m3u8"),
+        ]
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE if use_pipe else asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        asyncio.ensure_future(_log_stderr(proc.stderr))
+        if use_pipe:
+            asyncio.ensure_future(_pipe_from_vod_cache(vod_entry, proc.stdin, 0))
+
+        session = {"dir": tmpdir, "process": proc, "start": start, "key": session_key}
+        _iptv_vod_hls_sessions[session_key] = session
+        return session
+
+
+@app.get("/api/iptv/vod_hls2/{stream_id}/playlist.m3u8")
+async def iptv_vod_hls2_playlist(
+    request: Request,
+    stream_id: str,
+    ext: str = "mp4",
+    media: str = "movie",
+    audio_idx: int = 0,
+    start: int = 0,
+):
+    if not _xtream_cfg.get("server"):
+        raise HTTPException(status_code=400, detail="IPTV not configured")
+
+    # Kill sessions for same stream but different parameters
+    async with _iptv_vod_hls_lock:
+        session_key = f"{stream_id}:{ext}:{media}:{audio_idx}:{start}"
+        to_kill = [k for k in _iptv_vod_hls_sessions
+                   if k.startswith(f"{stream_id}:") and k != session_key]
+        for k in to_kill:
+            sess = _iptv_vod_hls_sessions.pop(k)
+            try: sess["process"].kill()
+            except Exception: pass
+            shutil.rmtree(sess["dir"], ignore_errors=True)
+
+    try:
+        session = await _start_iptv_vod_hls_session(stream_id, ext, media, audio_idx, start)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    playlist_path = Path(session["dir"]) / "playlist.m3u8"
+
+    for _ in range(150):
+        if playlist_path.exists() and playlist_path.stat().st_size > 10:
+            break
+        proc = session["process"]
+        if proc.returncode is not None and proc.returncode != 0:
+            async with _iptv_vod_hls_lock:
+                _iptv_vod_hls_sessions.pop(session["key"], None)
+            shutil.rmtree(session["dir"], ignore_errors=True)
+            raise HTTPException(status_code=503, detail="ffmpeg failed to start")
+        await asyncio.sleep(0.1)
+    else:
+        raise HTTPException(status_code=504, detail="HLS transcoding timeout")
+
+    content = playlist_path.read_text()
+    base = str(request.base_url).rstrip("/")
+    content = re.sub(
+        r"^(seg\d+\.ts)$",
+        lambda m: f"{base}/api/iptv/vod_hls2/{stream_id}/{start}/{m.group(1)}?ext={ext}&media={media}&audio_idx={audio_idx}",
+        content,
+        flags=re.MULTILINE,
+    )
+    return Response(
+        content=content,
+        media_type="application/vnd.apple.mpegurl",
+        headers={"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"},
+    )
+
+
+@app.get("/api/iptv/vod_hls2/{stream_id}/{start}/{segment}")
+async def iptv_vod_hls2_segment(
+    stream_id: str, start: int, segment: str,
+    ext: str = "mp4", media: str = "movie", audio_idx: int = 0,
+):
+    if not re.match(r"^seg\d+\.ts$", segment):
+        raise HTTPException(status_code=400, detail="Invalid segment")
+    session_key = f"{stream_id}:{ext}:{media}:{audio_idx}:{start}"
+    session = _iptv_vod_hls_sessions.get(session_key)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    seg_path = Path(session["dir"]) / segment
+    for _ in range(100):
+        if seg_path.exists() and seg_path.stat().st_size > 0:
+            return FileResponse(
+                seg_path, media_type="video/mp2t",
+                headers={"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"},
+            )
+        await asyncio.sleep(0.1)
+    raise HTTPException(status_code=404, detail="Segment not ready")
+
+
 @app.get("/api/stream/{video_id}")
 async def stream_video(video_id: str, request: Request, itag: Optional[str] = None):
     try:
@@ -4932,14 +5080,15 @@ async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", med
     vargs_vtb  = ["-c:v", "h264_videotoolbox", "-b:v", "3M",
                   "-profile:v", "high", "-level", "4.1"]
 
-    def _cmd(input_args: list, video_args: list, fast_probe: bool = False) -> list:
+    def _cmd(input_args: list, video_args: list, fast_probe: bool = False, ts_offset: int = 0) -> list:
         probesize = "131072" if fast_probe else "2097152"
         analyzedur = "500000" if fast_probe else "2000000"
+        offset_args = ["-output_ts_offset", str(ts_offset)] if ts_offset > 0 else []
         return [_FFMPEG, "-loglevel", "error",
                 "-probesize", probesize, "-analyzeduration", analyzedur,
                 *input_args,
                 "-map", "0:v:0?", "-map", f"0:a:{audio_idx}?",
-                *video_args, *_OUTPUT_ARGS]
+                *video_args, *offset_args, *_OUTPUT_ARGS]
 
     # For seeks: estimate byte offset so the pipe downloader can jump directly
     # to approximately the right position (much faster than reading from byte 0).
@@ -4970,6 +5119,10 @@ async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", med
         except Exception as e:
             print(f"[seek] probe failed: {e}, byte_offset=0", flush=True)
 
+    vod_cache_entry = await _ensure_vod_download(f"{stream_id}.{ext}", src)
+    cache_path = vod_cache_entry.get("path", "")
+    cache_done = vod_cache_entry.get("done", False) and bool(cache_path) and os.path.exists(cache_path)
+
     if start > 0:
         # +ignidx: ignore MKV SeekHead index so ffmpeg reads linearly through
         # the pipe without trying to jump to referenced byte positions.
@@ -4978,16 +5131,22 @@ async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", med
         # mid-file always breaks parsing, so skip the byte-offset attempt.
         non_seekable_pipe = ext.lower() in ("mp4", "mkv", "avi", "ts", "m2ts", "mts")
         attempts = [
-            # 1. Pipe with estimated byte offset — skipped for all common formats
+            # 1. File seek (instant random-access, no pipe decoding from byte 0)
+            #    Only when vod_cache is fully downloaded. libx264 re-encoding always resets
+            #    PTS to 0 regardless of input position, so ts_offset is required here too.
+            *([{"cmd": _cmd(["-ss", str(start), "-i", cache_path], vargs_x264, ts_offset=start),
+                "use_pipe": False, "timeout": 60.0, "min_chunk": 1, "initial_offset": 0}]
+              if cache_done else []),
+            # 2. Pipe with estimated byte offset — skipped for all common formats
             #    because the moov/header atom is always at the start of the file.
-            *([{"cmd": _cmd(pipe_ss, vargs_x264, fast_probe=True),
+            *([{"cmd": _cmd(pipe_ss, vargs_x264, fast_probe=True, ts_offset=start),
                 "use_pipe": True, "timeout": 60.0, "min_chunk": 1, "initial_offset": byte_offset}]
               if byte_offset > 0 and not non_seekable_pipe else []),
-            # 2. Pipe from byte 0 — always works, slow for large seeks
-            {"cmd": _cmd(pipe_ss, vargs_x264),
+            # 3. Pipe from byte 0 with ts_offset so PTS matches startSec on frontend
+            {"cmd": _cmd(pipe_ss, vargs_x264, ts_offset=start),
              "use_pipe": True, "timeout": 300.0, "min_chunk": 1, "initial_offset": 0},
-            # 3. VideoToolbox hardware encoder fallback
-            {"cmd": _cmd(pipe_ss, vargs_vtb),
+            # 4. VideoToolbox hardware encoder fallback
+            {"cmd": _cmd(pipe_ss, vargs_vtb, ts_offset=start),
              "use_pipe": True, "timeout": 300.0, "min_chunk": 1, "initial_offset": 0},
         ]
     else:
@@ -4995,9 +5154,6 @@ async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", med
             {"cmd": _cmd(["-i", "pipe:0"], vargs_x264), "use_pipe": True, "timeout": 45.0, "min_chunk": 1, "initial_offset": 0},
             {"cmd": _cmd(["-i", "pipe:0"], vargs_vtb),  "use_pipe": True, "timeout": 15.0, "min_chunk": 1, "initial_offset": 0},
         ]
-
-    # Get (or start) the shared file download for this stream
-    vod_cache_entry = await _ensure_vod_download(f"{stream_id}.{ext}", src)
 
     process: asyncio.subprocess.Process | None = None
     first_chunk: bytes = b""

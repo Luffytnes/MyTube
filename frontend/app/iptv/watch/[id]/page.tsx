@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Radio, Film } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
-import Hls from 'hls.js'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -20,85 +19,69 @@ export default function IPTVWatchPage() {
   const ext = searchParams.get('ext') || 'mp4'
   const media = searchParams.get('media') || 'movie'
   const videoRef = useRef<HTMLVideoElement>(null)
+  const playerRef = useRef<any>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [iconErr, setIconErr] = useState(false)
 
   useEffect(() => {
-    let hls: Hls | null = null
     let aborted = false
-    const controller = new AbortController()
-    let loadTimeout: ReturnType<typeof setTimeout> | null = null
+    let player: any = null
 
-    function clearLoadTimeout() {
-      if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null }
-    }
+    async function init() {
+      const video = videoRef.current
+      if (!video) return
 
-    function onReady() {
-      clearLoadTimeout()
-      setLoading(false)
-    }
-
-    function onError() {
-      clearLoadTimeout()
-      const code = videoRef.current?.error?.code
-      // 4 = MEDIA_ERR_SRC_NOT_SUPPORTED (codec/format not playable in this browser)
-      setError(code === 4 ? t('iptv_format_unsupported') : t('iptv_error'))
-      setLoading(false)
-    }
-
-    async function startStream() {
-      // Bail out after 30s if the video never fires loadedmetadata/canplay/error
-      loadTimeout = setTimeout(() => { setError(t('iptv_error')); setLoading(false) }, 30000)
       try {
-        const endpoint = type === 'live'
-          ? `${API_BASE}/api/iptv/stream/${id}`
-          : `${API_BASE}/api/iptv/vod_stream/${id}?ext=${ext}&media=${media}`
-        const res = await fetch(endpoint, { signal: controller.signal })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const shakaModule: any = await import('shaka-player')
+        const shaka = shakaModule.default ?? shakaModule
         if (aborted) return
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
+        shaka.polyfill.installAll()
+
+        player = new shaka.Player()
+        playerRef.current = player
+        await player.attach(video)
         if (aborted) return
-        const url: string = data.url
-        const useHls = type === 'live' || data.hls !== false
 
-        const video = videoRef.current
-        if (!video || aborted) return
+        player.addEventListener('error', () => {
+          if (!aborted) { setError(t('iptv_error')); setLoading(false) }
+        })
 
-        if (useHls && Hls.isSupported()) {
-          hls = new Hls({ enableWorker: true, lowLatencyMode: type === 'live' })
-          hls.loadSource(url)
-          hls.attachMedia(video)
-          hls.on(Hls.Events.MANIFEST_PARSED, () => { onReady(); video.play().catch(() => {}) })
-          hls.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) onError() })
-        } else if (useHls && video.canPlayType('application/vnd.apple.mpegurl')) {
-          video.src = url
-          video.addEventListener('loadedmetadata', () => { onReady(); video.play().catch(() => {}) })
-          video.addEventListener('error', onError)
+        video.addEventListener('canplay', () => {
+          setLoading(false)
+          video.play().catch(() => {})
+        }, { once: true })
+
+        if (type === 'live') {
+          await player.load(`${API_BASE}/api/iptv/hls/${id}`)
         } else {
-          video.src = url
-          video.addEventListener('loadedmetadata', onReady)
-          video.addEventListener('canplay', () => { onReady(); video.play().catch(() => {}) })
-          video.addEventListener('error', onError)
+          const res = await fetch(`${API_BASE}/api/iptv/vod_stream/${id}?ext=${ext}&media=${media}`)
+          if (!res.ok || aborted) throw new Error('stream info failed')
+          const data = await res.json()
+          if (aborted) return
+          const hlsUrl = `${API_BASE}/api/iptv/vod_hls2/${id}/playlist.m3u8?ext=${ext}&media=${media}&audio_idx=0&start=0`
+          // Try HLS first, fall back to direct URL from backend if not available
+          try {
+            await player.load(hlsUrl)
+          } catch {
+            await player.load(data.url)
+          }
         }
-      } catch (err) {
-        if ((err as Error).name === 'AbortError') return
-        onError()
+        if (!aborted) video.play().catch(() => {})
+      } catch (e) {
+        if (!aborted) { setError(t('iptv_error')); setLoading(false) }
       }
     }
 
-    startStream()
+    init()
+
     return () => {
       aborted = true
-      clearLoadTimeout()
-      controller.abort()
-      hls?.destroy()
+      player?.destroy().catch?.(() => {})
+      playerRef.current = null
       const video = videoRef.current
-      if (video) {
-        video.pause()
-        video.src = ''
-        video.load()
-      }
+      if (video) { video.pause(); video.src = '' }
     }
   }, [id, type, ext, media, t])
 
@@ -106,7 +89,6 @@ export default function IPTVWatchPage() {
 
   return (
     <div className="min-h-screen bg-yt-bg">
-      {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 bg-yt-secondary border-b border-yt-border">
         <button onClick={() => router.back()} className="p-2 rounded-full hover:bg-yt-hover text-yt-text transition-colors">
           <ArrowLeft className="w-5 h-5" />
@@ -135,7 +117,6 @@ export default function IPTVWatchPage() {
         </div>
       </div>
 
-      {/* Video */}
       <div className="max-w-4xl mx-auto px-4 py-6">
         <div className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
           {loading && !error && (
@@ -151,12 +132,7 @@ export default function IPTVWatchPage() {
               </button>
             </div>
           ) : (
-            <video
-              ref={videoRef}
-              className="w-full h-full"
-              controls
-              playsInline
-            />
+            <video ref={videoRef} className="w-full h-full" controls playsInline />
           )}
         </div>
       </div>

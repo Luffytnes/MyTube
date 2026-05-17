@@ -98,6 +98,12 @@ export interface TvVideoPlayerProps {
   onEnded?: () => void
   onPrev?: () => void
   onNext?: () => void
+  /** Absolute start offset in seconds (e.g. resume position). currentTime display = videoCurrentTime + timeOffset */
+  timeOffset?: number
+  /** Total duration of the content (overrides video.duration for the seek bar) */
+  externalDuration?: number
+  /** Called when the user seeks to an absolute position outside the current HLS session range */
+  onNeedNewSession?: (absoluteTime: number) => void
 }
 
 export default function TvVideoPlayer({
@@ -108,6 +114,7 @@ export default function TvVideoPlayer({
   onTimeUpdate,
   queue = [], currentQueueId, queueTitle = 'Liste de lecture',
   onEnded, onPrev, onNext,
+  timeOffset = 0, externalDuration, onNeedNewSession,
 }: TvVideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [playing, setPlaying] = useState(false)
@@ -247,11 +254,23 @@ export default function TvVideoPlayer({
   function seekTo(clientX: number) {
     const bar = seekRef.current
     const v = videoRef.current
-    if (!bar || !v || !duration) return
+    const displayDur = externalDuration ?? duration
+    if (!bar || !v || !displayDur) return
     const { left, width } = bar.getBoundingClientRect()
     const ratio = Math.max(0, Math.min(1, (clientX - left) / width))
-    v.currentTime = ratio * duration
-    setCurrentTime(ratio * duration)
+    const absoluteT = ratio * displayDur
+    const relativeT = absoluteT - timeOffset
+
+    if (onNeedNewSession) {
+      // Always create a new HLS session for progress bar seeks so ffmpeg can
+      // seek directly to the target position instead of waiting for it to be
+      // transcoded sequentially.
+      onNeedNewSession(absoluteT)
+    } else {
+      const clamped = Math.max(0, Math.min(v.duration || displayDur, relativeT))
+      v.currentTime = clamped
+      setCurrentTime(clamped)
+    }
   }
 
   function onSeekDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -268,8 +287,11 @@ export default function TvVideoPlayer({
     seekTo(e.clientX)
   }
 
-  const playedPct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0
-  const bufPct = duration > 0 ? Math.min(100, (buffered / duration) * 100) : 0
+  const displayDur = externalDuration ?? duration
+  const displayTime = currentTime + timeOffset
+  const displayBuffered = buffered + timeOffset
+  const playedPct = displayDur > 0 ? Math.min(100, (displayTime / displayDur) * 100) : 0
+  const bufPct = displayDur > 0 ? Math.min(100, (displayBuffered / displayDur) * 100) : 0
   const controlsVisible = showControls || !playing || showQueue
 
   return (
@@ -407,7 +429,7 @@ export default function TvVideoPlayer({
 
               {/* Time */}
               <span className="text-white/80 text-xs font-mono flex-shrink-0 tabular-nums">
-                {fmt(currentTime)}{duration > 0 ? <> <span className="text-white/40">/</span> {fmt(duration)}</> : null}
+                {fmt(displayTime)}{displayDur > 0 ? <> <span className="text-white/40">/</span> {fmt(displayDur)}</> : null}
               </span>
 
               <div className="flex-1" />
