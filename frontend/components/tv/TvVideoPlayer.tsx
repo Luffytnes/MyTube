@@ -147,6 +147,7 @@ export default function TvVideoPlayer({
   const openPanelRef = useRef<'audio' | 'sub' | null>(null)
   const seekRef = useRef<HTMLDivElement>(null)
   const activeQueueItemRef = useRef<HTMLAnchorElement>(null)
+  const [hoverRatio, setHoverRatio] = useState<number | null>(null)
 
   function setOpenPanelBoth(val: 'audio' | 'sub' | null) {
     openPanelRef.current = val
@@ -458,6 +459,13 @@ export default function TvVideoPlayer({
                   onPointerMove={onSeekMove}
                   onPointerUp={onSeekUp}
                   onClick={e => e.stopPropagation()}
+                  onMouseMove={e => {
+                    const bar = seekRef.current
+                    if (!bar) return
+                    const { left, width } = bar.getBoundingClientRect()
+                    setHoverRatio(Math.max(0, Math.min(1, (e.clientX - left) / width)))
+                  }}
+                  onMouseLeave={() => setHoverRatio(null)}
                 >
                   {/* Extended hit area */}
                   <div className="absolute inset-x-0 -top-3 -bottom-3" />
@@ -468,6 +476,17 @@ export default function TvVideoPlayer({
                     className="absolute w-3 h-3 bg-red-500 rounded-full top-1/2 -translate-y-1/2 shadow-lg"
                     style={{ left: `calc(${playedPct}% - 6px)` }}
                   />
+                  {/* Hover time tooltip */}
+                  {hoverRatio !== null && displayDur > 0 && (
+                    <div
+                      className="absolute bottom-full mb-3 pointer-events-none -translate-x-1/2"
+                      style={{ left: `${hoverRatio * 100}%` }}
+                    >
+                      <div className="bg-black/85 text-white text-xs px-2 py-1 rounded font-mono whitespace-nowrap">
+                        {fmt(hoverRatio * displayDur)}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <span className="text-white/40 text-xs tabular-nums shrink-0 w-11">
                   {displayDur > 0 ? fmt(displayDur) : ''}
