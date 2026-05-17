@@ -332,6 +332,7 @@ export default function TvWatchPage() {
           loading={loading}
           error={error}
           onErrorBack={() => router.back()}
+          title={name}
           subUrl={subUrl}
           audioTracks={tracks?.audio ?? []}
           subTracks={tracks?.subtitles ?? []}

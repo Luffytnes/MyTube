@@ -1,11 +1,16 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Radio, Film } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
+import TvVideoPlayer from '@/components/tv/TvVideoPlayer'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+
+interface AudioTrack { index: number; language: string; title: string; codec: string; channels: number }
+interface SubTrack { index: number; language: string; title: string; codec: string }
+interface TrackList { audio: AudioTrack[]; subtitles: SubTrack[] }
 
 export default function IPTVWatchPage() {
   const params = useParams()
@@ -18,72 +23,128 @@ export default function IPTVWatchPage() {
   const type = (searchParams.get('type') || 'live') as 'live' | 'vod'
   const ext = searchParams.get('ext') || 'mp4'
   const media = searchParams.get('media') || 'movie'
+
   const videoRef = useRef<HTMLVideoElement>(null)
   const playerRef = useRef<any>(null)
+  const abortedRef = useRef(false)
+  const audioChangePositionRef = useRef<number>(0)
+  const positionRef = useRef<number>(0)
+
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [iconErr, setIconErr] = useState(false)
+  const [tracks, setTracks] = useState<TrackList | null>(null)
+  const [audioIdx, setAudioIdx] = useState(0)
+  const [subIdx, setSubIdx] = useState<number | null>(null)
+
+  // Fetch audio/subtitle tracks for VOD
+  useEffect(() => {
+    if (type === 'live') return
+    fetch(`${API_BASE}/api/iptv/vod_tracks/${id}?ext=${ext}&media=${media}`)
+      .then(r => r.json())
+      .then((data: TrackList) => { if (data.audio?.length || data.subtitles?.length) setTracks(data) })
+      .catch(() => {})
+  }, [id, type, ext, media])
 
   useEffect(() => {
-    let aborted = false
+    abortedRef.current = false
+    setLoading(true)
+    setError(null)
+
+    let loadTimeout: ReturnType<typeof setTimeout> | null = null
+    function clearLoadTimeout() {
+      if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null }
+    }
+    function onError() {
+      if (abortedRef.current) return
+      clearLoadTimeout()
+      setError(t('iptv_error'))
+      setLoading(false)
+    }
+    function onReady() {
+      clearLoadTimeout()
+      setLoading(false)
+    }
+
     let player: any = null
 
     async function init() {
       const video = videoRef.current
-      if (!video) return
+      if (!video || abortedRef.current) return
+
+      loadTimeout = setTimeout(onError, 60000)
 
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const shakaModule: any = await import('shaka-player')
         const shaka = shakaModule.default ?? shakaModule
-        if (aborted) return
+        if (abortedRef.current) return
+
         shaka.polyfill.installAll()
+        if (!shaka.Player.isBrowserSupported()) { onError(); return }
 
         player = new shaka.Player()
         playerRef.current = player
         await player.attach(video)
-        if (aborted) return
+        if (abortedRef.current) return
 
-        player.addEventListener('error', () => {
-          if (!aborted) { setError(t('iptv_error')); setLoading(false) }
+        player.addEventListener('error', (e: any) => {
+          console.error('[shaka]', e.detail)
+          onError()
         })
 
-        video.addEventListener('canplay', () => {
-          setLoading(false)
-          video.play().catch(() => {})
-        }, { once: true })
+        const onCanPlay = () => { onReady(); video.play().catch(() => {}) }
+        video.addEventListener('canplay', onCanPlay, { once: true })
 
         if (type === 'live') {
           await player.load(`${API_BASE}/api/iptv/hls/${id}`)
         } else {
-          const res = await fetch(`${API_BASE}/api/iptv/vod_stream/${id}?ext=${ext}&media=${media}`)
-          if (!res.ok || aborted) throw new Error('stream info failed')
-          const data = await res.json()
-          if (aborted) return
-          const hlsUrl = `${API_BASE}/api/iptv/vod_hls2/${id}/playlist.m3u8?ext=${ext}&media=${media}&audio_idx=0&start=0`
-          // Try HLS first, fall back to direct URL from backend if not available
+          const startSec = audioChangePositionRef.current > 0 ? Math.floor(audioChangePositionRef.current) : 0
+          audioChangePositionRef.current = 0
+          const hlsUrl = `${API_BASE}/api/iptv/vod_hls2/${id}/playlist.m3u8?ext=${ext}&media=${media}&audio_idx=${audioIdx}&start=${startSec}`
           try {
             await player.load(hlsUrl)
           } catch {
-            await player.load(data.url)
+            const res = await fetch(`${API_BASE}/api/iptv/vod_stream/${id}?ext=${ext}&media=${media}`)
+            if (res.ok) {
+              const data = await res.json()
+              await player.load(data.url)
+            } else {
+              throw new Error('stream failed')
+            }
           }
         }
-        if (!aborted) video.play().catch(() => {})
-      } catch (e) {
-        if (!aborted) { setError(t('iptv_error')); setLoading(false) }
+
+        if (!abortedRef.current) video.play().catch(() => {})
+      } catch (e: any) {
+        if (!abortedRef.current) { console.error('[shaka init]', e); onError() }
       }
     }
 
     init()
 
     return () => {
-      aborted = true
+      abortedRef.current = true
+      clearLoadTimeout()
+      if (type !== 'live') {
+        const pos = positionRef.current
+        if (pos > 0) audioChangePositionRef.current = pos
+      }
       player?.destroy().catch?.(() => {})
       playerRef.current = null
       const video = videoRef.current
       if (video) { video.pause(); video.src = '' }
     }
-  }, [id, type, ext, media, t])
+  }, [id, type, ext, media, t, audioIdx])
+
+  const handleTimeUpdate = useCallback(() => {
+    if (type === 'live' || !videoRef.current) return
+    positionRef.current = videoRef.current.currentTime
+  }, [type])
+
+  const subUrl = subIdx !== null
+    ? `${API_BASE}/api/iptv/vod_subtitle/${id}?ext=${ext}&media=${media}&sub_idx=${subIdx}`
+    : null
 
   const isLive = type === 'live'
 
@@ -106,8 +167,8 @@ export default function IPTVWatchPage() {
         ) : (
           <Film className="w-6 h-6 text-yt-text" />
         )}
-        <div>
-          <p className="text-yt-text font-semibold text-sm">{name}</p>
+        <div className="flex-1 min-w-0">
+          <p className="text-yt-text font-semibold text-sm truncate">{name}</p>
           {isLive && (
             <div className="flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
@@ -117,24 +178,22 @@ export default function IPTVWatchPage() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
-        <div className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
-          {loading && !error && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-10 h-10 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            </div>
-          )}
-          {error ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-white px-4">
-              <p className="text-lg mb-4">{error}</p>
-              <button onClick={() => router.back()} className="px-4 py-2 bg-white/20 rounded-full text-sm hover:bg-white/30 transition-colors">
-                {t('nav_back')}
-              </button>
-            </div>
-          ) : (
-            <video ref={videoRef} className="w-full h-full" controls playsInline />
-          )}
-        </div>
+      <div className="max-w-4xl mx-auto px-4 pt-6 pb-2">
+        <TvVideoPlayer
+          videoRef={videoRef}
+          loading={loading}
+          error={error}
+          onErrorBack={() => router.back()}
+          title={name}
+          subUrl={subUrl}
+          audioTracks={tracks?.audio ?? []}
+          subTracks={tracks?.subtitles ?? []}
+          audioIdx={audioIdx}
+          subIdx={subIdx}
+          onAudioChange={setAudioIdx}
+          onSubChange={setSubIdx}
+          onTimeUpdate={handleTimeUpdate}
+        />
       </div>
     </div>
   )

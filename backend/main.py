@@ -1663,7 +1663,7 @@ async def _start_iptv_vod_hls_session(
 
         vod_entry = await _ensure_vod_download(f"{stream_id}.{ext}", src)
         cache_path = vod_entry.get("path", "")
-        cache_done = vod_entry.get("done", False) and bool(cache_path) and os.path.exists(cache_path)
+        cache_done = vod_entry.get("done", False) and bool(cache_path) and os.path.exists(cache_path) and os.path.getsize(cache_path) > 0
 
         tmpdir = tempfile.mkdtemp(prefix="mytube_iptv_hls_")
 
@@ -5121,7 +5121,7 @@ async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", med
 
     vod_cache_entry = await _ensure_vod_download(f"{stream_id}.{ext}", src)
     cache_path = vod_cache_entry.get("path", "")
-    cache_done = vod_cache_entry.get("done", False) and bool(cache_path) and os.path.exists(cache_path)
+    cache_done = vod_cache_entry.get("done", False) and bool(cache_path) and os.path.exists(cache_path) and os.path.getsize(cache_path) > 0
 
     if start > 0:
         # +ignidx: ignore MKV SeekHead index so ffmpeg reads linearly through
