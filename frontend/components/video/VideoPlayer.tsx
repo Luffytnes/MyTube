@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { formatDuration } from '@/lib/utils'
 import { getStreamUrl, getAudioUrl, getSubtitles, getSubtitleUrl, type VideoFormat, type SubtitleTrack } from '@/lib/api'
+import VolumeSlider from '@/components/ui/VolumeSlider'
 import { useRegion } from '@/lib/regionContext'
 import { getPlaybackSettings, setPlaybackSettings } from '@/lib/playbackSettings'
 import { savePosition, getPosition } from '@/lib/resumePosition'
@@ -790,11 +791,11 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                       {muted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                     </button>
                     {(!isMobile || fullscreen) && (
-                      <input
-                        type="range" min="0" max="1" step="0.05"
-                        value={muted ? 0 : volume}
-                        onChange={handleVolumeChange}
-                        className="hidden sm:block w-16 h-1 accent-red-600 cursor-pointer"
+                      <VolumeSlider
+                        volume={volume}
+                        muted={muted}
+                        onChange={v => handleVolumeChange({ target: { value: String(v) } } as React.ChangeEvent<HTMLInputElement>)}
+                        className="hidden sm:flex w-16"
                       />
                     )}
                   </div>

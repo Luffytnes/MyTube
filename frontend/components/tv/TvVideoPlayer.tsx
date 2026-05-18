@@ -4,7 +4,9 @@ import { useState, useEffect, useRef, useCallback, RefObject } from 'react'
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   Loader2, List, X, RotateCcw, RotateCw, Check, Headphones,
+  SkipBack, SkipForward,
 } from 'lucide-react'
+import VolumeSlider from '@/components/ui/VolumeSlider'
 
 function fmt(sec: number): string {
   if (!isFinite(sec) || isNaN(sec) || sec < 0) return '0:00'
@@ -125,7 +127,7 @@ export default function TvVideoPlayer({
   onAudioChange, onSubChange,
   onTimeUpdate,
   queue = [], currentQueueId, queueTitle = 'Liste de lecture',
-  onEnded,
+  onEnded, onPrev, onNext,
   timeOffset = 0, externalDuration, onNeedNewSession,
 }: TvVideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -495,8 +497,17 @@ export default function TvVideoPlayer({
 
               {/* Button row */}
               <div className="flex items-center justify-between">
-                {/* Left: Play, Rewind, Forward, Volume */}
+                {/* Left: Prev ep, Play, Next ep, Rewind, Forward, Volume */}
                 <div className="flex items-center gap-0.5">
+                  {onPrev && (
+                    <button
+                      onClick={e => { e.stopPropagation(); onPrev() }}
+                      className="w-10 h-10 flex items-center justify-center text-white/70 hover:text-white transition-colors"
+                      title="Épisode précédent"
+                    >
+                      <SkipBack className="w-5 h-5 fill-current" />
+                    </button>
+                  )}
                   <button
                     onClick={togglePlay}
                     className="w-10 h-10 flex items-center justify-center text-white hover:text-white/70 transition-colors"
@@ -505,6 +516,15 @@ export default function TvVideoPlayer({
                       ? <Pause className="w-6 h-6 fill-current" />
                       : <Play className="w-6 h-6 fill-current translate-x-0.5" />}
                   </button>
+                  {onNext && (
+                    <button
+                      onClick={e => { e.stopPropagation(); onNext() }}
+                      className="w-10 h-10 flex items-center justify-center text-white/70 hover:text-white transition-colors"
+                      title="Épisode suivant"
+                    >
+                      <SkipForward className="w-5 h-5 fill-current" />
+                    </button>
+                  )}
                   <button
                     onClick={e => { e.stopPropagation(); skip(-10) }}
                     className="w-10 h-10 flex items-center justify-center text-white hover:text-white/70 transition-colors"
@@ -519,25 +539,23 @@ export default function TvVideoPlayer({
                   >
                     <RotateCw className="w-5 h-5" />
                   </button>
-                  <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                     <button
                       onClick={() => { const v = videoRef.current; if (v) v.muted = !v.muted }}
                       className="w-10 h-10 flex items-center justify-center text-white hover:text-white/70 transition-colors"
                     >
                       {muted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                     </button>
-                    <input
-                      type="range" min="0" max="1" step="0.05"
-                      value={muted ? 0 : volume}
-                      onChange={e => {
+                    <VolumeSlider
+                      volume={volume}
+                      muted={muted}
+                      onChange={val => {
                         const v = videoRef.current
                         if (!v) return
-                        const val = parseFloat(e.target.value)
                         v.volume = val
                         v.muted = val === 0
                       }}
-                      className="hidden sm:block w-16 h-1 accent-red-600 cursor-pointer"
-                      onClick={e => e.stopPropagation()}
+                      className="hidden sm:flex w-16"
                     />
                   </div>
                 </div>

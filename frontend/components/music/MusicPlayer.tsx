@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { useMusic } from '@/lib/musicContext'
 import { cn } from '@/lib/utils'
+import VolumeSlider from '@/components/ui/VolumeSlider'
 import { getMusicPlaylists, addTrackToPlaylist, type MusicPlaylist } from '@/lib/musicPlaylists'
 
 function formatTime(s: number): string {
@@ -28,31 +29,6 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
   const [showQueue, setShowQueue] = useState(false)
   const [scrubValue, setScrubValue] = useState<number | null>(null)
   const [showPlaylistPicker, setShowPlaylistPicker] = useState(false)
-  const volBarRef = useRef<HTMLDivElement>(null)
-  const volDragging = useRef(false)
-
-  const calcVolFromX = useCallback((clientX: number) => {
-    const bar = volBarRef.current
-    if (!bar) return
-    const rect = bar.getBoundingClientRect()
-    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-    setVolume(pct)
-  }, [setVolume])
-
-  // Attach non-passive native touch listeners — React registers touch as passive by default
-  // which prevents preventDefault and makes the slider unresponsive on iOS
-  useEffect(() => {
-    const bar = volBarRef.current
-    if (!bar) return
-    const onTouchStart = (e: TouchEvent) => { e.preventDefault(); calcVolFromX(e.touches[0].clientX) }
-    const onTouchMove  = (e: TouchEvent) => { e.preventDefault(); calcVolFromX(e.touches[0].clientX) }
-    bar.addEventListener('touchstart', onTouchStart, { passive: false })
-    bar.addEventListener('touchmove',  onTouchMove,  { passive: false })
-    return () => {
-      bar.removeEventListener('touchstart', onTouchStart)
-      bar.removeEventListener('touchmove',  onTouchMove)
-    }
-  }, [calcVolFromX])
 
   const [addedToPlaylist, setAddedToPlaylist] = useState<string | null>(null)
   const [playlists, setPlaylists] = useState<MusicPlaylist[]>([])
@@ -76,10 +52,6 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
   const displayProgress = isScrubbing ? scrubValue! : progress
   const artistNames = currentTrack.artists.map((a) => a.name).join(', ')
   const nextTrack = queue[currentIndex + 1] || null
-
-  function handleVolume(e: ChangeEvent<HTMLInputElement>) {
-    setVolume(parseFloat(e.target.value))
-  }
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col bg-yt-bg overflow-hidden">
@@ -209,21 +181,12 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
             <button onClick={toggleMute} className="text-white/50 hover:text-white transition-colors flex-shrink-0">
               {muted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
             </button>
-            {/* Slider visible only on desktop (sm+) */}
-            <div
-              ref={volBarRef}
-              className="hidden sm:flex flex-1 relative items-center"
-              style={{ height: '44px', cursor: 'pointer', touchAction: 'none' }}
-              onMouseDown={(e) => { volDragging.current = true; calcVolFromX(e.clientX) }}
-              onMouseMove={(e) => { if (volDragging.current) calcVolFromX(e.clientX) }}
-              onMouseUp={() => { volDragging.current = false }}
-              onMouseLeave={() => { volDragging.current = false }}
-            >
-              <div className="absolute inset-x-0 h-1 rounded-full bg-white/20">
-                <div className="h-full rounded-full bg-white/80" style={{ width: `${(muted ? 0 : volume) * 100}%` }} />
-              </div>
-              <div className="absolute w-3.5 h-3.5 rounded-full bg-white shadow-lg -translate-x-1/2 pointer-events-none" style={{ left: `${(muted ? 0 : volume) * 100}%` }} />
-            </div>
+            <VolumeSlider
+              volume={volume}
+              muted={muted}
+              onChange={setVolume}
+              className="hidden sm:flex flex-1"
+            />
             {/* Mobile: hint text */}
             <span className="sm:hidden text-white/30 text-xs">Boutons physiques</span>
           </div>
@@ -407,10 +370,6 @@ export default function MusicPlayer() {
     seek((pct / 100) * duration)
   }
 
-  function handleVolume(e: ChangeEvent<HTMLInputElement>) {
-    setVolume(parseFloat(e.target.value))
-  }
-
   return (
     <>
       {showFullPlayer && <FullScreenPlayer onClose={() => setShowFullPlayer(false)} />}
@@ -538,13 +497,11 @@ export default function MusicPlayer() {
             <button onClick={toggleMute} className="text-yt-text-muted hover:text-yt-text transition-colors" aria-label="Mute">
               {muted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
             </button>
-            <input
-              type="range" min="0" max="1" step="0.02"
-              value={muted ? 0 : volume}
-              onChange={handleVolume}
-              className="w-24 h-1 cursor-pointer accent-yt-red"
-              style={{ background: `linear-gradient(to right, #f1f1f1 ${(muted ? 0 : volume) * 100}%, #3f3f3f ${(muted ? 0 : volume) * 100}%)` }}
-              aria-label="Volume"
+            <VolumeSlider
+              volume={volume}
+              muted={muted}
+              onChange={setVolume}
+              className="flex w-24"
             />
           </div>
         </div>
