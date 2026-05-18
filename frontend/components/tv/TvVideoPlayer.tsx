@@ -8,6 +8,21 @@ import {
 } from 'lucide-react'
 import VolumeSlider from '@/components/ui/VolumeSlider'
 
+function shiftVTTTimestamps(vtt: string, shiftSeconds: number): string {
+  function parseT(t: string): number {
+    const parts = t.split(':').map(Number)
+    return parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts[0] * 60 + parts[1]
+  }
+  function fmtT(s: number): string {
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${sec.toFixed(3).padStart(6,'0')}`
+  }
+  return vtt.replace(
+    /(\d{2}:\d{2}:\d{2}\.\d{3}|\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}\.\d{3}|\d{2}:\d{2}\.\d{3})(.*)/g,
+    (_, s, e, rest) => `${fmtT(Math.max(0, parseT(s) - shiftSeconds))} --> ${fmtT(Math.max(0, parseT(e) - shiftSeconds))}${rest}`
+  )
+}
+
 function fmt(sec: number): string {
   if (!isFinite(sec) || isNaN(sec) || sec < 0) return '0:00'
   const h = Math.floor(sec / 3600)
@@ -200,28 +215,43 @@ export default function TvVideoPlayer({
     return () => document.removeEventListener('fullscreenchange', fn)
   }, [])
 
-  // Subtitle track (imperative)
+  // Subtitle track — fetched via JS to bypass CORS on <track>, timestamps shifted to match HLS offset
   useEffect(() => {
     const v = videoRef.current
     if (!v) return
     Array.from(v.querySelectorAll('track[kind="subtitles"]')).forEach(t => t.remove())
     Array.from(v.textTracks).forEach(t => { t.mode = 'disabled' })
     if (!subUrl) return
-    const el = document.createElement('track')
-    el.kind = 'subtitles'
-    el.src = subUrl
-    el.default = true
-    v.appendChild(el)
-    const onLoad = () => { el.track.mode = 'showing' }
-    el.addEventListener('load', onLoad)
-    const timer = setTimeout(() => { el.track.mode = 'showing' }, 300)
+
+    let cancelled = false
+    let blobUrl: string | null = null
+    let el: HTMLTrackElement | null = null
+
+    fetch(subUrl)
+      .then(r => r.ok ? r.text() : Promise.reject('fetch failed'))
+      .then(text => {
+        if (cancelled || !v) return
+        // Shift VTT timestamps backward by timeOffset so cues match HLS session start
+        const shifted = timeOffset > 0 ? shiftVTTTimestamps(text, timeOffset) : text
+        const blob = new Blob([shifted], { type: 'text/vtt' })
+        blobUrl = URL.createObjectURL(blob)
+        el = document.createElement('track')
+        el.kind = 'subtitles'
+        el.src = blobUrl
+        v.appendChild(el)
+        const show = () => { if (el) el.track.mode = 'showing' }
+        el.addEventListener('load', show, { once: true })
+        setTimeout(show, 200)
+      })
+      .catch(() => {})
+
     return () => {
-      el.removeEventListener('load', onLoad)
-      clearTimeout(timer)
-      el.remove()
-      Array.from(v.textTracks).forEach(t => { t.mode = 'disabled' })
+      cancelled = true
+      el?.remove()
+      if (blobUrl) URL.revokeObjectURL(blobUrl)
+      if (v) Array.from(v.textTracks).forEach(t => { t.mode = 'disabled' })
     }
-  }, [subUrl, videoRef])
+  }, [subUrl, timeOffset, videoRef])
 
   // Scroll to active queue item on open
   useEffect(() => {

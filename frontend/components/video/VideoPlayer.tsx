@@ -253,6 +253,12 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
     const video = videoRef.current
     if (!video || !selectedFormat) return
     if (hdHlsRef.current) { hdHlsRef.current.destroy(); hdHlsRef.current = null }
+    // Pre-seek audio immediately so it starts buffering while HLS loads
+    const audio = audioRef.current
+    if (audio) audio.currentTime = startOffset
+    // Reset video MSE state to avoid BufferAppendError from stale SourceBuffers
+    video.removeAttribute('src')
+    video.load()
     hlsStartOffsetRef.current = startOffset
     const itag = String(selectedFormat.itag)
     const hlsUrl = `${API_BASE}/api/hls/${videoId}/${itag}/stream.m3u8?start=${Math.floor(startOffset)}`
@@ -267,16 +273,16 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setLoading(false)
         if (knownDuration) setDuration(knownDuration)
-        if (autoplay) {
-          const audio = audioRef.current
-          if (audio) audio.currentTime = startOffset
-          safePlay(video)
-        }
+        if (autoplay) safePlay(video)
       })
       hls.on(Hls.Events.ERROR, (_: unknown, data: { fatal: boolean; type: string; details: string }) => {
         if (!data.fatal) return
-        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && mediaErrorRecovery < 2) {
+        if (mediaErrorRecovery === 0) {
           mediaErrorRecovery++
+          hls.recoverMediaError()
+        } else if (mediaErrorRecovery === 1) {
+          mediaErrorRecovery++
+          hls.swapAudioCodec()
           hls.recoverMediaError()
         } else {
           setError(`Erreur HD : ${data.details}`)

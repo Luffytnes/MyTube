@@ -35,7 +35,11 @@ export default function TvSidebar() {
     setFavorites(getTvFavorites())
     function onFocus() { setFavorites(getTvFavorites()) }
     window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
+    window.addEventListener('tvfavoriteschange', onFocus)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('tvfavoriteschange', onFocus)
+    }
   }, [])
 
   useEffect(() => { setShowMoreDrawer(false) }, [pathname])

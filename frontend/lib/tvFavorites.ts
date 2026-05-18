@@ -22,6 +22,7 @@ function load(): TvFavorite[] {
 
 function save(favs: TvFavorite[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(favs))
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('tvfavoriteschange'))
 }
 
 export function getTvFavorites(): TvFavorite[] {
