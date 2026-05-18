@@ -29,6 +29,7 @@ export default function IPTVWatchPage() {
   const abortedRef = useRef(false)
   const audioChangePositionRef = useRef<number>(0)
   const positionRef = useRef<number>(0)
+  const audioIdxRef = useRef(0)
 
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -50,6 +51,8 @@ export default function IPTVWatchPage() {
     abortedRef.current = false
     setLoading(true)
     setError(null)
+    audioIdxRef.current = 0
+    setAudioIdx(0)
 
     let loadTimeout: ReturnType<typeof setTimeout> | null = null
     function clearLoadTimeout() {
@@ -101,7 +104,7 @@ export default function IPTVWatchPage() {
         } else {
           const startSec = audioChangePositionRef.current > 0 ? Math.floor(audioChangePositionRef.current) : 0
           audioChangePositionRef.current = 0
-          const hlsUrl = `${API_BASE}/api/iptv/vod_hls2/${id}/playlist.m3u8?ext=${ext}&media=${media}&audio_idx=${audioIdx}&start=${startSec}`
+          const hlsUrl = `${API_BASE}/api/iptv/vod_hls2/${id}/playlist.m3u8?ext=${ext}&media=${media}&audio_idx=${audioIdxRef.current}&start=${startSec}`
           try {
             await player.load(hlsUrl)
           } catch {
@@ -135,7 +138,25 @@ export default function IPTVWatchPage() {
       const video = videoRef.current
       if (video) { video.pause(); video.src = '' }
     }
-  }, [id, type, ext, media, t, audioIdx])
+  }, [id, type, ext, media, t])
+
+  const handleAudioChange = useCallback(async (newIdx: number) => {
+    if (type === 'live') return
+    const player = playerRef.current
+    const video = videoRef.current
+    if (!player || !video) return
+    audioIdxRef.current = newIdx
+    setAudioIdx(newIdx)
+    const startSec = Math.floor(Math.max(0, positionRef.current))
+    setLoading(true)
+    const url = `${API_BASE}/api/iptv/vod_hls2/${id}/playlist.m3u8?ext=${ext}&media=${media}&audio_idx=${newIdx}&start=${startSec}`
+    try {
+      await player.load(url)
+      if (!abortedRef.current) { setLoading(false); video.play().catch(() => {}) }
+    } catch {
+      if (!abortedRef.current) setLoading(false)
+    }
+  }, [id, type, ext, media])
 
   const handleTimeUpdate = useCallback(() => {
     if (type === 'live' || !videoRef.current) return
@@ -190,7 +211,7 @@ export default function IPTVWatchPage() {
           subTracks={tracks?.subtitles ?? []}
           audioIdx={audioIdx}
           subIdx={subIdx}
-          onAudioChange={setAudioIdx}
+          onAudioChange={handleAudioChange}
           onSubChange={setSubIdx}
           onTimeUpdate={handleTimeUpdate}
         />

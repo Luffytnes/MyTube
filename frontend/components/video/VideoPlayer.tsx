@@ -260,16 +260,27 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
     import('hls.js').then(({ default: Hls }) => {
       if (!videoRef.current) return
       if (!Hls.isSupported()) { setError('Lecture HD non supportée dans ce navigateur.'); return }
+      let mediaErrorRecovery = 0
       const hls = new Hls({ enableWorker: false, maxBufferLength: 30, manifestLoadingMaxRetry: 3, manifestLoadingRetryDelay: 1000 })
       hdHlsRef.current = hls
       hls.loadSource(hlsUrl); hls.attachMedia(video)
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setLoading(false)
         if (knownDuration) setDuration(knownDuration)
-        if (autoplay) safePlay(video)
+        if (autoplay) {
+          const audio = audioRef.current
+          if (audio) audio.currentTime = startOffset
+          safePlay(video)
+        }
       })
-      hls.on(Hls.Events.ERROR, (_: unknown, data: { fatal: boolean; details: string }) => {
-        if (data.fatal) setError(`Erreur HD : ${data.details}`)
+      hls.on(Hls.Events.ERROR, (_: unknown, data: { fatal: boolean; type: string; details: string }) => {
+        if (!data.fatal) return
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && mediaErrorRecovery < 2) {
+          mediaErrorRecovery++
+          hls.recoverMediaError()
+        } else {
+          setError(`Erreur HD : ${data.details}`)
+        }
       })
     })
   }, [videoId, selectedFormat, knownDuration]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -392,7 +403,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
     setCurrentTime(absoluteTime)
     if (video.buffered.length > 0) setBuffered(hlsStartOffsetRef.current + video.buffered.end(video.buffered.length - 1))
     const audio = audioRef.current
-    if (audio && !audio.paused && Math.abs(audio.currentTime - video.currentTime) > 0.3) audio.currentTime = video.currentTime
+    if (audio && !audio.paused && Math.abs(audio.currentTime - absoluteTime) > 0.3) audio.currentTime = absoluteTime
   }
 
   function handleLoadedMetadata() {
@@ -530,8 +541,14 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
       }}
     >
       {/* Hidden audio — video-only formats */}
-      {audioSrc && !isVideoOnly && (
-        <audio ref={audioRef} src={audioSrc} preload="auto" style={{ display: 'none' }} onSeeked={() => {}} />
+      {audioSrc && (
+        <audio
+          ref={audioRef}
+          src={audioSrc}
+          preload="auto"
+          style={{ display: 'none' }}
+          onCanPlay={() => { if (videoRef.current && !videoRef.current.paused) safePlay(audioRef.current) }}
+        />
       )}
 
       <video
@@ -544,7 +561,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
         preload="auto"
         onPlay={() => { setPlaying(true); safePlay(audioRef.current) }}
         onPause={() => { setPlaying(false); audioRef.current?.pause() }}
-        onSeeked={() => { if (audioRef.current && videoRef.current) audioRef.current.currentTime = videoRef.current.currentTime }}
+        onSeeked={() => { if (audioRef.current && videoRef.current) audioRef.current.currentTime = hlsStartOffsetRef.current + videoRef.current.currentTime }}
         onTimeUpdate={handleTimeUpdate}
         onDurationChange={() => {
           const v = videoRef.current

@@ -60,6 +60,7 @@ export default function TvWatchPage() {
   const audioChangePositionRef = useRef<number>(0)
   const positionRef = useRef<number>(0)
   const durationRef = useRef<number>(0)
+  const audioIdxRef = useRef(0)
 
   function setStartOffsetBoth(val: number) {
     startOffsetRef.current = val
@@ -130,7 +131,7 @@ export default function TvWatchPage() {
     const newStart = Math.max(0, Math.floor(absoluteT))
     setStartOffsetBoth(newStart)
     setLoading(true)
-    const url = `${API_BASE}/api/iptv/vod_hls2/${id}/playlist.m3u8?ext=${ext}&media=${media}&audio_idx=${audioIdx}&start=${newStart}`
+    const url = `${API_BASE}/api/iptv/vod_hls2/${id}/playlist.m3u8?ext=${ext}&media=${media}&audio_idx=${audioIdxRef.current}&start=${newStart}`
     try {
       await player.load(url)
       if (!abortedRef.current) {
@@ -141,7 +142,7 @@ export default function TvWatchPage() {
       console.error('[shaka] seek-to-new-session failed:', e)
       if (!abortedRef.current) setLoading(false)
     }
-  }, [id, ext, media, audioIdx])
+  }, [id, ext, media])
 
   useEffect(() => {
     abortedRef.current = false
@@ -150,6 +151,8 @@ export default function TvWatchPage() {
     setStartOffsetBoth(0)
     totalDurationRef.current = 0
     setTotalDuration(0)
+    audioIdxRef.current = 0
+    setAudioIdx(0)
 
     let loadTimeout: ReturnType<typeof setTimeout> | null = null
     function clearLoadTimeout() {
@@ -222,7 +225,7 @@ export default function TvWatchPage() {
           audioChangePositionRef.current = 0
           setStartOffsetBoth(startSec)
 
-          const hlsUrl = `${API_BASE}/api/iptv/vod_hls2/${id}/playlist.m3u8?ext=${ext}&media=${media}&audio_idx=${audioIdx}&start=${startSec}`
+          const hlsUrl = `${API_BASE}/api/iptv/vod_hls2/${id}/playlist.m3u8?ext=${ext}&media=${media}&audio_idx=${audioIdxRef.current}&start=${startSec}`
           await player.load(hlsUrl)
         }
 
@@ -255,7 +258,7 @@ export default function TvWatchPage() {
       const video = videoRef.current
       if (video) { video.pause(); video.src = '' }
     }
-  }, [id, type, ext, media, t, audioIdx])
+  }, [id, type, ext, media, t])
 
   const isLive = type === 'live'
   const subUrl = subIdx !== null
@@ -283,6 +286,25 @@ export default function TvWatchPage() {
 
   const queueTitle = isLive ? 'Chaînes' : seriesSeason ? `Saison ${seriesSeason}` : 'Épisodes'
   const currentQueueIdx = queue.findIndex(q => q.id === id)
+
+  const handleAudioChange = useCallback(async (newIdx: number) => {
+    if (type === 'live') return
+    const player = playerRef.current
+    const video = videoRef.current
+    if (!player || !video) return
+    audioIdxRef.current = newIdx
+    setAudioIdx(newIdx)
+    const startSec = Math.floor(Math.max(0, positionRef.current))
+    setStartOffsetBoth(startSec)
+    setLoading(true)
+    const url = `${API_BASE}/api/iptv/vod_hls2/${id}/playlist.m3u8?ext=${ext}&media=${media}&audio_idx=${newIdx}&start=${startSec}`
+    try {
+      await player.load(url)
+      if (!abortedRef.current) { setLoading(false); video.play().catch(() => {}) }
+    } catch {
+      if (!abortedRef.current) setLoading(false)
+    }
+  }, [id, type, ext, media])
 
   const handleEnded = useCallback(() => {
     if (isLive || !queue.length) return
@@ -338,7 +360,7 @@ export default function TvWatchPage() {
           subTracks={tracks?.subtitles ?? []}
           audioIdx={audioIdx}
           subIdx={subIdx}
-          onAudioChange={setAudioIdx}
+          onAudioChange={handleAudioChange}
           onSubChange={setSubIdx}
           onTimeUpdate={handleTimeUpdate}
           queue={queue}
