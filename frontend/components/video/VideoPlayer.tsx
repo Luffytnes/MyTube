@@ -252,13 +252,10 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   const startHdHls = useCallback((startOffset: number, autoplay: boolean) => {
     const video = videoRef.current
     if (!video || !selectedFormat) return
+    const hadPreviousSession = !!hdHlsRef.current
     if (hdHlsRef.current) { hdHlsRef.current.destroy(); hdHlsRef.current = null }
-    // Pre-seek audio immediately so it starts buffering while HLS loads
-    const audio = audioRef.current
-    if (audio) audio.currentTime = startOffset
-    // Reset video MSE state to avoid BufferAppendError from stale SourceBuffers
-    video.removeAttribute('src')
-    video.load()
+    // Reset video MSE state only when there was a previous session (prevents BufferAppendError from stale SourceBuffers)
+    if (hadPreviousSession) { video.removeAttribute('src'); video.load() }
     hlsStartOffsetRef.current = startOffset
     const itag = String(selectedFormat.itag)
     const hlsUrl = `${API_BASE}/api/hls/${videoId}/${itag}/stream.m3u8?start=${Math.floor(startOffset)}`
@@ -546,15 +543,9 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
         togglePlay()
       }}
     >
-      {/* Hidden audio — video-only formats */}
-      {audioSrc && (
-        <audio
-          ref={audioRef}
-          src={audioSrc}
-          preload="auto"
-          style={{ display: 'none' }}
-          onCanPlay={() => { if (videoRef.current && !videoRef.current.paused) safePlay(audioRef.current) }}
-        />
+      {/* Hidden audio — video-only formats (unused: HLS stream already muxes audio via ffmpeg) */}
+      {audioSrc && !isVideoOnly && (
+        <audio ref={audioRef} src={audioSrc} preload="auto" style={{ display: 'none' }} />
       )}
 
       <video
@@ -835,15 +826,6 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                       {speed === 1 ? '1×' : `${speed}×`}
                     </button>
                   )}
-                  {!isLive && allVideoFormats.length > 0 && (!isMobile || fullscreen) && (
-                    <button
-                      onClick={e => { e.stopPropagation(); setShowQualityMenu(v => !v); setShowSpeedMenu(false); setShowSubtitleMenu(false) }}
-                      className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${showQualityMenu ? 'bg-red-600 text-white' : 'text-white/80 hover:text-white'}`}
-                      title="Qualité"
-                    >
-                      <Settings className="w-5 h-5" />
-                    </button>
-                  )}
                   {!isLive && (!isMobile || fullscreen) && (
                     <button
                       onClick={e => {
@@ -859,6 +841,15 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                       title="Sous-titres"
                     >
                       <span className="text-xs font-bold leading-none">CC</span>
+                    </button>
+                  )}
+                  {!isLive && allVideoFormats.length > 0 && (!isMobile || fullscreen) && (
+                    <button
+                      onClick={e => { e.stopPropagation(); setShowQualityMenu(v => !v); setShowSpeedMenu(false); setShowSubtitleMenu(false) }}
+                      className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${showQualityMenu ? 'bg-red-600 text-white' : 'text-white/80 hover:text-white'}`}
+                      title="Qualité"
+                    >
+                      <Settings className="w-5 h-5" />
                     </button>
                   )}
                   <button
