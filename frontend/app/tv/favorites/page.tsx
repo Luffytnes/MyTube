@@ -138,7 +138,7 @@ function VodSeriesCard({ fav, onRemove }: { fav: TvFavorite; onRemove: () => voi
           )}
         </Link>
         {noImage && (
-          <p className="text-yt-text text-xs font-medium line-clamp-2 leading-tight mt-1.5 px-0.5">{fav.name}</p>
+          <p className="text-yt-text text-xs font-medium line-clamp-1 mt-1.5 px-0.5">{fav.name}</p>
         )}
         <RemoveBtn onClick={handleRemove} />
       </Card3D>
@@ -191,7 +191,7 @@ function Section({ title, icon, items, onRemove }: { title: string; icon: React.
         {title}
         <span className="text-yt-text-muted text-sm font-normal">({items.length})</span>
       </h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
         {items.map(fav => fav.type === 'live'
           ? <LiveCard key={`${fav.type}-${fav.id}`} fav={fav} onRemove={onRemove} />
           : <VodSeriesCard key={`${fav.type}-${fav.id}`} fav={fav} onRemove={onRemove} />

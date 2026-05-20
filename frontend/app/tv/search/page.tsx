@@ -110,7 +110,7 @@ function TmdbGridCard({ name, type, href, fallbackIcon }: {
           )}
         </Link>
         {noImage && (
-          <p className="text-yt-text text-xs font-medium line-clamp-2 leading-tight mt-1.5 px-0.5">{name}</p>
+          <p className="text-yt-text text-xs font-medium line-clamp-1 mt-1.5 px-0.5">{name}</p>
         )}
       </Card3D>
     </div>
@@ -180,7 +180,7 @@ function TvSearchContent() {
                 <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                 {t('iptv_live')}
               </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                 {liveResults.map(r => {
                   const ch = (r as { kind: 'live'; item: LiveResult }).item
                   return (
@@ -204,7 +204,7 @@ function TvSearchContent() {
           {vodResults.length > 0 && (
             <section>
               <h2 className="text-yt-text text-sm font-semibold uppercase tracking-widest mb-4">Films</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                 {vodResults.map(r => {
                   const v = (r as { kind: 'vod'; item: VodResult }).item
                   return (
@@ -225,7 +225,7 @@ function TvSearchContent() {
           {seriesResults.length > 0 && (
             <section>
               <h2 className="text-yt-text text-sm font-semibold uppercase tracking-widest mb-4">Séries</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                 {seriesResults.map(r => {
                   const s = (r as { kind: 'series'; item: SeriesResult }).item
                   return (

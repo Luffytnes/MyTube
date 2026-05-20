@@ -1636,6 +1636,9 @@ async def hls_stop(video_id: str, itag: str):
     """Kill all ffmpeg sessions for this video+itag and clean up."""
     async with _hls_lock:
         _kill_hls_sessions_for(video_id, itag)
+    # Invalidate stream URL cache so the next session fetches fresh YouTube URLs
+    # (without this, the next session reuses expired URLs → immediate ffmpeg crash → 503)
+    stream_url_cache_invalidate(video_id)
     return {"ok": True}
 
 

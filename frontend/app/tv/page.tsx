@@ -148,7 +148,7 @@ function TmdbGridCard({ name, type, href, favButton, fallbackIcon }: {
           {favButton}
         </Link>
         {noImage && (
-          <p className="text-yt-text text-xs font-medium line-clamp-2 leading-tight mt-1.5 px-0.5">{name}</p>
+          <p className="text-yt-text text-xs font-medium line-clamp-1 mt-1.5 px-0.5">{name}</p>
         )}
       </Card3D>
     </div>
@@ -287,13 +287,13 @@ function CategoryBar({ categories, selectedCat, onSelect }: {
 }
 
 function useColCount(): number {
-  const [cols, setCols] = useState(6)
+  const [cols, setCols] = useState(5)
   useEffect(() => {
     const update = () => {
       const w = window.innerWidth
-      if (w >= 1280) setCols(6)
-      else if (w >= 1024) setCols(5)
-      else if (w >= 768) setCols(4)
+      if (w >= 1280) setCols(5)
+      else if (w >= 1024) setCols(4)
+      else if (w >= 768) setCols(3)
       else if (w >= 640) setCols(3)
       else setCols(2)
     }
@@ -364,7 +364,7 @@ function TmdbSectionRow({ section, onCardClick }: { section: TmdbSectionData; on
         {section.label}
       </h2>
       {section.loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {Array.from({ length: cols }).map((_, i) => (
             <div key={i} className="aspect-[2/3] rounded-xl bg-yt-secondary animate-pulse" />
           ))}
@@ -380,7 +380,7 @@ function TmdbSectionRow({ section, onCardClick }: { section: TmdbSectionData; on
               <ChevronLeft className="w-9 h-9 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]" />
             </button>
           )}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {pageItems.map(item => (
               <TmdbCard
                 key={item.id}
@@ -617,7 +617,7 @@ function ContinueCard({ item, onRemove }: { item: ContinueItem; onRemove: () => 
           )}
         </Link>
         {noImage && (
-          <p className="text-yt-text text-xs font-medium line-clamp-2 leading-tight mt-1.5 px-0.5">{displayName}</p>
+          <p className="text-yt-text text-xs font-medium line-clamp-1 mt-1.5 px-0.5">{displayName}</p>
         )}
         <button
           onClick={handleRemove}
@@ -650,7 +650,7 @@ function ContinueSection({ items, onRemove }: { items: ContinueItem[]; onRemove:
         <Clock className="w-5 h-5 text-yt-red" />
         Continuer à regarder
       </h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
         {deduped.map(item => (
           <ContinueCard key={item.seriesId ?? item.id} item={item} onRemove={onRemove} />
         ))}
@@ -878,7 +878,7 @@ function TvPageContent() {
           </button>
         </div>
       ) : section === 'live' ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {(items as Channel[]).map(ch => (
             <Card3D key={ch.stream_id} className="group relative">
               <Link
@@ -906,7 +906,7 @@ function TvPageContent() {
           ))}
         </div>
       ) : section === 'vod' ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {(items as VodItem[]).map(v => (
             <TmdbGridCard
               key={v.stream_id}
@@ -919,7 +919,7 @@ function TvPageContent() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {(items as SeriesItem[]).map(s => (
             <TmdbGridCard
               key={s.series_id}

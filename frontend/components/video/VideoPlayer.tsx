@@ -136,6 +136,9 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   const justShowedControlsRef = useRef(false)
   const seekBarRef = useRef<HTMLDivElement>(null)
   const seekDragging = useRef(false)
+  const hlsRestartRef = useRef(0)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const startHdHlsRef = useRef<((startOffset: number, autoplay: boolean, isErrorRestart?: boolean) => void) | null>(null)
 
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -249,13 +252,13 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   const streamUrl = selectedFormat ? getStreamUrl(videoId, String(selectedFormat.itag)) : getStreamUrl(videoId)
   const audioSrc = isVideoOnly ? getAudioUrl(videoId) : null
 
-  const startHdHls = useCallback((startOffset: number, autoplay: boolean) => {
+  const startHdHls = useCallback((startOffset: number, autoplay: boolean, isErrorRestart = false) => {
     const video = videoRef.current
     if (!video || !selectedFormat) return
+    if (!isErrorRestart) hlsRestartRef.current = 0
     const hadPreviousSession = !!hdHlsRef.current
     if (hdHlsRef.current) { hdHlsRef.current.destroy(); hdHlsRef.current = null }
-    // Reset video MSE state only when there was a previous session (prevents BufferAppendError from stale SourceBuffers)
-    if (hadPreviousSession) { video.removeAttribute('src'); video.load() }
+    if (hadPreviousSession || isErrorRestart) { video.removeAttribute('src'); video.load() }
     hlsStartOffsetRef.current = startOffset
     const itag = String(selectedFormat.itag)
     const hlsUrl = `${API_BASE}/api/hls/${videoId}/${itag}/stream.m3u8?start=${Math.floor(startOffset)}`
@@ -263,7 +266,8 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
     import('hls.js').then(({ default: Hls }) => {
       if (!videoRef.current) return
       if (!Hls.isSupported()) { setError('Lecture HD non supportée dans ce navigateur.'); return }
-      let mediaErrorRecovery = 0
+      let restartQueued = false
+      let sessionErrors = 0
       const hls = new Hls({ enableWorker: false, maxBufferLength: 30, manifestLoadingMaxRetry: 3, manifestLoadingRetryDelay: 1000 })
       hdHlsRef.current = hls
       hls.loadSource(hlsUrl); hls.attachMedia(video)
@@ -273,20 +277,25 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
         if (autoplay) safePlay(video)
       })
       hls.on(Hls.Events.ERROR, (_: unknown, data: { fatal: boolean; type: string; details: string }) => {
-        if (!data.fatal) return
-        if (mediaErrorRecovery === 0) {
-          mediaErrorRecovery++
+        if (!data.fatal || restartQueued) return
+        sessionErrors++
+        if (sessionErrors === 1 && data.type === 'mediaError') {
           hls.recoverMediaError()
-        } else if (mediaErrorRecovery === 1) {
-          mediaErrorRecovery++
-          hls.swapAudioCodec()
-          hls.recoverMediaError()
+        } else if (hlsRestartRef.current < 2) {
+          restartQueued = true
+          hlsRestartRef.current++
+          hls.destroy()
+          hdHlsRef.current = null
+          const currentPos = hlsStartOffsetRef.current + (videoRef.current?.currentTime ?? 0)
+          fetch(`${API_BASE}/api/hls/${videoId}/${itag}`, { method: 'DELETE' }).catch(() => {})
+          startHdHlsRef.current?.(currentPos, autoplay, true)
         } else {
           setError(`Erreur HD : ${data.details}`)
         }
       })
     })
   }, [videoId, selectedFormat, knownDuration]) // eslint-disable-line react-hooks/exhaustive-deps
+  startHdHlsRef.current = startHdHls
 
   useEffect(() => {
     if (isLive) return
