@@ -161,6 +161,8 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   const [showSubtitleMenu, setShowSubtitleMenu] = useState(false)
   const [scrubRatio, setScrubRatio] = useState<number | null>(null)
   const [hoverRatio, setHoverRatio] = useState<number | null>(null)
+  const [subCues, setSubCues] = useState<Array<{ start: number; end: number; lines: string[] }>>([])
+  const [activeCue, setActiveCue] = useState<string[] | null>(null)
 
   const allVideoFormats = (() => {
     const getHeight = (f: VideoFormat) =>
@@ -188,6 +190,51 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
     }
     setSelectedSubtitle(settings.subtitleLang)
   }, [videoId])
+
+  // Fetch + parse subtitle VTT
+  useEffect(() => {
+    setSubCues([])
+    setActiveCue(null)
+    if (selectedSubtitle === 'off') return
+    let cancelled = false
+    function toSec(t: string): number {
+      const parts = t.trim().split(':').map(Number)
+      return parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts[0] * 60 + parts[1]
+    }
+    fetch(getSubtitleUrl(videoId, selectedSubtitle))
+      .then(r => r.ok ? r.text() : Promise.reject())
+      .then(text => {
+        if (cancelled) return
+        const cues: Array<{ start: number; end: number; lines: string[] }> = []
+        for (const block of text.split(/\n{2,}/)) {
+          const lines = block.trim().split('\n')
+          const ti = lines.findIndex(l => l.includes('-->'))
+          if (ti === -1) continue
+          const [sPart, ePart] = lines[ti].split('-->').map(p => p.trim().split(/\s/)[0])
+          const start = toSec(sPart), end = toSec(ePart)
+          const rawTxt = lines.slice(ti + 1).filter(l => l.trim() && !l.startsWith('NOTE')).join('\n')
+          const txt = rawTxt.replace(/<[^>]*>/g, '').replace(/\{[^}]*\}/g, '').trim()
+          if (txt && !isNaN(start) && !isNaN(end)) cues.push({ start, end, lines: txt.split('\n') })
+        }
+        setSubCues(cues)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [videoId, selectedSubtitle]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update active cue on timeupdate
+  useEffect(() => {
+    if (subCues.length === 0) { setActiveCue(null); return }
+    const video = videoRef.current
+    if (!video) return
+    const onTime = () => {
+      const t = hlsStartOffsetRef.current + (videoRef.current?.currentTime ?? 0)
+      const cue = subCues.find(c => t >= c.start && t < c.end) ?? null
+      setActiveCue(cue ? cue.lines : null)
+    }
+    video.addEventListener('timeupdate', onTime)
+    return () => video.removeEventListener('timeupdate', onTime)
+  }, [subCues]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const settings = getPlaybackSettings()
@@ -590,9 +637,6 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
           }
         }}
       >
-        {selectedSubtitle !== 'off' && (
-          <track key={selectedSubtitle} kind="subtitles" src={getSubtitleUrl(videoId, selectedSubtitle)} label={selectedSubtitle} default />
-        )}
       </video>
 
       {/* Loading spinner */}
@@ -613,6 +657,15 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
           >
             {t('retry')}
           </button>
+        </div>
+      )}
+
+      {/* Subtitle overlay */}
+      {activeCue && !error && (
+        <div className="absolute bottom-20 left-0 right-0 flex justify-center pointer-events-none z-20 px-6">
+          <div className="bg-black/80 text-white text-sm sm:text-base px-4 py-2 rounded-lg text-center max-w-[85%] leading-snug">
+            {activeCue.map((line, i) => <div key={i}>{line}</div>)}
+          </div>
         </div>
       )}
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Tv, Film, Layers, Radio, Star, Play, Clock, TrendingUp, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Tv, Film, Layers, Radio, Star, Play, Clock, TrendingUp, X, ChevronLeft, ChevronRight, ChevronDown, Loader2 } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 import Link from 'next/link'
 import { toggleTvFavorite, isTvFavorite, type TvFavoriteType } from '@/lib/tvFavorites'
@@ -38,6 +38,9 @@ interface TmdbSectionData {
   icon: React.ReactNode
   items: TmdbItem[]
   loading: boolean
+  page: number
+  totalPages: number
+  loadingMore: boolean
 }
 
 function IptvIcon({ src, name }: { src: string; name: string }) {
@@ -349,13 +352,22 @@ function TmdbCard({ item, type, onClick }: { item: TmdbItem; type: 'movie' | 'tv
   )
 }
 
-function TmdbSectionRow({ section, onCardClick }: { section: TmdbSectionData; onCardClick: (item: TmdbItem) => void }) {
+function TmdbSectionRow({ section, onCardClick, onLoadMore }: { section: TmdbSectionData; onCardClick: (item: TmdbItem) => void; onLoadMore: () => void }) {
   const cols = useColCount()
   const [page, setPage] = useState(0)
   const totalPages = Math.ceil(section.items.length / cols)
   const pageItems = section.items.slice(page * cols, (page + 1) * cols)
 
   useEffect(() => { setPage(0) }, [cols])
+
+  // Auto-advance to the first newly loaded page when items are appended
+  const prevItemCount = useRef(section.items.length)
+  useEffect(() => {
+    if (section.items.length > prevItemCount.current) {
+      setPage(Math.floor(prevItemCount.current / cols))
+    }
+    prevItemCount.current = section.items.length
+  }, [section.items.length, cols])
 
   return (
     <div className="mb-10">
@@ -390,13 +402,19 @@ function TmdbSectionRow({ section, onCardClick }: { section: TmdbSectionData; on
               />
             ))}
           </div>
-          {page < totalPages - 1 && (
+          {(page < totalPages - 1 || section.page < section.totalPages) && (
             <button
-              onClick={() => setPage(p => p + 1)}
-              className="absolute right-0 top-0 bottom-0 z-10 w-14 flex items-center justify-center bg-gradient-to-l from-yt-bg via-yt-bg/80 to-transparent rounded-r-xl transition-opacity hover:from-yt-bg"
+              onClick={() => {
+                if (page < totalPages - 1) setPage(p => p + 1)
+                else onLoadMore()
+              }}
+              disabled={section.loadingMore}
+              className="absolute right-0 top-0 bottom-0 z-10 w-14 flex items-center justify-center bg-gradient-to-l from-yt-bg via-yt-bg/80 to-transparent rounded-r-xl transition-opacity hover:from-yt-bg disabled:opacity-60"
               aria-label="Page suivante"
             >
-              <ChevronRight className="w-9 h-9 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]" />
+              {section.loadingMore && page === totalPages - 1
+                ? <Loader2 className="w-6 h-6 text-white animate-spin drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]" />
+                : <ChevronRight className="w-9 h-9 text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]" />}
             </button>
           )}
         </div>
@@ -684,7 +702,7 @@ function TvPageContent() {
   const [continueItems, setContinueItems] = useState<ContinueItem[]>([])
 
   const [tmdbSections, setTmdbSections] = useState<TmdbSectionData[]>(
-    TMDB_SECTIONS.map(s => ({ ...s, items: [], loading: true }))
+    TMDB_SECTIONS.map(s => ({ ...s, items: [], loading: true, page: 1, totalPages: 1, loadingMore: false }))
   )
   const [tmdbKeySet, setTmdbKeySet] = useState<boolean | null>(null)
   const [modal, setModal] = useState<{ item: TmdbItem; type: 'movie' | 'tv' } | null>(null)
@@ -733,7 +751,7 @@ function TvPageContent() {
             .then(r => r.ok ? r.json() : null)
             .then(data => {
               setTmdbSections(prev => prev.map((s, i) =>
-                i === idx ? { ...s, items: data?.results?.slice(0, 20) ?? [], loading: false } : s
+                i === idx ? { ...s, items: data?.results ?? [], loading: false, page: 1, totalPages: data?.total_pages ?? 1 } : s
               ))
             })
             .catch(() => {
@@ -748,6 +766,23 @@ function TvPageContent() {
         setTmdbSections(prev => prev.map(s => ({ ...s, loading: false })))
       })
   }, [])
+
+  const handleLoadMore = useCallback((idx: number) => {
+    const section = tmdbSections[idx]
+    if (!section || section.loadingMore || section.page >= section.totalPages) return
+    const nextPage = section.page + 1
+    setTmdbSections(prev => prev.map((s, i) => i === idx ? { ...s, loadingMore: true } : s))
+    fetch(`${API_BASE}/api/tmdb/discover?type=${section.type}&list=${section.list}&page=${nextPage}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        setTmdbSections(cur => cur.map((s, i) =>
+          i === idx ? { ...s, items: [...s.items, ...(data?.results ?? [])], page: nextPage, loadingMore: false } : s
+        ))
+      })
+      .catch(() => {
+        setTmdbSections(cur => cur.map((s, i) => i === idx ? { ...s, loadingMore: false } : s))
+      })
+  }, [tmdbSections])
 
   const loadCategories = useCallback(async (sec: Section, savedCat?: string | null) => {
     setLoadingCats(true)
@@ -838,11 +873,12 @@ function TvPageContent() {
             <p>Configurez votre clé TMDB dans les paramètres pour découvrir films et séries.</p>
           </div>
         ) : (
-          tmdbSections.map(section => (
+          tmdbSections.map((section, idx) => (
             <TmdbSectionRow
               key={section.key}
               section={section}
               onCardClick={item => setModal({ item, type: section.type })}
+              onLoadMore={() => handleLoadMore(idx)}
             />
           ))
         )}
