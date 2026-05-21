@@ -261,9 +261,6 @@ export default function TvWatchPage() {
   }, [id, type, ext, media, t])
 
   const isLive = type === 'live'
-  const subUrl = subIdx !== null
-    ? `${API_BASE}/api/iptv/vod_subtitle/${id}?ext=${ext}&media=${media}&sub_idx=${subIdx}`
-    : null
 
   const queue: { id: string; label: string; sublabel?: string; href: string; icon?: string }[] = isLive
     ? queueChannels.map(ch => ({
@@ -305,6 +302,10 @@ export default function TvWatchPage() {
       if (!abortedRef.current) setLoading(false)
     }
   }, [id, type, ext, media])
+
+  const subUrl = type !== 'live' && subIdx !== null
+    ? `${API_BASE}/api/iptv/vod_subtitle/${id}?ext=${ext}&media=${media}&sub_idx=${subIdx}`
+    : null
 
   const handleEnded = useCallback(() => {
     if (isLive || !queue.length) return
@@ -355,11 +356,11 @@ export default function TvWatchPage() {
           error={error}
           onErrorBack={() => router.back()}
           title={name}
-          subUrl={subUrl}
           audioTracks={tracks?.audio ?? []}
           subTracks={tracks?.subtitles ?? []}
           audioIdx={audioIdx}
           subIdx={subIdx}
+          subUrl={subUrl}
           onAudioChange={handleAudioChange}
           onSubChange={setSubIdx}
           onTimeUpdate={handleTimeUpdate}

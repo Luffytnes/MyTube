@@ -29,7 +29,9 @@ export default function IPTVWatchPage() {
   const abortedRef = useRef(false)
   const audioChangePositionRef = useRef<number>(0)
   const positionRef = useRef<number>(0)
+  const startOffsetRef = useRef(0)
   const audioIdxRef = useRef(0)
+  const [startOffset, setStartOffset] = useState(0)
 
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -104,6 +106,8 @@ export default function IPTVWatchPage() {
         } else {
           const startSec = audioChangePositionRef.current > 0 ? Math.floor(audioChangePositionRef.current) : 0
           audioChangePositionRef.current = 0
+          startOffsetRef.current = startSec
+          setStartOffset(startSec)
           const hlsUrl = `${API_BASE}/api/iptv/vod_hls2/${id}/playlist.m3u8?ext=${ext}&media=${media}&audio_idx=${audioIdxRef.current}&start=${startSec}`
           try {
             await player.load(hlsUrl)
@@ -148,6 +152,8 @@ export default function IPTVWatchPage() {
     audioIdxRef.current = newIdx
     setAudioIdx(newIdx)
     const startSec = Math.floor(Math.max(0, positionRef.current))
+    startOffsetRef.current = startSec
+    setStartOffset(startSec)
     setLoading(true)
     const url = `${API_BASE}/api/iptv/vod_hls2/${id}/playlist.m3u8?ext=${ext}&media=${media}&audio_idx=${newIdx}&start=${startSec}`
     try {
@@ -158,14 +164,14 @@ export default function IPTVWatchPage() {
     }
   }, [id, type, ext, media])
 
-  const handleTimeUpdate = useCallback(() => {
-    if (type === 'live' || !videoRef.current) return
-    positionRef.current = videoRef.current.currentTime
-  }, [type])
-
-  const subUrl = subIdx !== null
+  const subUrl = type !== 'live' && subIdx !== null
     ? `${API_BASE}/api/iptv/vod_subtitle/${id}?ext=${ext}&media=${media}&sub_idx=${subIdx}`
     : null
+
+  const handleTimeUpdate = useCallback(() => {
+    if (type === 'live' || !videoRef.current) return
+    positionRef.current = startOffsetRef.current + videoRef.current.currentTime
+  }, [type])
 
   const isLive = type === 'live'
 
@@ -206,14 +212,15 @@ export default function IPTVWatchPage() {
           error={error}
           onErrorBack={() => router.back()}
           title={name}
-          subUrl={subUrl}
           audioTracks={tracks?.audio ?? []}
           subTracks={tracks?.subtitles ?? []}
           audioIdx={audioIdx}
           subIdx={subIdx}
+          subUrl={subUrl}
           onAudioChange={handleAudioChange}
           onSubChange={setSubIdx}
           onTimeUpdate={handleTimeUpdate}
+          timeOffset={startOffset}
         />
       </div>
     </div>

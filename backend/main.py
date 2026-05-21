@@ -1653,30 +1653,113 @@ _iptv_vod_hls_sessions: Dict[str, Dict[str, Any]] = {}
 _iptv_vod_hls_lock = asyncio.Lock()
 
 
+def _kill_vod_session(sess: Dict[str, Any]) -> None:
+    """Cancel the pipe task and close stdin before killing ffmpeg to avoid BrokenPipeError."""
+    pt = sess.get("pipe_task")
+    if pt and not pt.done():
+        pt.cancel()
+    proc = sess["process"]
+    try:
+        if proc.stdin and not proc.stdin.is_closing():
+            proc.stdin.close()
+    except Exception:
+        pass
+    try:
+        proc.kill()
+    except Exception:
+        pass
+    shutil.rmtree(sess["dir"], ignore_errors=True)
+
+
+async def _probe_vod_duration(path: str) -> float:
+    """Quick ffprobe to read duration from local file. Returns 0.0 on failure."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=8.0)
+        text = stdout.decode().strip()
+        return float(text) if text else 0.0
+    except Exception:
+        return 0.0
+
+
+async def _choose_ffmpeg_input(vod_entry: dict, cache_path: str, start: int) -> tuple:
+    """Pick the fastest ffmpeg input strategy for this start position.
+
+    For start > 0 with a partial cache, estimates the seek byte offset,
+    waits (up to 60s) for the download to cover it, then returns file-input
+    args so ffmpeg can use the MKV cue table for a near-instant seek instead
+    of reading the entire file linearly through a pipe.
+    """
+    seek = ["-ss", str(start)] if start > 0 else []
+    cache_done = (
+        vod_entry.get("done", False)
+        and bool(cache_path) and os.path.exists(cache_path)
+        and os.path.getsize(cache_path) > 0
+    )
+
+    if cache_done:
+        return [*seek, "-i", cache_path], False
+
+    if not cache_path or not os.path.exists(cache_path) or start == 0:
+        return ["-fflags", "+ignidx", *seek, "-i", "pipe:0"], True
+
+    # start > 0, partial cache — try to fast-seek via file input
+    total_size = vod_entry.get("total_size", 0)
+    if total_size > 0 and vod_entry.get("written", 0) >= 5 * 1024 * 1024:
+        duration = await _probe_vod_duration(cache_path)
+        if duration > 1.0:
+            seek_byte = int(start / duration * total_size)
+            # 20 MB safety buffer so ffmpeg isn't reading at the exact frontier
+            target = min(seek_byte + 20 * 1024 * 1024, total_size)
+            deadline = asyncio.get_event_loop().time() + 60
+            while (
+                vod_entry.get("written", 0) < target
+                and not vod_entry.get("done")
+                and asyncio.get_event_loop().time() < deadline
+            ):
+                await asyncio.sleep(0.5)
+            if vod_entry.get("written", 0) >= seek_byte or vod_entry.get("done"):
+                print(
+                    f"[vod_hls] seek={start}s seek_byte={seek_byte//1024//1024}MB "
+                    f"written={vod_entry['written']//1024//1024}MB → file seek",
+                    flush=True,
+                )
+                return [*seek, "-i", cache_path], False
+
+    return ["-fflags", "+ignidx", *seek, "-i", "pipe:0"], True
+
+
 async def _start_iptv_vod_hls_session(
     stream_id: str, ext: str, media: str, audio_idx: int, start: int
 ) -> Dict[str, Any]:
     session_key = f"{stream_id}:{ext}:{media}:{audio_idx}:{start}"
+
+    # Fast path: session already exists
     async with _iptv_vod_hls_lock:
         if session_key in _iptv_vod_hls_sessions:
             return _iptv_vod_hls_sessions[session_key]
 
-        s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
-        src = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
+    # Heavy work outside the lock so we don't block other session creation
+    s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
+    src = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
+    vod_entry = await _ensure_vod_download(f"{stream_id}.{ext}", src)
+    cache_path = vod_entry.get("path", "")
 
-        vod_entry = await _ensure_vod_download(f"{stream_id}.{ext}", src)
-        cache_path = vod_entry.get("path", "")
-        cache_done = vod_entry.get("done", False) and bool(cache_path) and os.path.exists(cache_path) and os.path.getsize(cache_path) > 0
+    input_args, use_pipe = await _choose_ffmpeg_input(vod_entry, cache_path, start)
+
+    async with _iptv_vod_hls_lock:
+        # Double-check: another concurrent request might have created this session
+        if session_key in _iptv_vod_hls_sessions:
+            return _iptv_vod_hls_sessions[session_key]
 
         tmpdir = tempfile.mkdtemp(prefix="mytube_iptv_hls_")
-
-        seek = ["-ss", str(start)] if start > 0 else []
-        if cache_done:
-            input_args = [*seek, "-i", cache_path]
-            use_pipe = False
-        else:
-            input_args = ["-fflags", "+ignidx", *seek, "-i", "pipe:0"]
-            use_pipe = True
 
         cmd = [
             _FFMPEG, "-loglevel", "error",
@@ -1702,10 +1785,12 @@ async def _start_iptv_vod_hls_session(
             stderr=asyncio.subprocess.PIPE,
         )
         asyncio.ensure_future(_log_stderr(proc.stderr))
+        pipe_task = None
         if use_pipe:
-            asyncio.ensure_future(_pipe_from_vod_cache(vod_entry, proc.stdin, 0))
+            pipe_task = asyncio.ensure_future(_pipe_from_vod_cache(vod_entry, proc.stdin, 0))
+            pipe_task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
 
-        session = {"dir": tmpdir, "process": proc, "start": start, "key": session_key}
+        session = {"dir": tmpdir, "process": proc, "pipe_task": pipe_task, "start": start, "key": session_key}
         _iptv_vod_hls_sessions[session_key] = session
         return session
 
@@ -1728,10 +1813,7 @@ async def iptv_vod_hls2_playlist(
         to_kill = [k for k in _iptv_vod_hls_sessions
                    if k.startswith(f"{stream_id}:") and k != session_key]
         for k in to_kill:
-            sess = _iptv_vod_hls_sessions.pop(k)
-            try: sess["process"].kill()
-            except Exception: pass
-            shutil.rmtree(sess["dir"], ignore_errors=True)
+            _kill_vod_session(_iptv_vod_hls_sessions.pop(k))
 
     try:
         session = await _start_iptv_vod_hls_session(stream_id, ext, media, audio_idx, start)
@@ -1747,6 +1829,9 @@ async def iptv_vod_hls2_playlist(
         if proc.returncode is not None and proc.returncode != 0:
             async with _iptv_vod_hls_lock:
                 _iptv_vod_hls_sessions.pop(session["key"], None)
+            pt = session.get("pipe_task")
+            if pt and not pt.done():
+                pt.cancel()
             shutil.rmtree(session["dir"], ignore_errors=True)
             raise HTTPException(status_code=503, detail="ffmpeg failed to start")
         await asyncio.sleep(0.1)
@@ -1755,12 +1840,16 @@ async def iptv_vod_hls2_playlist(
 
     content = playlist_path.read_text()
     base = str(request.base_url).rstrip("/")
+    seg_base = f"{base}/api/iptv/vod_hls2/{stream_id}/{start}"
+    qs = f"ext={ext}&media={media}&audio_idx={audio_idx}"
+
     content = re.sub(
         r"^(seg\d+\.ts)$",
-        lambda m: f"{base}/api/iptv/vod_hls2/{stream_id}/{start}/{m.group(1)}?ext={ext}&media={media}&audio_idx={audio_idx}",
+        lambda m: f"{seg_base}/{m.group(1)}?{qs}",
         content,
         flags=re.MULTILINE,
     )
+
     return Response(
         content=content,
         media_type="application/vnd.apple.mpegurl",
@@ -1775,17 +1864,23 @@ async def iptv_vod_hls2_segment(
 ):
     if not re.match(r"^seg\d+\.ts$", segment):
         raise HTTPException(status_code=400, detail="Invalid segment")
+
     session_key = f"{stream_id}:{ext}:{media}:{audio_idx}:{start}"
     session = _iptv_vod_hls_sessions.get(session_key)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found or expired")
+
     seg_path = Path(session["dir"]) / segment
+
     for _ in range(100):
         if seg_path.exists() and seg_path.stat().st_size > 0:
             return FileResponse(
                 seg_path, media_type="video/mp2t",
-                headers={"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"},
+                headers={"Cache-Control": "public, max-age=31536000", "Access-Control-Allow-Origin": "*"},
             )
+        proc = session["process"]
+        if proc.returncode is not None and proc.returncode != 0:
+            raise HTTPException(status_code=503, detail="ffmpeg terminated")
         await asyncio.sleep(0.1)
     raise HTTPException(status_code=404, detail="Segment not ready")
 
@@ -4357,33 +4452,76 @@ async def iptv_vod_tracks(stream_id: str, ext: str = "mp4", media: str = "movie"
     except Exception:
         pass
 
+    # Codecs image-based qui ne peuvent pas être convertis en WebVTT texte
+    _IMAGE_SUB_CODECS = {"hdmv_pgs_subtitle", "dvd_subtitle", "dvb_subtitle", "xsub", "pgssub", "dvb_teletext"}
+
     audio, subtitles, a_idx, s_idx = [], [], 0, 0
     for stream in streams:
         ctype = stream.get("codec_type", "")
         tags = stream.get("tags", {})
-        lang = tags.get("language") or tags.get("lang") or ""
+        lang = (tags.get("language") or tags.get("lang") or "").upper()
         title = tags.get("title") or tags.get("handler_name") or ""
+        codec = stream.get("codec_name", "")
+        disposition = stream.get("disposition", {})
         if ctype == "audio":
-            audio.append({"index": a_idx, "language": lang, "title": title, "codec": stream.get("codec_name", ""), "channels": stream.get("channels", 2)})
+            audio.append({"index": a_idx, "language": lang, "title": title, "codec": codec, "channels": stream.get("channels", 2)})
             a_idx += 1
         elif ctype == "subtitle":
-            subtitles.append({"index": s_idx, "language": lang, "title": title, "codec": stream.get("codec_name", "")})
-            s_idx += 1
+            if codec not in _IMAGE_SUB_CODECS:
+                forced = bool(disposition.get("forced", 0))
+                display_title = f"{title} (Forcé)" if forced and title else ("Forcé" if forced else title)
+                subtitles.append({"index": s_idx, "language": lang, "title": display_title, "codec": codec})
+            s_idx += 1  # toujours incrémenter pour conserver l'index ffmpeg correct
+
+    # Dédupliquer les libellés identiques (ex: deux pistes "FRE" sans titre)
+    label_count: dict = {}
+    for sub in subtitles:
+        key = f"{sub['language']}|{sub['title']}"
+        label_count[key] = label_count.get(key, 0) + 1
+    label_seen: dict = {}
+    for sub in subtitles:
+        key = f"{sub['language']}|{sub['title']}"
+        if label_count[key] > 1:
+            label_seen[key] = label_seen.get(key, 0) + 1
+            suffix = str(label_seen[key])
+            sub["title"] = f"{sub['title']} {suffix}".strip() if sub["title"] else suffix
+
     return {"audio": audio, "subtitles": subtitles}
 
 
 @app.get("/api/iptv/vod_subtitle/{stream_id}")
 async def iptv_vod_subtitle(stream_id: str, ext: str = "mp4", media: str = "movie", sub_idx: int = 0):
-    """Extract an embedded subtitle track as WebVTT (buffered, text subs only)."""
+    """Extract an embedded subtitle track as WebVTT.
+
+    Uses the local vod_cache file when available (shared with the HLS session),
+    which is orders of magnitude faster than reading from the remote URL.
+    """
     if not _xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
     s, u, p = _xtream_cfg["server"], _xtream_cfg["username"], _xtream_cfg["password"]
-    url = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
+    remote_url = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
+
+    # Prefer the local cache file (already being downloaded by the HLS session).
+    # Even a partial file lets ffmpeg seek via the MKV cues element instantly.
+    cache_key = f"{stream_id}.{ext}"
+    vod_entry = _vod_dl_cache.get(cache_key)
+    if not vod_entry:
+        vod_entry = await _ensure_vod_download(cache_key, remote_url)
+
+    cache_path = vod_entry.get("path", "")
+    cache_written = vod_entry.get("written", 0)
+    use_local = (
+        bool(cache_path)
+        and os.path.exists(cache_path)
+        and cache_written >= 10 * 1024 * 1024  # at least 10 MB (covers MKV headers + index)
+    )
+    src = cache_path if use_local else remote_url
+
     cmd = [
         _FFMPEG, "-loglevel", "error",
-        "-seekable", "0", "-i", url,
+        "-i", src,
         "-map", f"0:s:{sub_idx}",
-        "-vn", "-an",  # skip video/audio decoding — subtitle only
+        "-vn", "-an",
         "-f", "webvtt",
         "pipe:1",
     ]
@@ -4396,7 +4534,8 @@ async def iptv_vod_subtitle(stream_id: str, ext: str = "mp4", media: str = "movi
             cwd="/tmp",
         )
         try:
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30.0)
+            timeout = 15.0 if use_local else 60.0
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         except asyncio.TimeoutError:
             try: proc.kill()
             except Exception: pass
@@ -4900,6 +5039,16 @@ async def _download_to_file(url: str, path: str, entry: dict) -> None:
                                 break
                             if resp.status_code == 200 and offset > 0:
                                 break
+                            if not entry.get("total_size"):
+                                cl = int(resp.headers.get("content-length", 0) or 0)
+                                cr = resp.headers.get("content-range", "")
+                                if cr and "/" in cr:
+                                    try:
+                                        cl = int(cr.split("/")[-1].strip())
+                                    except Exception:
+                                        pass
+                                if cl > 0:
+                                    entry["total_size"] = cl
                             async for chunk in resp.aiter_bytes(65536):
                                 f.write(chunk)
                                 f.flush()
@@ -4936,7 +5085,7 @@ async def _ensure_vod_download(cache_key: str, url: str) -> dict:
             return entry
     import tempfile as _tempfile
     path = os.path.join(_tempfile.gettempdir(), f"mytube_{cache_key}")
-    entry: dict = {"path": path, "written": 0, "done": False, "event": asyncio.Event(), "task": None}
+    entry: dict = {"path": path, "written": 0, "done": False, "total_size": 0, "event": asyncio.Event(), "task": None}
     _vod_dl_cache[cache_key] = entry
     entry["task"] = asyncio.create_task(_download_to_file(url, path, entry))
     return entry

@@ -8,19 +8,30 @@ import {
 } from 'lucide-react'
 import VolumeSlider from '@/components/ui/VolumeSlider'
 
-function shiftVTTTimestamps(vtt: string, shiftSeconds: number): string {
-  function parseT(t: string): number {
-    const parts = t.split(':').map(Number)
-    return parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts[0] * 60 + parts[1]
+interface SubCue { start: number; end: number; lines: string[] }
+
+function toSec(ts: string): number {
+  const parts = ts.trim().split(':')
+  return parts.length === 3
+    ? +parts[0] * 3600 + +parts[1] * 60 + parseFloat(parts[2].replace(',', '.'))
+    : +parts[0] * 60 + parseFloat(parts[1].replace(',', '.'))
+}
+
+function cleanVTTText(text: string): string {
+  return text.replace(/<[^>]*>/g, '').replace(/\{[^}]*\}/g, '').trim()
+}
+
+function parseVTT(text: string): SubCue[] {
+  const cues: SubCue[] = []
+  for (const block of text.split(/\n\n+/)) {
+    const lines = block.trim().split('\n')
+    const ai = lines.findIndex(l => l.includes('-->'))
+    if (ai < 0) continue
+    const [s, e] = lines[ai].split('-->').map(p => p.trim())
+    const textLines = lines.slice(ai + 1).map(cleanVTTText).filter(Boolean)
+    if (textLines.length) cues.push({ start: toSec(s), end: toSec(e), lines: textLines })
   }
-  function fmtT(s: number): string {
-    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60
-    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${sec.toFixed(3).padStart(6,'0')}`
-  }
-  return vtt.replace(
-    /(\d{2}:\d{2}:\d{2}\.\d{3}|\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}\.\d{3}|\d{2}:\d{2}\.\d{3})(.*)/g,
-    (_, s, e, rest) => `${fmtT(Math.max(0, parseT(s) - shiftSeconds))} --> ${fmtT(Math.max(0, parseT(e) - shiftSeconds))}${rest}`
-  )
+  return cues
 }
 
 function fmt(sec: number): string {
@@ -114,11 +125,11 @@ export interface TvVideoPlayerProps {
   error: string | null
   onErrorBack: () => void
   title?: string
-  subUrl?: string | null
   audioTracks?: Track[]
   subTracks?: Track[]
   audioIdx?: number
   subIdx?: number | null
+  subUrl?: string | null
   onAudioChange?: (idx: number) => void
   onSubChange?: (idx: number | null) => void
   onTimeUpdate?: () => void
@@ -136,9 +147,9 @@ export interface TvVideoPlayerProps {
 export default function TvVideoPlayer({
   videoRef, loading, error, onErrorBack,
   title,
-  subUrl,
   audioTracks = [], subTracks = [],
   audioIdx = 0, subIdx = null,
+  subUrl = null,
   onAudioChange, onSubChange,
   onTimeUpdate,
   queue = [], currentQueueId, queueTitle = 'Liste de lecture',
@@ -157,7 +168,10 @@ export default function TvVideoPlayer({
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showQueue, setShowQueue] = useState(false)
   const [openPanel, setOpenPanel] = useState<'audio' | 'sub' | null>(null)
+  const [activeCue, setActiveCue] = useState<string[] | null>(null)
 
+  const subCuesRef = useRef<SubCue[]>([])
+  const timeOffsetRef = useRef(timeOffset)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dragging = useRef(false)
   const showQueueRef = useRef(false)
@@ -175,7 +189,13 @@ export default function TvVideoPlayer({
   useEffect(() => {
     const v = videoRef.current
     if (!v) return
-    const onTime = () => { setCurrentTime(v.currentTime); onTimeUpdate?.() }
+    const onTime = () => {
+      setCurrentTime(v.currentTime)
+      onTimeUpdate?.()
+      const t = v.currentTime + timeOffsetRef.current
+      const cue = subCuesRef.current.find(c => t >= c.start && t <= c.end) ?? null
+      setActiveCue(cue ? cue.lines : null)
+    }
     const onDur = () => setDuration(isFinite(v.duration) && v.duration > 0 ? v.duration : 0)
     const onPlay = () => { setPlaying(true); setWaiting(false) }
     const onPause = () => setPlaying(false)
@@ -215,43 +235,21 @@ export default function TvVideoPlayer({
     return () => document.removeEventListener('fullscreenchange', fn)
   }, [])
 
-  // Subtitle track — fetched via JS to bypass CORS on <track>, timestamps shifted to match HLS offset
+  // Keep timeOffsetRef in sync so the stale onTime closure always has the latest offset
+  useEffect(() => { timeOffsetRef.current = timeOffset }, [timeOffset])
+
+  // Fetch and parse WebVTT subtitle file when subUrl changes
   useEffect(() => {
-    const v = videoRef.current
-    if (!v) return
-    Array.from(v.querySelectorAll('track[kind="subtitles"]')).forEach(t => t.remove())
-    Array.from(v.textTracks).forEach(t => { t.mode = 'disabled' })
+    subCuesRef.current = []
+    setActiveCue(null)
     if (!subUrl) return
-
     let cancelled = false
-    let blobUrl: string | null = null
-    let el: HTMLTrackElement | null = null
-
     fetch(subUrl)
-      .then(r => r.ok ? r.text() : Promise.reject('fetch failed'))
-      .then(text => {
-        if (cancelled || !v) return
-        // Shift VTT timestamps backward by timeOffset so cues match HLS session start
-        const shifted = timeOffset > 0 ? shiftVTTTimestamps(text, timeOffset) : text
-        const blob = new Blob([shifted], { type: 'text/vtt' })
-        blobUrl = URL.createObjectURL(blob)
-        el = document.createElement('track')
-        el.kind = 'subtitles'
-        el.src = blobUrl
-        v.appendChild(el)
-        const show = () => { if (el) el.track.mode = 'showing' }
-        el.addEventListener('load', show, { once: true })
-        setTimeout(show, 200)
-      })
+      .then(r => r.text())
+      .then(text => { if (!cancelled) subCuesRef.current = parseVTT(text) })
       .catch(() => {})
-
-    return () => {
-      cancelled = true
-      el?.remove()
-      if (blobUrl) URL.revokeObjectURL(blobUrl)
-      if (v) Array.from(v.textTracks).forEach(t => { t.mode = 'disabled' })
-    }
-  }, [subUrl, timeOffset, videoRef])
+    return () => { cancelled = true }
+  }, [subUrl])
 
   // Scroll to active queue item on open
   useEffect(() => {
@@ -380,6 +378,15 @@ export default function TvVideoPlayer({
           <button onClick={onErrorBack} className="px-4 py-2 bg-white/20 rounded-full text-sm hover:bg-white/30 transition-colors">
             Retour
           </button>
+        </div>
+      )}
+
+      {/* Subtitle overlay */}
+      {activeCue && (
+        <div className="absolute bottom-20 left-0 right-0 flex justify-center pointer-events-none z-20 px-6">
+          <div className="bg-black/80 text-white text-sm sm:text-base px-4 py-2 rounded-lg text-center max-w-[85%] leading-snug">
+            {activeCue.map((line, i) => <div key={i}>{line}</div>)}
+          </div>
         </div>
       )}
 
