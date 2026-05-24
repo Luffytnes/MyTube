@@ -1268,7 +1268,7 @@ async def get_video(video_id: str):
         raise
     except Exception as e:
         msg = str(e).lower()
-        if any(k in msg for k in ("not available", "private video", "has been removed", "age-restricted", "sign in", "unavailable")):
+        if any(k in msg for k in ("not available", "private video", "has been removed", "age-restricted", "sign in", "unavailable", "your country", "not made this video", "geo", "blocked")):
             raise HTTPException(status_code=404, detail="This video is unavailable in your region or has been removed.")
         raise HTTPException(status_code=500, detail=f"Failed to get video info: {str(e)}")
 

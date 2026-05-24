@@ -1,9 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { X, Loader2, AlertCircle } from 'lucide-react'
-import VideoPlayer from '@/components/video/VideoPlayer'
-import type { VideoFormat } from '@/lib/api'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -14,9 +12,9 @@ interface Props {
 }
 
 export default function TrailerModal({ videoId, title, onClose }: Props) {
-  const [formats, setFormats] = useState<VideoFormat[] | null>(null)
-  const [duration, setDuration] = useState<number | undefined>(undefined)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -30,19 +28,8 @@ export default function TrailerModal({ videoId, title, onClose }: Props) {
   }, [])
 
   useEffect(() => {
-    setFormats(null)
+    setLoading(true)
     setError(false)
-    fetch(`${API_BASE}/api/video/${videoId}`)
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(data => {
-        setFormats(data.formats ?? [])
-        if (data.duration) {
-          const secs = (data.duration as string).split(':').reverse()
-            .reduce((acc: number, v: string, i: number) => acc + parseInt(v) * Math.pow(60, i), 0)
-          setDuration(secs)
-        }
-      })
-      .catch(() => setError(true))
   }, [videoId])
 
   return (
@@ -54,7 +41,6 @@ export default function TrailerModal({ videoId, title, onClose }: Props) {
         className="relative w-full max-w-5xl aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
-        {/* Close button — always on top */}
         <button
           onClick={onClose}
           className="absolute top-3 right-3 z-30 p-2 rounded-full bg-black/60 hover:bg-black/90 text-white transition-colors"
@@ -62,32 +48,32 @@ export default function TrailerModal({ videoId, title, onClose }: Props) {
           <X className="w-5 h-5" />
         </button>
 
-        {/* Loading */}
-        {!formats && !error && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white bg-black z-[2]">
+        {loading && !error && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white bg-black z-[2] pointer-events-none">
             <Loader2 className="w-8 h-8 animate-spin" />
             <p className="text-sm text-white/60">Chargement…</p>
           </div>
         )}
 
-        {/* Error */}
         {error && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white/60 bg-black z-[2]">
             <AlertCircle className="w-8 h-8" />
-            <p className="text-sm">Impossible de charger la vidéo</p>
+            <p className="text-sm">Vidéo non disponible dans votre région</p>
           </div>
         )}
 
-        {/* Player — même composant que la page watch */}
-        {formats && (
-          <div className="w-full h-full">
-            <VideoPlayer
-              videoId={videoId}
-              formats={formats}
-              title={title}
-              knownDuration={duration}
-            />
-          </div>
+        {!error && (
+          <video
+            ref={videoRef}
+            key={videoId}
+            src={`${API_BASE}/api/trailer/${videoId}`}
+            controls
+            autoPlay
+            title={title}
+            className="w-full h-full"
+            onCanPlay={() => setLoading(false)}
+            onError={() => { setLoading(false); setError(true) }}
+          />
         )}
       </div>
     </div>
