@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Film, Layers, Radio, Star, Play, SortAsc, SortDesc } from 'lucide-react'
+import { Search, Film, Layers, Radio, Star, Play, SortAsc, Tag } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
@@ -13,12 +13,42 @@ interface VodResult    { stream_id: number; name: string; stream_icon: string; c
 interface SeriesResult { series_id: number; name: string; cover: string }
 interface Category     { category_id: string; category_name: string }
 
+interface CategoryGroup {
+  kind: 'vod-cat' | 'series-cat'
+  category: Category
+  items: (VodResult | SeriesResult)[]
+}
+
 type AnyResult =
-  | { kind: 'live';   item: LiveResult;   rating?: number | null }
+  | { kind: 'live';   item: LiveResult }
   | { kind: 'vod';    item: VodResult;    rating?: number | null }
   | { kind: 'series'; item: SeriesResult; rating?: number | null }
 
 type SortMode = 'default' | 'az' | 'rating'
+
+// Category cache to avoid re-fetching on every keystroke
+let _vodCatsCache: Category[] | null = null
+let _seriesCatsCache: Category[] | null = null
+
+async function getVodCats(): Promise<Category[]> {
+  if (_vodCatsCache) return _vodCatsCache
+  try {
+    const r = await fetch(`${API_BASE}/api/iptv/vod_categories`)
+    const d = r.ok ? await r.json() : []
+    _vodCatsCache = Array.isArray(d) ? d : []
+    return _vodCatsCache
+  } catch { return [] }
+}
+
+async function getSeriesCats(): Promise<Category[]> {
+  if (_seriesCatsCache) return _seriesCatsCache
+  try {
+    const r = await fetch(`${API_BASE}/api/iptv/series_categories`)
+    const d = r.ok ? await r.json() : []
+    _seriesCatsCache = Array.isArray(d) ? d : []
+    return _seriesCatsCache
+  } catch { return [] }
+}
 
 function Card3D({ children, className }: { children: React.ReactNode; className?: string }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -132,11 +162,8 @@ function GenreChips({ type, label }: { type: 'vod' | 'series'; label: string }) 
   const [cats, setCats] = useState<Category[]>([])
 
   useEffect(() => {
-    const ep = type === 'vod' ? 'vod_categories' : 'series_categories'
-    fetch(`${API_BASE}/api/iptv/${ep}`)
-      .then(r => r.ok ? r.json() : [])
-      .then(d => setCats(Array.isArray(d) ? d.slice(0, 20) : []))
-      .catch(() => {})
+    const fn = type === 'vod' ? getVodCats : getSeriesCats
+    fn().then(d => setCats(d.slice(0, 20)))
   }, [type])
 
   if (!cats.length) return null
@@ -161,27 +188,65 @@ function GenreChips({ type, label }: { type: 'vod' | 'series'; label: string }) 
   )
 }
 
-function SortButton({ mode, onChange }: { mode: SortMode; onChange: (m: SortMode) => void }) {
-  const options: { value: SortMode; label: string }[] = [
-    { value: 'default', label: 'Par défaut' },
-    { value: 'az', label: 'A-Z' },
-    { value: 'rating', label: 'Note ↓' },
-  ]
+function SortBar({ mode, onChange }: { mode: SortMode; onChange: (m: SortMode) => void }) {
   return (
     <div className="flex items-center gap-1 rounded-xl bg-yt-secondary border border-yt-border/40 p-0.5">
-      {options.map(opt => (
+      {([['default', 'Défaut', null], ['az', 'A-Z', <SortAsc key="az" className="w-3 h-3" />], ['rating', 'Note', <Star key="r" className="w-3 h-3" />]] as [SortMode, string, React.ReactNode][]).map(([val, label, icon]) => (
         <button
-          key={opt.value}
-          onClick={() => onChange(opt.value)}
+          key={val}
+          onClick={() => onChange(val)}
           className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-            mode === opt.value ? 'bg-yt-red text-white' : 'text-yt-text-muted hover:text-yt-text'
+            mode === val ? 'bg-yt-red text-white' : 'text-yt-text-muted hover:text-yt-text'
           }`}
         >
-          {opt.value === 'az' ? <SortAsc className="w-3 h-3" /> : opt.value === 'rating' ? <Star className="w-3 h-3" /> : null}
-          {opt.label}
+          {icon}
+          {label}
         </button>
       ))}
     </div>
+  )
+}
+
+function CategoryGroupSection({ group, sortMode, ratings, onRatingLoaded }: {
+  group: CategoryGroup
+  sortMode: SortMode
+  ratings: Record<string, number | null>
+  onRatingLoaded: (name: string, r: number | null) => void
+}) {
+  const isVod = group.kind === 'vod-cat'
+  const items = group.items as (VodResult & SeriesResult)[]
+  const sorted = sortMode === 'az'
+    ? [...items].sort((a, b) => a.name.localeCompare(b.name))
+    : sortMode === 'rating'
+      ? [...items].sort((a, b) => (ratings[b.name] ?? -1) - (ratings[a.name] ?? -1))
+      : items
+
+  return (
+    <section>
+      <h2 className="text-yt-text text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2">
+        <Tag className="w-4 h-4 text-yt-red" />
+        {group.category.category_name}
+        <span className="text-yt-text-muted font-normal normal-case text-xs tracking-normal">({sorted.length} titres)</span>
+      </h2>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        {sorted.slice(0, 40).map(item => {
+          const id = isVod ? (item as VodResult).stream_id : (item as SeriesResult).series_id
+          const href = isVod
+            ? `/tv/film/${(item as VodResult).stream_id}?ext=${(item as VodResult).container_extension || 'mp4'}&name=${encodeURIComponent(item.name)}&icon=${encodeURIComponent((item as VodResult).stream_icon || '')}`
+            : `/tv/series/${(item as SeriesResult).series_id}?name=${encodeURIComponent(item.name)}&icon=${encodeURIComponent((item as SeriesResult).cover || '')}`
+          return (
+            <TmdbGridCard
+              key={`${group.kind}-${id}`}
+              name={item.name}
+              type={isVod ? 'movie' : 'tv'}
+              href={href}
+              onRatingLoaded={r => onRatingLoaded(item.name, r)}
+              fallbackIcon={isVod ? <Film className="w-10 h-10 text-yt-text-muted" /> : <Layers className="w-10 h-10 text-yt-text-muted" />}
+            />
+          )
+        })}
+      </div>
+    </section>
   )
 }
 
@@ -190,30 +255,62 @@ function TvSearchContent() {
   const searchParams = useSearchParams()
   const q = searchParams.get('q') || ''
   const [results, setResults] = useState<AnyResult[]>([])
+  const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([])
   const [ratings, setRatings] = useState<Record<string, number | null>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sortMode, setSortMode] = useState<SortMode>('default')
 
   const doSearch = useCallback(async (query: string) => {
-    if (!query.trim()) { setResults([]); return }
+    if (!query.trim()) { setResults([]); setCategoryGroups([]); return }
     setLoading(true)
     setError(null)
     setRatings({})
+    setCategoryGroups([])
+
     try {
-      const [liveRes, vodRes, seriesRes] = await Promise.allSettled([
-        fetch(`${API_BASE}/api/iptv/search?q=${encodeURIComponent(query)}&type=live`).then(r => r.json()),
-        fetch(`${API_BASE}/api/iptv/search?q=${encodeURIComponent(query)}&type=vod`).then(r => r.json()),
-        fetch(`${API_BASE}/api/iptv/search?q=${encodeURIComponent(query)}&type=series`).then(r => r.json()),
+      const qLower = query.trim().toLowerCase()
+
+      // Run title search + category fetch in parallel
+      const [liveRes, vodRes, seriesRes, vodCats, seriesCats] = await Promise.all([
+        fetch(`${API_BASE}/api/iptv/search?q=${encodeURIComponent(query)}&type=live`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`${API_BASE}/api/iptv/search?q=${encodeURIComponent(query)}&type=vod`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`${API_BASE}/api/iptv/search?q=${encodeURIComponent(query)}&type=series`).then(r => r.ok ? r.json() : []).catch(() => []),
+        getVodCats(),
+        getSeriesCats(),
       ])
+
+      // Build title search results
       const out: AnyResult[] = []
-      if (liveRes.status === 'fulfilled' && Array.isArray(liveRes.value))
-        liveRes.value.forEach((item: LiveResult) => out.push({ kind: 'live', item }))
-      if (vodRes.status === 'fulfilled' && Array.isArray(vodRes.value))
-        vodRes.value.forEach((item: VodResult) => out.push({ kind: 'vod', item }))
-      if (seriesRes.status === 'fulfilled' && Array.isArray(seriesRes.value))
-        seriesRes.value.forEach((item: SeriesResult) => out.push({ kind: 'series', item }))
+      if (Array.isArray(liveRes)) liveRes.forEach((item: LiveResult) => out.push({ kind: 'live', item }))
+      if (Array.isArray(vodRes))  vodRes.forEach((item: VodResult) => out.push({ kind: 'vod', item }))
+      if (Array.isArray(seriesRes)) seriesRes.forEach((item: SeriesResult) => out.push({ kind: 'series', item }))
       setResults(out)
+
+      // Find matching categories (partial case-insensitive match)
+      const matchVod = vodCats.filter(c => c.category_name.toLowerCase().includes(qLower))
+      const matchSeries = seriesCats.filter(c => c.category_name.toLowerCase().includes(qLower))
+
+      if (matchVod.length === 0 && matchSeries.length === 0) { setLoading(false); return }
+
+      // Fetch items for matching categories (cap at 3 categories each)
+      const groups: CategoryGroup[] = []
+      await Promise.all([
+        ...matchVod.slice(0, 3).map(async cat => {
+          const items = await fetch(`${API_BASE}/api/iptv/vod?category_id=${cat.category_id}`)
+            .then(r => r.ok ? r.json() : []).catch(() => [])
+          if (Array.isArray(items) && items.length > 0)
+            groups.push({ kind: 'vod-cat', category: cat, items })
+        }),
+        ...matchSeries.slice(0, 3).map(async cat => {
+          const items = await fetch(`${API_BASE}/api/iptv/series?category_id=${cat.category_id}`)
+            .then(r => r.ok ? r.json() : []).catch(() => [])
+          if (Array.isArray(items) && items.length > 0)
+            groups.push({ kind: 'series-cat', category: cat, items })
+        }),
+      ])
+
+      setCategoryGroups(groups)
     } catch {
       setError(t('iptv_error'))
     } finally {
@@ -227,30 +324,17 @@ function TvSearchContent() {
     setRatings(prev => ({ ...prev, [name]: rating }))
   }, [])
 
-  const sortedResults = useCallback((list: AnyResult[]) => {
-    if (sortMode === 'az') {
-      return [...list].sort((a, b) => {
-        const nameA = a.kind === 'live' ? a.item.name : a.kind === 'vod' ? a.item.name : a.item.name
-        const nameB = b.kind === 'live' ? b.item.name : b.kind === 'vod' ? b.item.name : b.item.name
-        return nameA.localeCompare(nameB)
-      })
-    }
-    if (sortMode === 'rating') {
-      return [...list].sort((a, b) => {
-        const nameA = a.kind === 'live' ? a.item.name : a.kind === 'vod' ? a.item.name : a.item.name
-        const nameB = b.kind === 'live' ? b.item.name : b.kind === 'vod' ? b.item.name : b.item.name
-        const rA = ratings[nameA] ?? -1
-        const rB = ratings[nameB] ?? -1
-        return rB - rA
-      })
-    }
+  function sortList<T extends { name: string }>(list: T[]): T[] {
+    if (sortMode === 'az') return [...list].sort((a, b) => a.name.localeCompare(b.name))
+    if (sortMode === 'rating') return [...list].sort((a, b) => (ratings[b.name] ?? -1) - (ratings[a.name] ?? -1))
     return list
-  }, [sortMode, ratings])
+  }
 
   const liveResults   = results.filter(r => r.kind === 'live')
-  const vodResults    = sortedResults(results.filter(r => r.kind === 'vod'))
-  const seriesResults = sortedResults(results.filter(r => r.kind === 'series'))
-  const hasResults = liveResults.length + vodResults.length + seriesResults.length > 0
+  const vodResults    = sortList(results.filter(r => r.kind === 'vod').map(r => (r as { kind: 'vod'; item: VodResult }).item))
+  const seriesResults = sortList(results.filter(r => r.kind === 'series').map(r => (r as { kind: 'series'; item: SeriesResult }).item))
+  const hasTitleResults = liveResults.length + vodResults.length + seriesResults.length > 0
+  const hasAnything = hasTitleResults || categoryGroups.length > 0
 
   return (
     <div className="px-4 py-6">
@@ -259,11 +343,12 @@ function TvSearchContent() {
           <Search className="w-5 h-5 text-yt-red" />
           {q ? `"${q}"` : t('tv_search_placeholder')}
         </h1>
-        {hasResults && (
-          <SortButton mode={sortMode} onChange={setSortMode} />
+        {hasAnything && (
+          <SortBar mode={sortMode} onChange={setSortMode} />
         )}
       </div>
 
+      {/* Genre chips when no query */}
       {!q && !loading && (
         <div className="mb-8">
           <GenreChips type="vod" label="Films par genre" />
@@ -277,85 +362,98 @@ function TvSearchContent() {
         </div>
       ) : error ? (
         <p className="text-yt-text-muted text-center py-20">{error}</p>
-      ) : results.length === 0 && q ? (
+      ) : !hasAnything && q ? (
         <p className="text-yt-text-muted text-center py-20">{t('noResultsFor')} «{q}»</p>
       ) : (
         <div className="space-y-10">
-          {/* Live channels */}
-          {liveResults.length > 0 && (
-            <section>
-              <h2 className="text-yt-text text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                {t('iptv_live')}
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                {liveResults.map(r => {
-                  const ch = (r as { kind: 'live'; item: LiveResult }).item
-                  return (
-                    <Link
-                      key={`live-${ch.stream_id}`}
-                      href={`/tv/watch/${ch.stream_id}?type=live&name=${encodeURIComponent(ch.name)}&icon=${encodeURIComponent(ch.stream_icon || '')}`}
-                      className="flex flex-col items-center gap-2 p-3 rounded-xl bg-yt-secondary hover:bg-yt-hover transition-colors border border-yt-border/30"
-                    >
-                      <div className="w-14 h-14 rounded-xl bg-yt-bg flex items-center justify-center overflow-hidden">
-                        <Radio className="w-7 h-7 text-yt-text-muted" />
-                      </div>
-                      <p className="text-yt-text text-xs font-medium text-center line-clamp-2">{ch.name}</p>
-                    </Link>
-                  )
-                })}
-              </div>
-            </section>
-          )}
+          {/* Category matches — shown first, most relevant */}
+          {categoryGroups.map((group, i) => (
+            <CategoryGroupSection
+              key={`${group.kind}-${group.category.category_id}-${i}`}
+              group={group}
+              sortMode={sortMode}
+              ratings={ratings}
+              onRatingLoaded={handleRating}
+            />
+          ))}
 
-          {/* Films */}
-          {vodResults.length > 0 && (
-            <section>
-              <h2 className="text-yt-text text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2">
-                <Film className="w-4 h-4 text-yt-text-muted" />
-                Films
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                {vodResults.map(r => {
-                  const v = (r as { kind: 'vod'; item: VodResult }).item
-                  return (
-                    <TmdbGridCard
-                      key={`vod-${v.stream_id}`}
-                      name={v.name}
-                      type="movie"
-                      href={`/tv/film/${v.stream_id}?ext=${v.container_extension || 'mp4'}&name=${encodeURIComponent(v.name)}&icon=${encodeURIComponent(v.stream_icon || '')}`}
-                      onRatingLoaded={rating => handleRating(v.name, rating)}
-                      fallbackIcon={<Film className="w-10 h-10 text-yt-text-muted" />}
-                    />
-                  )
-                })}
-              </div>
-            </section>
-          )}
+          {/* Title matches — only shown if no category results, or as supplement */}
+          {hasTitleResults && (
+            <>
+              {categoryGroups.length > 0 && (
+                <div className="border-t border-yt-border/30 pt-6">
+                  <p className="text-yt-text-muted text-xs uppercase tracking-widest mb-6">Correspondances de titre</p>
+                </div>
+              )}
 
-          {/* Séries */}
-          {seriesResults.length > 0 && (
-            <section>
-              <h2 className="text-yt-text text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2">
-                <Layers className="w-4 h-4 text-yt-text-muted" />
-                Séries
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                {seriesResults.map(r => {
-                  const s = (r as { kind: 'series'; item: SeriesResult }).item
-                  return (
-                    <TmdbGridCard
-                      key={`series-${s.series_id}`}
-                      name={s.name}
-                      type="tv"
-                      href={`/tv/series/${s.series_id}?name=${encodeURIComponent(s.name)}&icon=${encodeURIComponent(s.cover || '')}`}
-                      onRatingLoaded={rating => handleRating(s.name, rating)}
-                      fallbackIcon={<Layers className="w-10 h-10 text-yt-text-muted" />}
-                    />
-                  )
-                })}
-              </div>
-            </section>
+              {liveResults.length > 0 && (
+                <section>
+                  <h2 className="text-yt-text text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                    {t('iptv_live')}
+                  </h2>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                    {liveResults.map(r => {
+                      const ch = (r as { kind: 'live'; item: LiveResult }).item
+                      return (
+                        <Link
+                          key={`live-${ch.stream_id}`}
+                          href={`/tv/watch/${ch.stream_id}?type=live&name=${encodeURIComponent(ch.name)}&icon=${encodeURIComponent(ch.stream_icon || '')}`}
+                          className="flex flex-col items-center gap-2 p-3 rounded-xl bg-yt-secondary hover:bg-yt-hover transition-colors border border-yt-border/30"
+                        >
+                          <div className="w-14 h-14 rounded-xl bg-yt-bg flex items-center justify-center overflow-hidden">
+                            <Radio className="w-7 h-7 text-yt-text-muted" />
+                          </div>
+                          <p className="text-yt-text text-xs font-medium text-center line-clamp-2">{ch.name}</p>
+                        </Link>
+                      )
+                    })}
+                  </div>
+                </section>
+              )}
+
+              {vodResults.length > 0 && (
+                <section>
+                  <h2 className="text-yt-text text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <Film className="w-4 h-4 text-yt-text-muted" />
+                    Films
+                  </h2>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                    {vodResults.map(v => (
+                      <TmdbGridCard
+                        key={`vod-${v.stream_id}`}
+                        name={v.name}
+                        type="movie"
+                        href={`/tv/film/${v.stream_id}?ext=${v.container_extension || 'mp4'}&name=${encodeURIComponent(v.name)}&icon=${encodeURIComponent(v.stream_icon || '')}`}
+                        onRatingLoaded={r => handleRating(v.name, r)}
+                        fallbackIcon={<Film className="w-10 h-10 text-yt-text-muted" />}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {seriesResults.length > 0 && (
+                <section>
+                  <h2 className="text-yt-text text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-yt-text-muted" />
+                    Séries
+                  </h2>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                    {seriesResults.map(s => (
+                      <TmdbGridCard
+                        key={`series-${s.series_id}`}
+                        name={s.name}
+                        type="tv"
+                        href={`/tv/series/${s.series_id}?name=${encodeURIComponent(s.name)}&icon=${encodeURIComponent(s.cover || '')}`}
+                        onRatingLoaded={r => handleRating(s.name, r)}
+                        fallbackIcon={<Layers className="w-10 h-10 text-yt-text-muted" />}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
           )}
         </div>
       )}

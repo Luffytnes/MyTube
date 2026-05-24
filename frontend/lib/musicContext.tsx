@@ -117,7 +117,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       document.removeEventListener('visibilitychange', onVisibilityChange)
       audio.pause()
       audio.src = ''
-      document.body.removeChild(audio)
+      if (audio.parentNode) audio.parentNode.removeChild(audio)
     }
   }, [])
 
