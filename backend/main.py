@@ -4951,6 +4951,46 @@ async def tmdb_tv_season(name: str = "", season: int = 1):
         return {"episodes": []}
 
 
+@app.get("/api/tmdb/person_credits")
+async def tmdb_person_credits(person_id: int):
+    """Return combined movie+TV credits for a TMDB person."""
+    if not _TMDB_API_KEY:
+        return {"cast": []}
+    cache_key = f"tmdb:person:{person_id}"
+    if cache_key in _tmdb_cache:
+        ts, data = _tmdb_cache[cache_key]
+        if _time() - ts < 3600:
+            return data
+    try:
+        async with httpx_client(timeout=8.0) as client:
+            r = await client.get(f"{_TMDB_BASE}/person/{person_id}/combined_credits",
+                                 params={"api_key": _TMDB_API_KEY, "language": "fr-FR"})
+        if r.status_code != 200:
+            return {"cast": []}
+        raw = r.json().get("cast", [])
+        seen: set[int] = set()
+        items = []
+        for item in sorted(raw, key=lambda x: x.get("vote_average", 0) or 0, reverse=True):
+            mid = item.get("id")
+            if mid in seen:
+                continue
+            seen.add(mid)
+            items.append({
+                "id": mid,
+                "media_type": item.get("media_type"),
+                "title": item.get("title") or item.get("name"),
+                "poster_path": item.get("poster_path"),
+                "vote_average": item.get("vote_average"),
+                "release_date": item.get("release_date") or item.get("first_air_date"),
+                "character": item.get("character"),
+            })
+        data = {"cast": items[:40]}
+        _tmdb_cache[cache_key] = (_time(), data)
+        return data
+    except Exception:
+        return {"cast": []}
+
+
 @app.get("/api/tmdb/key")
 async def tmdb_get_key():
     return {"key": _TMDB_API_KEY}

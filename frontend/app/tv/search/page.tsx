@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Film, Layers, Radio, Star, Play } from 'lucide-react'
+import { Search, Film, Layers, Radio, Star, Play, SortAsc, SortDesc } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
@@ -11,11 +11,14 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 interface LiveResult   { stream_id: number; name: string; stream_icon: string }
 interface VodResult    { stream_id: number; name: string; stream_icon: string; container_extension: string }
 interface SeriesResult { series_id: number; name: string; cover: string }
+interface Category     { category_id: string; category_name: string }
 
 type AnyResult =
-  | { kind: 'live';   item: LiveResult }
-  | { kind: 'vod';    item: VodResult }
-  | { kind: 'series'; item: SeriesResult }
+  | { kind: 'live';   item: LiveResult;   rating?: number | null }
+  | { kind: 'vod';    item: VodResult;    rating?: number | null }
+  | { kind: 'series'; item: SeriesResult; rating?: number | null }
+
+type SortMode = 'default' | 'az' | 'rating'
 
 function Card3D({ children, className }: { children: React.ReactNode; className?: string }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -50,15 +53,18 @@ function Card3D({ children, className }: { children: React.ReactNode; className?
   )
 }
 
-function TmdbGridCard({ name, type, href, fallbackIcon }: {
+function TmdbGridCard({ name, type, href, onRatingLoaded, fallbackIcon }: {
   name: string
   type: 'movie' | 'tv'
   href: string
+  onRatingLoaded?: (rating: number | null) => void
   fallbackIcon: React.ReactNode
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [meta, setMeta] = useState<{ poster_path: string | null; vote_average: number | null } | null>(null)
   const [status, setStatus] = useState<'idle' | 'loading' | 'done'>('idle')
+  const onRatingRef = useRef(onRatingLoaded)
+  onRatingRef.current = onRatingLoaded
 
   useEffect(() => {
     const el = wrapRef.current
@@ -70,7 +76,11 @@ function TmdbGridCard({ name, type, href, fallbackIcon }: {
           setStatus('loading')
           fetch(`${API_BASE}/api/tmdb/meta?name=${encodeURIComponent(name)}&type=${type}`)
             .then(r => r.ok ? r.json() : null)
-            .then(d => { setMeta(d); setStatus('done') })
+            .then(d => {
+              setMeta(d)
+              setStatus('done')
+              onRatingRef.current?.(d?.vote_average ?? null)
+            })
             .catch(() => setStatus('done'))
         }
       },
@@ -117,18 +127,79 @@ function TmdbGridCard({ name, type, href, fallbackIcon }: {
   )
 }
 
+function GenreChips({ type, label }: { type: 'vod' | 'series'; label: string }) {
+  const router = useRouter()
+  const [cats, setCats] = useState<Category[]>([])
+
+  useEffect(() => {
+    const ep = type === 'vod' ? 'vod_categories' : 'series_categories'
+    fetch(`${API_BASE}/api/iptv/${ep}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setCats(Array.isArray(d) ? d.slice(0, 20) : []))
+      .catch(() => {})
+  }, [type])
+
+  if (!cats.length) return null
+
+  const tab = type === 'vod' ? 'vod' : 'series'
+
+  return (
+    <div className="mb-6">
+      <h3 className="text-yt-text-muted text-xs font-semibold uppercase tracking-widest mb-2">{label}</h3>
+      <div className="flex flex-wrap gap-2">
+        {cats.map(c => (
+          <button
+            key={c.category_id}
+            onClick={() => router.push(`/tv?tab=${tab}&cat=${c.category_id}`)}
+            className="px-3 py-1.5 rounded-full bg-yt-secondary hover:bg-yt-hover border border-yt-border/40 text-yt-text text-xs font-medium transition-colors"
+          >
+            {c.category_name}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function SortButton({ mode, onChange }: { mode: SortMode; onChange: (m: SortMode) => void }) {
+  const options: { value: SortMode; label: string }[] = [
+    { value: 'default', label: 'Par défaut' },
+    { value: 'az', label: 'A-Z' },
+    { value: 'rating', label: 'Note ↓' },
+  ]
+  return (
+    <div className="flex items-center gap-1 rounded-xl bg-yt-secondary border border-yt-border/40 p-0.5">
+      {options.map(opt => (
+        <button
+          key={opt.value}
+          onClick={() => onChange(opt.value)}
+          className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            mode === opt.value ? 'bg-yt-red text-white' : 'text-yt-text-muted hover:text-yt-text'
+          }`}
+        >
+          {opt.value === 'az' ? <SortAsc className="w-3 h-3" /> : opt.value === 'rating' ? <Star className="w-3 h-3" /> : null}
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function TvSearchContent() {
   const { t } = useRegion()
   const searchParams = useSearchParams()
   const q = searchParams.get('q') || ''
   const [results, setResults] = useState<AnyResult[]>([])
+  const [ratings, setRatings] = useState<Record<string, number | null>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [sortMode, setSortMode] = useState<SortMode>('default')
 
   const doSearch = useCallback(async (query: string) => {
     if (!query.trim()) { setResults([]); return }
     setLoading(true)
     setError(null)
+    setRatings({})
     try {
       const [liveRes, vodRes, seriesRes] = await Promise.allSettled([
         fetch(`${API_BASE}/api/iptv/search?q=${encodeURIComponent(query)}&type=live`).then(r => r.json()),
@@ -152,16 +223,53 @@ function TvSearchContent() {
 
   useEffect(() => { doSearch(q) }, [q, doSearch])
 
+  const handleRating = useCallback((name: string, rating: number | null) => {
+    setRatings(prev => ({ ...prev, [name]: rating }))
+  }, [])
+
+  const sortedResults = useCallback((list: AnyResult[]) => {
+    if (sortMode === 'az') {
+      return [...list].sort((a, b) => {
+        const nameA = a.kind === 'live' ? a.item.name : a.kind === 'vod' ? a.item.name : a.item.name
+        const nameB = b.kind === 'live' ? b.item.name : b.kind === 'vod' ? b.item.name : b.item.name
+        return nameA.localeCompare(nameB)
+      })
+    }
+    if (sortMode === 'rating') {
+      return [...list].sort((a, b) => {
+        const nameA = a.kind === 'live' ? a.item.name : a.kind === 'vod' ? a.item.name : a.item.name
+        const nameB = b.kind === 'live' ? b.item.name : b.kind === 'vod' ? b.item.name : b.item.name
+        const rA = ratings[nameA] ?? -1
+        const rB = ratings[nameB] ?? -1
+        return rB - rA
+      })
+    }
+    return list
+  }, [sortMode, ratings])
+
   const liveResults   = results.filter(r => r.kind === 'live')
-  const vodResults    = results.filter(r => r.kind === 'vod')
-  const seriesResults = results.filter(r => r.kind === 'series')
+  const vodResults    = sortedResults(results.filter(r => r.kind === 'vod'))
+  const seriesResults = sortedResults(results.filter(r => r.kind === 'series'))
+  const hasResults = liveResults.length + vodResults.length + seriesResults.length > 0
 
   return (
     <div className="px-4 py-6">
-      <h1 className="text-yt-text text-lg font-semibold mb-6 flex items-center gap-2">
-        <Search className="w-5 h-5 text-yt-red" />
-        {q ? `"${q}"` : t('tv_search_placeholder')}
-      </h1>
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <h1 className="text-yt-text text-lg font-semibold flex items-center gap-2">
+          <Search className="w-5 h-5 text-yt-red" />
+          {q ? `"${q}"` : t('tv_search_placeholder')}
+        </h1>
+        {hasResults && (
+          <SortButton mode={sortMode} onChange={setSortMode} />
+        )}
+      </div>
+
+      {!q && !loading && (
+        <div className="mb-8">
+          <GenreChips type="vod" label="Films par genre" />
+          <GenreChips type="series" label="Séries par genre" />
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-20">
@@ -203,7 +311,10 @@ function TvSearchContent() {
           {/* Films */}
           {vodResults.length > 0 && (
             <section>
-              <h2 className="text-yt-text text-sm font-semibold uppercase tracking-widest mb-4">Films</h2>
+              <h2 className="text-yt-text text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2">
+                <Film className="w-4 h-4 text-yt-text-muted" />
+                Films
+              </h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                 {vodResults.map(r => {
                   const v = (r as { kind: 'vod'; item: VodResult }).item
@@ -213,6 +324,7 @@ function TvSearchContent() {
                       name={v.name}
                       type="movie"
                       href={`/tv/film/${v.stream_id}?ext=${v.container_extension || 'mp4'}&name=${encodeURIComponent(v.name)}&icon=${encodeURIComponent(v.stream_icon || '')}`}
+                      onRatingLoaded={rating => handleRating(v.name, rating)}
                       fallbackIcon={<Film className="w-10 h-10 text-yt-text-muted" />}
                     />
                   )
@@ -224,7 +336,10 @@ function TvSearchContent() {
           {/* Séries */}
           {seriesResults.length > 0 && (
             <section>
-              <h2 className="text-yt-text text-sm font-semibold uppercase tracking-widest mb-4">Séries</h2>
+              <h2 className="text-yt-text text-sm font-semibold uppercase tracking-widest mb-4 flex items-center gap-2">
+                <Layers className="w-4 h-4 text-yt-text-muted" />
+                Séries
+              </h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                 {seriesResults.map(r => {
                   const s = (r as { kind: 'series'; item: SeriesResult }).item
@@ -234,6 +349,7 @@ function TvSearchContent() {
                       name={s.name}
                       type="tv"
                       href={`/tv/series/${s.series_id}?name=${encodeURIComponent(s.name)}&icon=${encodeURIComponent(s.cover || '')}`}
+                      onRatingLoaded={rating => handleRating(s.name, rating)}
                       fallbackIcon={<Layers className="w-10 h-10 text-yt-text-muted" />}
                     />
                   )

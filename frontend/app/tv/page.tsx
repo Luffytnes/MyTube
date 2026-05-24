@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Tv, Film, Layers, Radio, Star, Play, Clock, TrendingUp, X, ChevronLeft, ChevronRight, ChevronDown, Loader2 } from 'lucide-react'
+import { Tv, Film, Layers, Radio, Star, Play, Clock, TrendingUp, X, ChevronLeft, ChevronRight, ChevronDown, Loader2, SortAsc } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 import Link from 'next/link'
 import { toggleTvFavorite, isTvFavorite, type TvFavoriteType } from '@/lib/tvFavorites'
@@ -89,16 +89,19 @@ function SmartCover({ src, name, type, fallback }: { src: string; name: string; 
   )
 }
 
-function TmdbGridCard({ name, type, href, favButton, fallbackIcon }: {
+function TmdbGridCard({ name, type, href, favButton, fallbackIcon, onRatingLoaded }: {
   name: string
   type: 'movie' | 'tv'
   href: string
   favButton?: React.ReactNode
   fallbackIcon: React.ReactNode
+  onRatingLoaded?: (rating: number | null) => void
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [meta, setMeta] = useState<{ poster_path: string | null; vote_average: number | null } | null>(null)
   const [status, setStatus] = useState<'idle' | 'loading' | 'done'>('idle')
+  const onRatingRef = useRef(onRatingLoaded)
+  onRatingRef.current = onRatingLoaded
 
   useEffect(() => {
     const el = wrapRef.current
@@ -110,7 +113,11 @@ function TmdbGridCard({ name, type, href, favButton, fallbackIcon }: {
           setStatus('loading')
           fetch(`${API_BASE}/api/tmdb/meta?name=${encodeURIComponent(name)}&type=${type}`)
             .then(r => r.ok ? r.json() : null)
-            .then(d => { setMeta(d); setStatus('done') })
+            .then(d => {
+              setMeta(d)
+              setStatus('done')
+              onRatingRef.current?.(d?.vote_average ?? null)
+            })
             .catch(() => setStatus('done'))
         }
       },
@@ -251,7 +258,7 @@ function CategoryBar({ categories, selectedCat, onSelect }: {
     scrollRef.current?.scrollBy({ left: dir === 'left' ? -300 : 300, behavior: 'smooth' })
 
   return (
-    <div className="relative mb-6">
+    <div className="relative">
       {canLeft && (
         <button
           onClick={() => shift('left')}
@@ -700,6 +707,8 @@ function TvPageContent() {
   const [loadingCats, setLoadingCats] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [continueItems, setContinueItems] = useState<ContinueItem[]>([])
+  const [sortMode, setSortMode] = useState<'default' | 'az' | 'rating'>('default')
+  const [ratings, setRatings] = useState<Record<string, number | null>>({})
 
   const [tmdbSections, setTmdbSections] = useState<TmdbSectionData[]>(
     TMDB_SECTIONS.map(s => ({ ...s, items: [], loading: true, page: 1, totalPages: 1, loadingMore: false }))
@@ -817,6 +826,8 @@ function TvPageContent() {
     setLoading(true)
     setError(null)
     setItems([])
+    setRatings({})
+    setSortMode('default')
     try {
       let url: string
       if (sec === 'live') url = `${API_BASE}/api/iptv/channels?category_id=${catId}`
@@ -886,16 +897,47 @@ function TvPageContent() {
     )
   }
 
+  const handleRating = useCallback((name: string, rating: number | null) => {
+    setRatings(prev => ({ ...prev, [name]: rating }))
+  }, [])
+
+  function sortItems<T extends { name: string }>(list: T[]): T[] {
+    if (sortMode === 'az') return [...list].sort((a, b) => a.name.localeCompare(b.name))
+    if (sortMode === 'rating') return [...list].sort((a, b) => (ratings[b.name] ?? -1) - (ratings[a.name] ?? -1))
+    return list
+  }
+
   /* ── Section tabs: live / vod / series ─────────────────────── */
   return (
     <div className="px-4 py-6">
-      {/* Category pills */}
+      {/* Category pills + sort */}
       {!loadingCats && categories.length > 0 && (
-        <CategoryBar
-          categories={categories}
-          selectedCat={selectedCat}
-          onSelect={id => { setSelectedCat(id); pushUrl(section, id) }}
-        />
+        <div className="flex items-start gap-3 mb-6">
+          <div className="flex-1 min-w-0">
+            <CategoryBar
+              categories={categories}
+              selectedCat={selectedCat}
+              onSelect={id => { setSelectedCat(id); pushUrl(section, id) }}
+            />
+          </div>
+          {section !== 'live' && items.length > 1 && (
+            <div className="flex items-center gap-1 rounded-xl bg-yt-secondary border border-yt-border/40 p-0.5 flex-shrink-0">
+              {([['default', 'Défaut'], ['az', 'A-Z'], ['rating', 'Note']] as [typeof sortMode, string][]).map(([val, label]) => (
+                <button
+                  key={val}
+                  onClick={() => setSortMode(val)}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    sortMode === val ? 'bg-yt-red text-white' : 'text-yt-text-muted hover:text-yt-text'
+                  }`}
+                >
+                  {val === 'az' && <SortAsc className="w-3 h-3" />}
+                  {val === 'rating' && <Star className="w-3 h-3" />}
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Content */}
@@ -943,7 +985,7 @@ function TvPageContent() {
         </div>
       ) : section === 'vod' ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {(items as VodItem[]).map(v => (
+          {sortItems(items as VodItem[]).map(v => (
             <TmdbGridCard
               key={v.stream_id}
               name={v.name}
@@ -951,12 +993,13 @@ function TvPageContent() {
               href={`/tv/film/${v.stream_id}?ext=${v.container_extension || 'mp4'}&name=${encodeURIComponent(v.name)}&icon=${encodeURIComponent(v.stream_icon || '')}&cat=${encodeURIComponent(selectedCat || '')}`}
               favButton={<FavButton id={String(v.stream_id)} type="vod" name={v.name} icon={v.stream_icon || ''} />}
               fallbackIcon={<Film className="w-10 h-10 text-yt-text-muted" />}
+              onRatingLoaded={rating => handleRating(v.name, rating)}
             />
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {(items as SeriesItem[]).map(s => (
+          {sortItems(items as SeriesItem[]).map(s => (
             <TmdbGridCard
               key={s.series_id}
               name={s.name}
@@ -964,6 +1007,7 @@ function TvPageContent() {
               href={`/tv/series/${s.series_id}?name=${encodeURIComponent(s.name)}&icon=${encodeURIComponent(s.cover || '')}`}
               favButton={<FavButton id={String(s.series_id)} type="series" name={s.name} icon={s.cover || ''} />}
               fallbackIcon={<Layers className="w-10 h-10 text-yt-text-muted" />}
+              onRatingLoaded={rating => handleRating(s.name, rating)}
             />
           ))}
         </div>

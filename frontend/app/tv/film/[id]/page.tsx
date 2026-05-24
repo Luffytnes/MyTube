@@ -8,6 +8,7 @@ import { ArrowLeft, Play, Plus, Check, Star, Clock, ChevronLeft, ChevronRight, X
 import { getContinueWatching, removeContinue, type ContinueItem } from '@/lib/tvContinueWatching'
 import { toggleTvFavorite, isTvFavorite } from '@/lib/tvFavorites'
 import TrailerModal from '@/components/tv/TrailerModal'
+import ActorModal from '@/components/tv/ActorModal'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -299,6 +300,7 @@ export default function TvFilmPage() {
   const [continueItem, setContinueItem] = useState<ContinueItem | null>(null)
   const [fav, setFav] = useState(false)
   const [imgErr, setImgErr] = useState(false)
+  const [actorModal, setActorModal] = useState<{ id: number; name: string; profile_path: string | null } | null>(null)
 
   useEffect(() => {
     setFav(isTvFavorite(id, 'vod'))
@@ -363,8 +365,8 @@ export default function TvFilmPage() {
 
   return (
     <div className="min-h-screen bg-yt-bg">
-      {/* Hero backdrop — full viewport width, tall */}
-      <div className="relative h-[62vh] min-h-[360px] overflow-hidden bg-yt-secondary">
+      {/* Hero banner — tall, full bleed */}
+      <div className="relative h-[78vh] min-h-[520px] overflow-hidden bg-yt-secondary">
         {(backdropSrc || posterSrc) && !loading && !imgErr ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -375,9 +377,9 @@ export default function TvFilmPage() {
           />
         ) : null}
 
-        {/* Gradient: only bottom half darkens — top stays visible */}
-        <div className="absolute inset-x-0 bottom-0 h-3/4 bg-gradient-to-t from-yt-bg via-yt-bg/70 to-transparent pointer-events-none" />
-        <div className="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-black/30 to-transparent pointer-events-none" />
+        {/* Gradients for readability */}
+        <div className="absolute inset-0 bg-gradient-to-t from-yt-bg via-yt-bg/55 to-transparent pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/20 to-transparent pointer-events-none" />
 
         {/* Back button */}
         <button
@@ -387,11 +389,12 @@ export default function TvFilmPage() {
           <ArrowLeft className="w-5 h-5" />
         </button>
 
-        {/* Hero bottom content — centered */}
+        {/* Hero content — left-aligned, bottom */}
         {!loading && (
-          <div className="absolute bottom-0 left-0 right-0 z-10 flex flex-col items-center text-center px-6 pb-8">
-            <h1 className="text-white text-2xl md:text-4xl font-bold leading-tight mb-2 drop-shadow-lg">{title}</h1>
-            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-white/75 text-sm mb-5">
+          <div className="absolute bottom-0 left-0 z-10 flex flex-col items-start px-6 md:px-10 pb-10 max-w-2xl">
+            <h1 className="text-white text-3xl md:text-5xl font-bold leading-tight mb-3 drop-shadow-lg">{title}</h1>
+
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-white/80 text-sm mb-3">
               {year && <span>{year}</span>}
               {runtime && <><span className="opacity-40">·</span><span>{runtime}</span></>}
               {rating && (
@@ -401,31 +404,33 @@ export default function TvFilmPage() {
               )}
             </div>
 
-            {/* Buttons: Ma liste  |  Regarder/Continuer  [Début] */}
-            <div className="flex items-center gap-3 flex-wrap justify-center">
-              <button
-                onClick={toggleFav}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors backdrop-blur-sm border ${
-                  fav ? 'bg-yt-red/20 border-yt-red/60 text-yt-red' : 'bg-black/30 border-white/25 text-white hover:bg-black/50'
-                }`}
-              >
-                {fav ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                Ma liste
-              </button>
+            {genreList.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                {genreList.map(g => (
+                  <span key={g} className="px-2.5 py-0.5 rounded-full bg-white/15 backdrop-blur-sm text-white/90 text-xs font-medium border border-white/20">{g}</span>
+                ))}
+              </div>
+            )}
 
+            {overview && (
+              <p className="text-white/80 text-sm leading-relaxed line-clamp-3 mb-5 max-w-xl">{overview}</p>
+            )}
+
+            {/* Buttons */}
+            <div className="flex items-center gap-3 flex-wrap">
               {continueItem ? (
                 <>
                   <Link
                     href={watchHref}
-                    className="flex items-center gap-2 px-7 py-2.5 bg-yt-red hover:bg-yt-red-hover text-white rounded-xl font-semibold text-sm transition-colors shadow-xl"
+                    className="flex items-center gap-2 px-7 py-2.5 bg-white hover:bg-white/90 text-black rounded-xl font-semibold text-sm transition-colors shadow-xl"
                   >
-                    <Play className="w-4 h-4 fill-white" />
+                    <Play className="w-4 h-4 fill-black" />
                     Continuer · {fmtTime(continueItem.position)}
-                    {pct > 0 && <span className="opacity-75">({pct}%)</span>}
+                    {pct > 0 && <span className="opacity-60">({pct}%)</span>}
                   </Link>
                   <button
                     onClick={() => { removeContinue(id); router.push(watchHref) }}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-black/30 hover:bg-black/50 border border-white/25 text-white rounded-xl text-sm transition-colors backdrop-blur-sm"
+                    className="flex items-center gap-2 px-4 py-2.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm border border-white/25 text-white rounded-xl text-sm transition-colors"
                   >
                     <Clock className="w-4 h-4" />
                     Début
@@ -434,17 +439,27 @@ export default function TvFilmPage() {
               ) : (
                 <Link
                   href={watchHref}
-                  className="flex items-center gap-2 px-7 py-2.5 bg-yt-red hover:bg-yt-red-hover text-white rounded-xl font-semibold text-sm transition-colors shadow-xl"
+                  className="flex items-center gap-2 px-7 py-2.5 bg-white hover:bg-white/90 text-black rounded-xl font-semibold text-sm transition-colors shadow-xl"
                 >
-                  <Play className="w-4 h-4 fill-white" />
+                  <Play className="w-4 h-4 fill-black" />
                   Regarder
                 </Link>
               )}
+
+              <button
+                onClick={toggleFav}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors backdrop-blur-sm border ${
+                  fav ? 'bg-yt-red/25 border-yt-red/60 text-white' : 'bg-white/15 border-white/25 text-white hover:bg-white/25'
+                }`}
+              >
+                {fav ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                Ma liste
+              </button>
             </div>
 
             {pct > 0 && (
-              <div className="mt-3 h-1 bg-white/20 rounded-full overflow-hidden w-40">
-                <div className="h-full bg-yt-red rounded-full" style={{ width: `${pct}%` }} />
+              <div className="mt-3 h-1 bg-white/20 rounded-full overflow-hidden w-44">
+                <div className="h-full bg-white rounded-full" style={{ width: `${pct}%` }} />
               </div>
             )}
           </div>
@@ -458,21 +473,6 @@ export default function TvFilmPage() {
         </div>
       ) : (
         <div className="px-5 md:px-8 pb-16">
-          {overview && (
-            <div className="mt-6">
-              <h2 className="text-yt-text font-semibold text-lg mb-3">Synopsis</h2>
-              <p className="text-yt-text text-base leading-loose">{overview}</p>
-            </div>
-          )}
-
-          {genreList.length > 0 && (
-            <div className="mt-5 flex flex-wrap gap-2">
-              {genreList.map(g => (
-                <span key={g} className="px-3 py-1 rounded-full bg-yt-secondary text-yt-text-muted text-xs font-medium border border-yt-border/40">{g}</span>
-              ))}
-            </div>
-          )}
-
           <TrailerRow videos={videos} />
 
           {tmdb?.credits?.cast?.length > 0 && (
@@ -480,8 +480,12 @@ export default function TvFilmPage() {
               <h2 className="text-yt-text font-semibold text-base mb-3">Distribution</h2>
               <div className="flex gap-4 overflow-x-auto scrollbar-none pb-2">
                 {tmdb.credits.cast.slice(0, 14).map((actor: { id: number; name: string; character: string; profile_path: string | null }) => (
-                  <div key={actor.id} className="flex-shrink-0 w-20 text-center">
-                    <div className="w-20 h-20 rounded-full overflow-hidden bg-yt-secondary mx-auto mb-1.5">
+                  <button
+                    key={actor.id}
+                    onClick={() => setActorModal(actor)}
+                    className="flex-shrink-0 w-20 text-center group focus:outline-none"
+                  >
+                    <div className="w-20 h-20 rounded-full overflow-hidden bg-yt-secondary mx-auto mb-1.5 ring-2 ring-transparent group-hover:ring-yt-red transition-all">
                       {actor.profile_path ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={`${API_BASE}/api/tmdb/image?path=/w185${actor.profile_path}`} alt={actor.name} className="w-full h-full object-cover" />
@@ -489,9 +493,9 @@ export default function TvFilmPage() {
                         <div className="w-full h-full flex items-center justify-center text-yt-text-muted text-xl font-bold">{actor.name[0]}</div>
                       )}
                     </div>
-                    <p className="text-yt-text text-[11px] font-medium line-clamp-2 leading-tight">{actor.name}</p>
+                    <p className="text-yt-text text-[11px] font-medium line-clamp-2 leading-tight group-hover:text-yt-red transition-colors">{actor.name}</p>
                     <p className="text-yt-text-muted text-[10px] line-clamp-1 mt-0.5">{actor.character}</p>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -499,6 +503,14 @@ export default function TvFilmPage() {
 
           <RecoRow items={recos} onCardClick={setRecoModal} />
           {recoModal && <RecoModal item={recoModal} onClose={() => setRecoModal(null)} />}
+          {actorModal && (
+            <ActorModal
+              actorId={actorModal.id}
+              actorName={actorModal.name}
+              actorImage={actorModal.profile_path}
+              onClose={() => setActorModal(null)}
+            />
+          )}
         </div>
       )}
     </div>
