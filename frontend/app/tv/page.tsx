@@ -848,6 +848,10 @@ function TvPageContent() {
     if (configured && !isHome && selectedCat) loadItems(section, selectedCat)
   }, [configured, isHome, section, selectedCat, loadItems])
 
+  const handleRating = useCallback((name: string, rating: number | null) => {
+    setRatings(prev => ({ ...prev, [name]: rating }))
+  }, [])
+
   if (configured === null) return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="w-8 h-8 border-2 border-yt-red border-t-transparent rounded-full animate-spin" />
@@ -896,10 +900,6 @@ function TvPageContent() {
       </div>
     )
   }
-
-  const handleRating = useCallback((name: string, rating: number | null) => {
-    setRatings(prev => ({ ...prev, [name]: rating }))
-  }, [])
 
   function sortItems<T extends { name: string }>(list: T[]): T[] {
     if (sortMode === 'az') return [...list].sort((a, b) => a.name.localeCompare(b.name))
