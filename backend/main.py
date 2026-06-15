@@ -1770,7 +1770,7 @@ async def _start_iptv_vod_hls_session(
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
             "-profile:v", "high", "-level", "4.1",
             "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-ar", "48000",
-            "-af", "aresample=async=1:min_hard_comp=0.100000:first_pts=0",
+            "-af", "aresample=async=1:min_hard_comp=0.100000",
             "-avoid_negative_ts", "make_zero",
             "-max_muxing_queue_size", "9999",
             "-sn", "-dn",
