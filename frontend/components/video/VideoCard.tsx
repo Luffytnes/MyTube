@@ -29,10 +29,11 @@ function ChannelAvatar({
   const sizeClass = size === 'sm' ? 'w-6 h-6 text-xs' : 'w-9 h-9 text-sm'
 
   if (src && !imgFailed) {
+    const imgSrc = src.startsWith('http') ? src : `${API_BASE}${src.startsWith('/') ? src : '/' + src}`
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={`${API_BASE}${src.startsWith('/') ? src : '/' + src}`}
+        src={imgSrc}
         alt={name}
         className={cn('rounded-full object-cover flex-shrink-0', sizeClass)}
         onError={() => setImgFailed(true)}
@@ -118,12 +119,16 @@ export default function VideoCard({ video, layout = 'grid' }: VideoCardProps) {
               className="w-full h-full object-cover"
               loading="lazy"
             />
-            {/* Duration badge */}
-            {video.duration && (
+            {/* Duration / Live badge (list layout) */}
+            {video.isLive ? (
+              <span className="absolute bottom-1 right-1 bg-red-600 text-white text-xs px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />LIVE
+              </span>
+            ) : video.duration ? (
               <span className="absolute bottom-1 right-1 bg-black/80 text-white text-xs px-1 py-0.5 rounded font-medium">
                 {video.duration}
               </span>
-            )}
+            ) : null}
           </div>
         </Link>
 
@@ -161,12 +166,16 @@ export default function VideoCard({ video, layout = 'grid' }: VideoCardProps) {
             className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
             loading="lazy"
           />
-          {/* Duration badge */}
-          {video.duration && (
+          {/* Duration / Live badge (grid layout) */}
+          {video.isLive ? (
+            <span className="absolute bottom-2 right-2 bg-red-600 text-white text-xs px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />LIVE
+            </span>
+          ) : video.duration ? (
             <span className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-1.5 py-0.5 rounded font-medium">
               {video.duration}
             </span>
-          )}
+          ) : null}
           {/* Watch Later button */}
           <button
             onClick={handleWatchLater}

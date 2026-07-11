@@ -1,4 +1,6 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+// YouTube.js routes are same-origin Next.js API routes
+const YT_API = '/api/yt'
 
 export interface VideoChannel {
   id: string
@@ -15,6 +17,8 @@ export interface VideoCard {
   views: string
   published: string
   channel: VideoChannel
+  isLive?: boolean
+  isShort?: boolean
 }
 
 export interface VideoFormat {
@@ -57,6 +61,8 @@ export interface ChannelInfo {
   videoCount: number
   thumbnail: string | null
   banner: string | null
+  hasShorts?: boolean
+  hasLive?: boolean
 }
 
 export interface ChannelSearchResult {
@@ -111,25 +117,26 @@ function normalizeThumbnail(video: VideoCard): VideoCard {
 }
 
 export async function getTrending(region = 'US', category = 'all', lang = 'en'): Promise<TrendingResult> {
+  // Use YouTube.js for trending (falls back to Python backend if needed)
+  try {
+    const params = new URLSearchParams({ category })
+    const res = await fetch(`${YT_API}/trending?${params}`, { cache: 'no-store' })
+    if (!res.ok) throw new Error('yt trending failed')
+    const data: TrendingResult = await res.json()
+    if (data.videos?.length) return { videos: data.videos.map(normalizeThumbnail) }
+  } catch { /* fall through */ }
+  // Python backend fallback
   const params = new URLSearchParams({ region, category, lang })
   const res = await fetch(`${API_BASE}/api/trending?${params}`, { cache: 'no-store' })
-  if (!res.ok) {
-    throw new Error(`Failed to fetch trending: ${res.statusText}`)
-  }
+  if (!res.ok) throw new Error(`Failed to fetch trending: ${res.statusText}`)
   const data: TrendingResult = await res.json()
-  return {
-    videos: data.videos.map(normalizeThumbnail),
-  }
+  return { videos: data.videos.map(normalizeThumbnail) }
 }
 
 export async function searchVideos(q: string, page = 1): Promise<SearchResult> {
   const params = new URLSearchParams({ q, page: String(page) })
-  const res = await fetch(`${API_BASE}/api/search?${params}`, {
-    cache: 'no-store',
-  })
-  if (!res.ok) {
-    throw new Error(`Search failed: ${res.statusText}`)
-  }
+  const res = await fetch(`${YT_API}/search?${params}`, { cache: 'no-store' })
+  if (!res.ok) throw new Error(`Search failed: ${res.statusText}`)
   const data: SearchResult = await res.json()
   return {
     ...data,
@@ -140,9 +147,7 @@ export async function searchVideos(q: string, page = 1): Promise<SearchResult> {
 }
 
 export async function getVideo(id: string): Promise<VideoDetail> {
-  const res = await fetch(`${API_BASE}/api/video/${id}`, {
-    cache: 'no-store',
-  })
+  const res = await fetch(`${YT_API}/video/${id}`, { cache: 'no-store' })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.detail || `Failed to fetch video: ${res.statusText}`)
@@ -156,31 +161,31 @@ export async function getVideo(id: string): Promise<VideoDetail> {
 }
 
 export async function getChannel(id: string): Promise<ChannelInfo> {
-  const res = await fetch(`${API_BASE}/api/channel/${id}`, {
-    next: { revalidate: 60 },
-  })
-  if (!res.ok) {
-    throw new Error(`Failed to fetch channel: ${res.statusText}`)
-  }
+  const res = await fetch(`${YT_API}/channel/${id}`, { next: { revalidate: 60 } })
+  if (!res.ok) throw new Error(`Failed to fetch channel: ${res.statusText}`)
   return res.json()
 }
 
-export async function getChannelVideos(
-  id: string,
-  page = 1
-): Promise<ChannelVideosResult> {
+export async function getChannelVideos(id: string, page = 1): Promise<ChannelVideosResult> {
   const params = new URLSearchParams({ page: String(page) })
-  const res = await fetch(`${API_BASE}/api/channel/${id}/videos?${params}`, {
-    cache: 'no-store',
-  })
-  if (!res.ok) {
-    throw new Error(`Failed to fetch channel videos: ${res.statusText}`)
-  }
+  const res = await fetch(`${YT_API}/channel/${id}/videos?${params}`, { cache: 'no-store' })
+  if (!res.ok) throw new Error(`Failed to fetch channel videos: ${res.statusText}`)
   const data: ChannelVideosResult = await res.json()
-  return {
-    ...data,
-    videos: data.videos.map(normalizeThumbnail),
-  }
+  return { ...data, videos: data.videos.map(normalizeThumbnail) }
+}
+
+export async function getChannelShorts(id: string): Promise<ChannelVideosResult> {
+  const res = await fetch(`${YT_API}/channel/${id}/shorts`, { cache: 'no-store' })
+  if (!res.ok) throw new Error(`Failed to fetch channel shorts: ${res.statusText}`)
+  const data = await res.json()
+  return { videos: (data.videos ?? []).map(normalizeThumbnail), channelId: id, page: 1 }
+}
+
+export async function getChannelLive(id: string): Promise<ChannelVideosResult> {
+  const res = await fetch(`${YT_API}/channel/${id}/live`, { cache: 'no-store' })
+  if (!res.ok) throw new Error(`Failed to fetch channel live streams: ${res.statusText}`)
+  const data = await res.json()
+  return { videos: (data.videos ?? []).map(normalizeThumbnail), channelId: id, page: 1 }
 }
 
 export function getStreamUrl(videoId: string, itag?: string): string {
@@ -240,7 +245,7 @@ export interface PlaylistDetail {
 }
 
 export async function getPlaylist(playlistId: string): Promise<PlaylistDetail> {
-  const res = await fetch(`${API_BASE}/api/playlist/${playlistId}`, { cache: 'no-store' })
+  const res = await fetch(`${YT_API}/playlist/${playlistId}`, { cache: 'no-store' })
   if (!res.ok) throw new Error(`Failed to fetch playlist: ${res.statusText}`)
   return res.json()
 }

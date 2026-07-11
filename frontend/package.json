@@ -14,7 +14,8 @@
     "next": "^14.2.30",
     "react": "^18",
     "react-dom": "^18",
-    "shaka-player": "^5.1.4"
+    "shaka-player": "^5.1.4",
+    "youtubei.js": "^17.2.0"
   },
   "devDependencies": {
     "@types/node": "^20",

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { getChannel, getChannelVideos } from '@/lib/api'
+import { getChannel, getChannelVideos, getChannelShorts, getChannelLive } from '@/lib/api'
 import type { ChannelInfo, VideoCard } from '@/lib/api'
 import VideoGrid from '@/components/video/VideoGrid'
 import { VideoGridSkeleton } from '@/components/ui/Skeleton'
@@ -13,12 +13,7 @@ import { useSubscriptions } from '@/lib/subscriptionsContext'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
-type TabKey = 'videos' | 'playlists' | 'about'
-const TABS: { key: TabKey; labelKey: 'tab_videos' | 'tab_playlists' | 'tab_about' }[] = [
-  { key: 'videos', labelKey: 'tab_videos' },
-  { key: 'playlists', labelKey: 'tab_playlists' },
-  { key: 'about', labelKey: 'tab_about' },
-]
+type TabKey = 'videos' | 'shorts' | 'live' | 'playlists' | 'about'
 
 function ChannelHeaderSkeleton() {
   return (
@@ -46,8 +41,12 @@ export default function ChannelPage({ params }: ChannelPageProps) {
   const { isSubscribed, toggle: toggleSubscription } = useSubscriptions()
   const [channel, setChannel] = useState<ChannelInfo | null>(null)
   const [videos, setVideos] = useState<VideoCard[]>([])
+  const [shortsVideos, setShortsVideos] = useState<VideoCard[]>([])
+  const [liveVideos, setLiveVideos] = useState<VideoCard[]>([])
   const [channelLoading, setChannelLoading] = useState(true)
   const [videosLoading, setVideosLoading] = useState(true)
+  const [shortsLoading, setShortsLoading] = useState(false)
+  const [liveLoading, setLiveLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabKey>('videos')
   const [page, setPage] = useState(1)
@@ -73,11 +72,8 @@ export default function ChannelPage({ params }: ChannelPageProps) {
       setVideosLoading(true)
       try {
         const data = await getChannelVideos(id, p)
-        if (reset) {
-          setVideos(data.videos)
-        } else {
-          setVideos((prev) => [...prev, ...data.videos])
-        }
+        if (reset) setVideos(data.videos)
+        else setVideos((prev) => [...prev, ...data.videos])
         setHasMore(data.videos.length > 0)
       } catch (err) {
         console.error(err)
@@ -87,6 +83,26 @@ export default function ChannelPage({ params }: ChannelPageProps) {
     },
     [id]
   )
+
+  const loadShorts = useCallback(async () => {
+    if (shortsVideos.length > 0) return
+    setShortsLoading(true)
+    try {
+      const data = await getChannelShorts(id)
+      setShortsVideos(data.videos)
+    } catch (err) { console.error(err) }
+    finally { setShortsLoading(false) }
+  }, [id, shortsVideos.length])
+
+  const loadLive = useCallback(async () => {
+    if (liveVideos.length > 0) return
+    setLiveLoading(true)
+    try {
+      const data = await getChannelLive(id)
+      setLiveVideos(data.videos)
+    } catch (err) { console.error(err) }
+    finally { setLiveLoading(false) }
+  }, [id, liveVideos.length])
 
   useEffect(() => {
     loadChannel()
@@ -213,24 +229,40 @@ export default function ChannelPage({ params }: ChannelPageProps) {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center border-b border-yt-border px-4 sm:px-6">
-        {TABS.map(({ key, labelKey }) => (
+      <div className="flex items-center border-b border-yt-border px-4 sm:px-6 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+        {([
+          { key: 'videos', label: t('tab_videos') },
+          ...(channel.hasShorts ? [{ key: 'shorts', label: t('tab_shorts') }] : []),
+          ...(channel.hasLive ? [{ key: 'live', label: t('tab_live') }] : []),
+          { key: 'playlists', label: t('tab_playlists') },
+          { key: 'about', label: t('tab_about') },
+        ] as { key: TabKey; label: string }[]).map(({ key, label }) => (
           <button
             key={key}
-            onClick={() => setActiveTab(key)}
-            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors -mb-px ${
+            onClick={() => {
+              setActiveTab(key)
+              if (key === 'shorts') loadShorts()
+              if (key === 'live') loadLive()
+            }}
+            className={`flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors -mb-px ${
               activeTab === key
                 ? 'border-yt-text text-yt-text'
                 : 'border-transparent text-yt-text-muted hover:text-yt-text hover:border-yt-text-muted'
             }`}
           >
-            {t(labelKey)}
+            {label}
           </button>
         ))}
       </div>
 
       {/* Tab content */}
       <div className="px-4 sm:px-6 py-6">
+        {activeTab === 'shorts' && (
+          <VideoGrid videos={shortsVideos} loading={shortsLoading} emptyMessage={t('shorts_empty')} />
+        )}
+        {activeTab === 'live' && (
+          <VideoGrid videos={liveVideos} loading={liveLoading} emptyMessage={t('live_empty')} />
+        )}
         {activeTab === 'videos' && (
           <>
             <VideoGrid
