@@ -1689,6 +1689,8 @@ async def _probe_vod_duration(path: str) -> float:
         return 0.0
 
 
+
+
 async def _choose_ffmpeg_input(vod_entry: dict, cache_path: str, start: int) -> tuple:
     """Pick the fastest ffmpeg input strategy for this start position.
 
@@ -1763,15 +1765,13 @@ async def _start_iptv_vod_hls_session(
 
         cmd = [
             _FFMPEG, "-loglevel", "error",
-            "-probesize", "2097152", "-analyzeduration", "2000000",
-            "-fflags", "+genpts",
+            "-probesize", "5000000", "-analyzeduration", "5000000",
             *input_args,
             "-map", "0:v:0?", "-map", f"0:a:{audio_idx}?",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
             "-profile:v", "high", "-level", "4.1",
+            "-bf", "0",
             "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-ar", "48000",
-            "-af", "aresample=async=1:min_hard_comp=0.100000",
-            "-avoid_negative_ts", "make_zero",
             "-max_muxing_queue_size", "9999",
             "-sn", "-dn",
             "-f", "hls",
