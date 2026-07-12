@@ -8,10 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# yt-dlp (latest)
-RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
-    && chmod +x /usr/local/bin/yt-dlp
-
+# yt-dlp (pinned via requirements.txt — installed below)
 # wireproxy (WireGuard userspace)
 RUN ARCH=$(dpkg --print-architecture) \
     && case "$ARCH" in \
@@ -25,11 +22,23 @@ RUN ARCH=$(dpkg --print-architecture) \
     && chmod +x /usr/local/bin/wireproxy \
     && rm /tmp/wireproxy.tar.gz
 
+# Non-root user
+RUN useradd --create-home --shell /bin/bash mytube
+
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY --chown=mytube:mytube . .
+
+# Data directory writable by non-root user
+RUN mkdir -p /home/mytube/.mytube && chown mytube:mytube /home/mytube/.mytube
+
+USER mytube
 
 EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/api/trending?region=US&lang=en || exit 1
+
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,7 +1,7 @@
-fastapi
-uvicorn[standard]
-yt-dlp
-httpx[socks]
-python-dotenv
-python-multipart
-ytmusicapi
+fastapi==0.135.2
+uvicorn[standard]==0.42.0
+yt-dlp==2026.3.17
+httpx[socks]==0.28.1
+python-dotenv==1.2.2
+python-multipart==0.0.24
+ytmusicapi==1.11.5
