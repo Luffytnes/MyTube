@@ -56,6 +56,20 @@ export async function GET(
       if (card) related.push(card)
     }
 
+    // Chapters from YouTube.js player overlay (more reliable than parsing the description)
+    const chapters: { time: number; title: string }[] = []
+    try {
+      const ytChapters = (info.player_overlays as any)
+        ?.decorated_player_bar?.player_bar?.chapters
+      if (Array.isArray(ytChapters) && ytChapters.length >= 2) {
+        for (const ch of ytChapters) {
+          const title: string = ch?.title?.toString?.() ?? ''
+          const time: number = Math.round((ch?.time_range_start_millis ?? 0) / 1000)
+          if (title) chapters.push({ time, title })
+        }
+      }
+    } catch { /* ignore — fall back to description parsing in the client */ }
+
     const viewCount = basic.view_count ?? 0
     const likeCount = basic.like_count ?? 0
 
@@ -73,6 +87,7 @@ export async function GET(
       uploadDate: (basic as any).publish_date ?? (basic as any).upload_date ?? '',
       isLive: basic.is_live ?? false,
       formats,
+      chapters,
       related,
     })
   } catch (err: any) {

@@ -11,6 +11,7 @@ import { useRegion } from '@/lib/regionContext'
 import type { VideoDetail } from '@/lib/api'
 import VideoPlayer, { type Chapter } from '@/components/video/VideoPlayer'
 import VideoCard from '@/components/video/VideoCard'
+import Comments from '@/components/video/Comments'
 import DownloadModal from '@/components/video/DownloadModal'
 import { WatchPageSkeleton } from '@/components/ui/Skeleton'
 import {
@@ -115,6 +116,21 @@ function RelatedChannelCard({ id, name }: { id: string; name: string }) {
       </div>
     </Link>
   )
+}
+
+function renderDescription(text: string): React.ReactNode[] {
+  const parts = text.split(/(#[\wÀ-ɏЀ-ӿ]+)/g)
+  return parts.map((part, i) => {
+    if (/^#[\wÀ-ɏЀ-ӿ]+$/.test(part)) {
+      const tag = part.slice(1)
+      return (
+        <Link key={i} href={`/hashtag/${encodeURIComponent(tag)}`} className="text-blue-400 hover:underline">
+          {part}
+        </Link>
+      )
+    }
+    return part
+  })
 }
 
 function parseChapters(description: string): Chapter[] {
@@ -338,7 +354,7 @@ function WatchContent({ params }: WatchPageProps) {
               onPrev={handlePrev}
               hasNext={!!(nextQueueItem || video.related?.[0])}
               hasPrev={true}
-              chapters={video.description ? parseChapters(video.description) : []}
+              chapters={video.chapters?.length ? video.chapters : (video.description ? parseChapters(video.description) : [])}
             />
 
             {/* Autoplay countdown overlay */}
@@ -562,7 +578,7 @@ function WatchContent({ params }: WatchPageProps) {
                     descExpanded ? '' : 'line-clamp-2'
                   }`}
                 >
-                  {video.description}
+                  {renderDescription(video.description)}
                 </div>
               ) : (
                 <p className="text-sm text-yt-text-muted italic">No description available.</p>
@@ -591,14 +607,7 @@ function WatchContent({ params }: WatchPageProps) {
             </div>
           </div>
 
-          {/* Comments placeholder */}
-          <div className="mt-6">
-            <h2 className="text-yt-text font-semibold text-lg mb-4">Comments</h2>
-            <div className="bg-yt-secondary rounded-xl p-4 text-center">
-              <p className="text-yt-text-muted text-sm">{t('comments_unavailable')}</p>
-              <p className="text-yt-text-muted text-xs mt-1">{t('comments_privacy')}</p>
-            </div>
-          </div>
+          <Comments videoId={id} />
         </div>
 
         {/* Right sidebar */}

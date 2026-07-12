@@ -43,6 +43,11 @@ export interface RelatedChannel {
   channel: VideoChannel
 }
 
+export interface VideoChapter {
+  time: number
+  title: string
+}
+
 export interface VideoDetail extends VideoCard {
   description: string
   likes: string
@@ -50,6 +55,7 @@ export interface VideoDetail extends VideoCard {
   uploadDate: string
   formats: VideoFormat[]
   related: (VideoCard | RelatedChannel)[]
+  chapters?: VideoChapter[]
   isLive?: boolean
 }
 
