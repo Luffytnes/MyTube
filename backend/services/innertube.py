@@ -14,6 +14,7 @@ from core.config import (
     _YT_HEADERS,
     _YT_VIDEOS_TAB_PARAMS,
 )
+from core.security import ssrf_redirect_hook
 from services.vpn import (
     _get_proxy_url,
     vpn_record_activity,
@@ -46,7 +47,9 @@ def httpx_client(**kwargs) -> httpx.AsyncClient:
     if proxy:
         kwargs.setdefault("proxy", proxy)
         vpn_record_activity()
-    return httpx.AsyncClient(**kwargs)
+    hooks = kwargs.pop("event_hooks", {})
+    hooks["response"] = [ssrf_redirect_hook] + list(hooks.get("response", []))
+    return httpx.AsyncClient(event_hooks=hooks, **kwargs)
 
 
 def rewrite_hls_manifest(content: str, source_url: str, proxy_base: str) -> str:

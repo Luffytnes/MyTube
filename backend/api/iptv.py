@@ -12,7 +12,7 @@ import httpx
 from fastapi import APIRouter, Body, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 
-from core.security import validate_proxy_url
+from core.security import validate_proxy_url, ssrf_redirect_hook
 from core import config
 from core.config import _FFMPEG, _FFPROBE, _OUTPUT_ARGS
 from core.cache import cache_get, cache_set
@@ -55,7 +55,7 @@ async def _xtream_api(action: str, extra: dict | None = None, timeout: float = 4
     if extra:
         params.update(extra)
     try:
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, event_hooks={"response": [ssrf_redirect_hook]}) as client:
             resp = await client.get(f"{s}/player_api.php", params=params)
         if resp.status_code != 200:
             raise HTTPException(status_code=502, detail=f"Xtream HTTP {resp.status_code}")
@@ -76,7 +76,7 @@ async def iptv_debug():
         return {"configured": False}
     s, u, p = config._xtream_cfg["server"], config._xtream_cfg["username"], config._xtream_cfg["password"]
     try:
-        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True, event_hooks={"response": [ssrf_redirect_hook]}) as client:
             resp = await client.get(f"{s}/player_api.php", params={"username": u, "password": p})
         data = resp.json() if resp.status_code == 200 else {}
         return {
@@ -120,7 +120,7 @@ async def iptv_hls_stream(stream_id: str, request: Request):
     s, u, p = config._xtream_cfg["server"], config._xtream_cfg["username"], config._xtream_cfg["password"]
     m3u8_url = f"{s}/live/{u}/{p}/{stream_id}.m3u8"
     try:
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, event_hooks={"response": [ssrf_redirect_hook]}) as client:
             resp = await client.get(m3u8_url)
         if resp.status_code != 200:
             raise HTTPException(status_code=502, detail=f"Stream returned HTTP {resp.status_code}")
@@ -147,7 +147,7 @@ async def iptv_hls_proxy(url: str, request: Request):
         raise HTTPException(status_code=400, detail="Invalid URL encoding")
     validate_proxy_url(decoded_url)
     try:
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, event_hooks={"response": [ssrf_redirect_hook]}) as client:
             resp = await client.get(decoded_url)
         ct = resp.headers.get("content-type", "")
         if "mpegurl" in ct or decoded_url.split("?")[0].endswith(".m3u8"):
@@ -178,7 +178,7 @@ async def iptv_icon_proxy(url: str):
     try:
         parsed = urlparse(url)
         referer = f"{parsed.scheme}://{parsed.netloc}/"
-        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True, event_hooks={"response": [ssrf_redirect_hook]}) as client:
             resp = await client.get(url, headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Referer": referer,
@@ -469,7 +469,7 @@ async def iptv_vod_hls(stream_id: str, request: Request, media: str = "movie"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
     s, u, p = config._xtream_cfg["server"], config._xtream_cfg["username"], config._xtream_cfg["password"]
     m3u8_url = f"{s}/{media}/{u}/{p}/{stream_id}.m3u8"
-    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, event_hooks={"response": [ssrf_redirect_hook]}) as client:
         resp = await client.get(m3u8_url)
     if resp.status_code != 200 or "#EXTM3U" not in resp.text:
         raise HTTPException(status_code=502, detail="VOD HLS not available")

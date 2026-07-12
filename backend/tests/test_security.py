@@ -1,12 +1,33 @@
 """Tests for SSRF protection (core/security.py)."""
+import socket as _socket
 import sys
 import os
 import pytest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from fastapi import HTTPException
 from core.security import validate_proxy_url, _is_private_ip
+
+
+# ---------------------------------------------------------------------------
+# Helpers for DNS mocking
+# ---------------------------------------------------------------------------
+
+def _dns_public(host, port=None, *a, **kw):
+    """Mock DNS: always returns a public IP."""
+    return [(_socket.AF_INET, _socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))]
+
+
+def _dns_private(host, port=None, *a, **kw):
+    """Mock DNS: always returns a private IP."""
+    return [(_socket.AF_INET, _socket.SOCK_STREAM, 6, "", ("127.0.0.1", 0))]
+
+
+def _dns_fail(host, port=None, *a, **kw):
+    """Mock DNS: always raises an exception."""
+    raise OSError("Name or service not known")
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +93,8 @@ class TestValidateProxyUrlBlocked:
         self._assert_blocked("http://127.0.0.1/etc/passwd")
 
     def test_localhost(self):
-        self._assert_blocked("http://localhost/secret")
+        with patch("core.security._dns_resolve", side_effect=_dns_private):
+            self._assert_blocked("http://localhost/secret")
 
     def test_private_10(self):
         self._assert_blocked("http://10.0.0.1/admin")
@@ -101,6 +123,16 @@ class TestValidateProxyUrlBlocked:
     def test_ipv6_private(self):
         self._assert_blocked("http://[fc00::1]/secret")
 
+    def test_dns_fail_closed(self):
+        """DNS failures must block the request (fail-closed)."""
+        with patch("core.security._dns_resolve", side_effect=_dns_fail):
+            self._assert_blocked("http://unresolvable.internal/secret")
+
+    def test_dns_resolves_to_private(self):
+        """A public-looking hostname that DNS resolves to a private IP must be blocked."""
+        with patch("core.security._dns_resolve", side_effect=_dns_private):
+            self._assert_blocked("http://evil-redirect.example.com/secret")
+
 
 # ---------------------------------------------------------------------------
 # validate_proxy_url — allowed cases
@@ -108,27 +140,33 @@ class TestValidateProxyUrlBlocked:
 
 class TestValidateProxyUrlAllowed:
     def test_public_http(self):
-        result = validate_proxy_url("http://example.com/file.m3u8")
+        with patch("core.security._dns_resolve", side_effect=_dns_public):
+            result = validate_proxy_url("http://example.com/file.m3u8")
         assert result == "http://example.com/file.m3u8"
 
     def test_public_https(self):
-        result = validate_proxy_url("https://cdn.example.com/segment.ts")
+        with patch("core.security._dns_resolve", side_effect=_dns_public):
+            result = validate_proxy_url("https://cdn.example.com/segment.ts")
         assert result == "https://cdn.example.com/segment.ts"
 
     def test_youtube_url(self):
         url = "https://r1---sn-test.googlevideo.com/videoplayback?itag=137"
-        result = validate_proxy_url(url)
+        with patch("core.security._dns_resolve", side_effect=_dns_public):
+            result = validate_proxy_url(url)
         assert result == url
 
     def test_url_with_port(self):
-        result = validate_proxy_url("http://example.com:8080/stream.m3u8")
+        with patch("core.security._dns_resolve", side_effect=_dns_public):
+            result = validate_proxy_url("http://example.com:8080/stream.m3u8")
         assert result == "http://example.com:8080/stream.m3u8"
 
     def test_custom_allowed_schemes(self):
-        result = validate_proxy_url("https://example.com/", allowed_schemes=("https",))
+        with patch("core.security._dns_resolve", side_effect=_dns_public):
+            result = validate_proxy_url("https://example.com/", allowed_schemes=("https",))
         assert result == "https://example.com/"
 
     def test_custom_scheme_rejected(self):
-        with pytest.raises(HTTPException) as exc_info:
-            validate_proxy_url("http://example.com/", allowed_schemes=("https",))
+        with patch("core.security._dns_resolve", side_effect=_dns_public):
+            with pytest.raises(HTTPException) as exc_info:
+                validate_proxy_url("http://example.com/", allowed_schemes=("https",))
         assert exc_info.value.status_code == 400
