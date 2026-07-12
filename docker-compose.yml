@@ -6,14 +6,12 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    cap_add:
-      - NET_ADMIN           # WireGuard requires kernel network capabilities
+    # wireproxy is fully userspace (Go + gVisor netstack, no TUN interface)
+    # — NET_ADMIN is not required
     mem_limit: 64m
     cpus: "0.5"
     volumes:
       - mytube-data:/data
-    expose:
-      - "25344"
 
   backend:
     build: ./backend
@@ -34,6 +32,12 @@ services:
       - WIREPROXY_HOST=wireproxy
     depends_on:
       - wireproxy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   frontend:
     build: ./frontend
@@ -46,6 +50,12 @@ services:
     cpus: "1.0"
     expose:
       - "3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get({host:'localhost',port:3000,path:'/'}, r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   nginx:
     image: nginx:alpine
@@ -63,8 +73,16 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/.htpasswd:/etc/nginx/auth/.htpasswd:ro
     depends_on:
-      - backend
-      - frontend
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:80/_health 2>&1"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
 
 volumes:
   mytube-data:

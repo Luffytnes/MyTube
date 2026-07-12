@@ -19,7 +19,7 @@ tar -czf "$ARCHIVE" -C "$(dirname "$MYTUBE_DIR")" "$(basename "$MYTUBE_DIR")"
 SIZE=$(du -sh "$ARCHIVE" | cut -f1)
 echo "Backup created: $ARCHIVE ($SIZE)"
 
-# Keep only the 10 most recent backups
-ls -t "$BACKUP_DIR"/mytube_*.tar.gz 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null || true
-REMAINING=$(ls "$BACKUP_DIR"/mytube_*.tar.gz 2>/dev/null | wc -l | tr -d ' ')
+# Keep only the 10 most recent backups (filenames sort chronologically: YYYYMMDD_HHMMSS)
+find "$BACKUP_DIR" -maxdepth 1 -name 'mytube_*.tar.gz' | sort -r | tail -n +11 | xargs rm -f 2>/dev/null || true
+REMAINING=$(find "$BACKUP_DIR" -maxdepth 1 -name 'mytube_*.tar.gz' 2>/dev/null | wc -l | tr -d ' ')
 echo "Backups kept: $REMAINING"

@@ -181,7 +181,7 @@ def _start_wireproxy_sync(conf_path: str) -> bool:
     import re
 
     if WIREPROXY_HOST:
-        # External container mode: write prepared conf to shared volume.
+        # External container mode: write prepared conf to shared volume atomically.
         # The wireproxy container polls _ACTIVE_CONF_PATH and restarts on change.
         try:
             raw = open(conf_path).read()
@@ -194,8 +194,17 @@ def _start_wireproxy_sync(conf_path: str) -> bool:
             else:
                 prepared = raw.rstrip() + SOCKS5_SECTION_EXT
             os.makedirs(os.path.dirname(_ACTIVE_CONF_PATH), exist_ok=True)
-            with open(_ACTIVE_CONF_PATH, "w") as f:
-                f.write(prepared)
+            tmp_path = _ACTIVE_CONF_PATH + ".tmp"
+            try:
+                with open(tmp_path, "w") as f:
+                    f.write(prepared)
+                os.replace(tmp_path, _ACTIVE_CONF_PATH)
+            except Exception:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
             time.sleep(2)  # give wireproxy container time to restart
             _ytm_cache.clear()
             return True
@@ -268,7 +277,7 @@ def record_youtube_error(status_code: int):
     global _vpn_error_count
     if not _vpn_auto_mode:
         return
-    if _wireproxy_process is None or _wireproxy_process.poll() is not None:
+    if not is_wireproxy_active():
         return
     if status_code in (403, 429, 451):
         _vpn_error_count += 1

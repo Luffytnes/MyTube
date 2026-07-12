@@ -12,7 +12,7 @@ BACKUP_DIR="${BACKUP_DEST:-$HOME/mytube-backups}"
 if [ -n "$1" ]; then
     ARCHIVE="$1"
 else
-    ARCHIVE=$(ls -t "$BACKUP_DIR"/mytube_*.tar.gz 2>/dev/null | head -1)
+    ARCHIVE=$(find "$BACKUP_DIR" -maxdepth 1 -name 'mytube_*.tar.gz' 2>/dev/null | sort -r | head -1)
     if [ -z "$ARCHIVE" ]; then
         echo "Error: no backup found in $BACKUP_DIR" >&2
         exit 1

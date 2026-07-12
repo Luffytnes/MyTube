@@ -38,7 +38,7 @@ BACKEND_PID=$!
 
 # Wait for backend to be ready
 echo -n "Waiting for backend"
-for i in $(seq 1 30); do
+for _ in $(seq 1 30); do
   if curl -s http://localhost:8000/docs > /dev/null 2>&1; then
     echo -e " ${GREEN}ready!${NC}"
     break
@@ -62,6 +62,12 @@ echo ""
 echo "Press Ctrl+C to stop all services."
 
 # Wait and cleanup on exit
-trap "echo ''; echo 'Stopping MyTube...'; kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; exit 0" INT TERM
+_stop() {
+    echo ''
+    echo 'Stopping MyTube...'
+    kill "$BACKEND_PID" "$FRONTEND_PID" 2>/dev/null || true
+    exit 0
+}
+trap _stop INT TERM
 
 wait $FRONTEND_PID

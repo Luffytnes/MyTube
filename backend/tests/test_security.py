@@ -1,9 +1,10 @@
 """Tests for SSRF protection (core/security.py)."""
+import asyncio
 import socket as _socket
 import sys
 import os
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -170,3 +171,67 @@ class TestValidateProxyUrlAllowed:
             with pytest.raises(HTTPException) as exc_info:
                 validate_proxy_url("http://example.com/", allowed_schemes=("https",))
         assert exc_info.value.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# ssrf_redirect_hook — relative URL resolution (B1)
+# ---------------------------------------------------------------------------
+
+class TestSsrfRedirectHook:
+    """Verify that relative Location headers are resolved before SSRF validation."""
+
+    def _make_response(self, location: str, request_url: str = "https://cdn.example.com/stream"):
+        """Create a minimal httpx-like response mock."""
+        response = MagicMock()
+        response.is_redirect = True
+        response.headers = {"location": location}
+        request = MagicMock()
+        request.url = request_url
+        response.request = request
+        return response
+
+    def test_absolute_url_private_blocked(self):
+        from core.security import ssrf_redirect_hook
+        response = self._make_response("http://192.168.1.1/evil")
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(ssrf_redirect_hook(response))
+        assert exc.value.status_code == 400
+
+    def test_relative_path_resolves_and_blocks_private(self):
+        """A relative redirect like '/admin' on a private-IP origin must be blocked."""
+        from core.security import ssrf_redirect_hook
+        response = self._make_response("/admin", request_url="http://10.0.0.1/start")
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(ssrf_redirect_hook(response))
+        assert exc.value.status_code == 400
+
+    def test_protocol_relative_url_blocked(self):
+        """Protocol-relative redirect '//127.0.0.1/' must be blocked."""
+        from core.security import ssrf_redirect_hook
+        response = self._make_response("//127.0.0.1/secret")
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(ssrf_redirect_hook(response))
+        assert exc.value.status_code == 400
+
+    def test_relative_redirect_to_public_host_allowed(self):
+        """Relative redirect on a public origin resolves to a public URL — allowed."""
+        from core.security import ssrf_redirect_hook
+        with patch("core.security._dns_resolve", side_effect=_dns_public):
+            response = self._make_response(
+                "/new-path",
+                request_url="https://cdn.example.com/old-path",
+            )
+            asyncio.run(ssrf_redirect_hook(response))  # must not raise
+
+    def test_non_redirect_is_noop(self):
+        """Non-redirect responses are ignored."""
+        from core.security import ssrf_redirect_hook
+        response = MagicMock()
+        response.is_redirect = False
+        asyncio.run(ssrf_redirect_hook(response))  # must not raise
+
+    def test_empty_location_is_noop(self):
+        """Empty Location header is silently skipped."""
+        from core.security import ssrf_redirect_hook
+        response = self._make_response("")
+        asyncio.run(ssrf_redirect_hook(response))  # must not raise
