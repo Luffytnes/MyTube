@@ -72,7 +72,7 @@ export function parseVideoItem(v: any): VideoCard | null {
       title,
       thumbnail: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
       duration: v?.duration?.text ?? fmtDuration(v?.duration?.seconds),
-      views: v?.short_view_count_text?.text ?? v?.view_count?.text ?? v?.view_count?.simple_text ?? '',
+      views: v?.short_view_count_text?.text ?? v?.short_view_count?.text ?? v?.view_count?.text ?? v?.view_count?.simple_text ?? '',
       published: v?.published?.text ?? '',
       isLive,
       channel: {
