@@ -21,6 +21,7 @@ const NAV_ITEMS: { icon: typeof Home; labelKey: keyof Translations; href: string
   { icon: TrendingUp, labelKey: 'nav_trending', href: '/trending' },
   { icon: Radio, labelKey: 'nav_live', href: '/live' },
   { icon: Clapperboard, labelKey: 'nav_shorts', href: '/shorts' },
+  { icon: Baby, labelKey: 'nav_kids', href: '/kids' },
   { icon: History, labelKey: 'nav_history', href: '/history' },
   { icon: Clock, labelKey: 'nav_watchLater', href: '/watch-later' },
   { icon: ThumbsUp, labelKey: 'nav_likes', href: '/likes' },
@@ -96,7 +97,6 @@ export default function Sidebar() {
         <div className="border-t border-yt-border/40 my-3 mx-3" />
         <nav className="px-2 flex flex-col gap-0.5">
           {[
-            { href: '/kids', icon: Baby, label: t('nav_kids'), active: pathname.startsWith('/kids') },
             { href: '/tv', icon: Tv, label: t('nav_iptv'), active: pathname.startsWith('/tv') },
             { href: '/music', icon: Music2, label: t('nav_music'), active: pathname.startsWith('/music') },
             { href: '/news', icon: Newspaper, label: t('nav_news'), active: pathname.startsWith('/news') },
@@ -255,7 +255,6 @@ export default function Sidebar() {
             {/* MyTube Apps */}
             <div className="px-2 flex flex-col gap-0.5">
               {[
-                { href: '/kids', icon: Baby, label: t('nav_kids'), active: pathname.startsWith('/kids') },
                 { href: '/tv', icon: Tv, label: t('nav_iptv'), active: pathname.startsWith('/tv') },
                 { href: '/music', icon: Music2, label: t('nav_music'), active: pathname.startsWith('/music') },
                 { href: '/news', icon: Newspaper, label: t('nav_news'), active: pathname.startsWith('/news') },
