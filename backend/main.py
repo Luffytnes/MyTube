@@ -1295,14 +1295,18 @@ async def live_hls_master(video_id: str, request: Request):
                     )
                     if not info:
                         return None
-                    for fmt in info.get("formats", []):
-                        proto = fmt.get("protocol", "")
-                        ext = fmt.get("ext", "")
-                        url = fmt.get("url", "")
-                        if proto in ("m3u8", "m3u8_native") or ext == "m3u8":
-                            return url
-                    # Fall back to manifest_url or direct url
-                    return info.get("manifest_url") or info.get("url")
+                    # Prefer master manifest — contains all quality levels, hls.js picks best
+                    if info.get("manifest_url"):
+                        return info["manifest_url"]
+                    # Fall back to the highest-resolution HLS format
+                    hls_fmts = [
+                        f for f in info.get("formats", [])
+                        if f.get("protocol", "") in ("m3u8", "m3u8_native") or f.get("ext", "") == "m3u8"
+                    ]
+                    if hls_fmts:
+                        best = max(hls_fmts, key=lambda f: f.get("height") or 0)
+                        return best.get("url")
+                    return info.get("url")
 
             hls_url = await loop.run_in_executor(None, _get_hls)
             if not hls_url:
