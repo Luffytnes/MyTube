@@ -14,10 +14,10 @@ RUN set -eu \
         *) echo "Unsupported arch: $ARCH" && exit 1 ;; \
     esac \
     && BASE="https://github.com/pufferffish/wireproxy/releases/download/v${WIREPROXY_VERSION}" \
-    && wget -qO /tmp/wireproxy.tar.gz  "${BASE}/wireproxy_${WP_ARCH}.tar.gz" \
-    && wget -qO /tmp/checksums.txt     "${BASE}/checksums.txt" \
-    && grep "wireproxy_${WP_ARCH}.tar.gz" /tmp/checksums.txt | sha256sum -c - \
-    && tar -xzf /tmp/wireproxy.tar.gz -C /tmp wireproxy \
+    && wget -qO /tmp/wireproxy_${WP_ARCH}.tar.gz "${BASE}/wireproxy_${WP_ARCH}.tar.gz" \
+    && wget -qO /tmp/checksums.txt                "${BASE}/checksums.txt" \
+    && cd /tmp && grep "wireproxy_${WP_ARCH}.tar.gz" checksums.txt | sha256sum -c - \
+    && tar -xzf /tmp/wireproxy_${WP_ARCH}.tar.gz -C /tmp wireproxy \
     && chmod +x /tmp/wireproxy
 
 # ── Stage 2: Runtime ─────────────────────────────────────────────────────────
