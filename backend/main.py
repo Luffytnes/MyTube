@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from services.vpn import _vpn_watchdog
 from services.ffmpeg import _vod_cache_cleanup_loop
 
+from api.health import router as health_router
 from api.youtube import router as youtube_router
 from api.music import router as music_router
 from api.iptv import router as iptv_router
@@ -31,6 +32,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(health_router)
 app.include_router(youtube_router)
 app.include_router(music_router)
 app.include_router(iptv_router)
