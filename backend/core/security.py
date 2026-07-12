@@ -64,9 +64,14 @@ def validate_proxy_url(url: str, allowed_schemes: tuple = ("http", "https")) -> 
     return url
 
 
-def ssrf_redirect_hook(response) -> None:
-    """httpx response event hook: block redirects pointing to private/internal addresses."""
+async def ssrf_redirect_hook(response) -> None:
+    """httpx async response event hook: block redirects pointing to private/internal addresses.
+
+    Runs DNS validation in a thread pool to avoid blocking the asyncio event loop.
+    Only active on proxy endpoints that forward user-supplied URLs.
+    """
     if response.is_redirect:
         location = response.headers.get("location", "")
         if location:
-            validate_proxy_url(location)
+            import asyncio
+            await asyncio.to_thread(validate_proxy_url, location)
