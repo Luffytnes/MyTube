@@ -212,7 +212,13 @@ The Docker setup runs MyTube on your local network — accessible from any devic
 ```bash
 git clone https://github.com/Luffytnes/MyTube.git
 cd MyTube
-docker compose up --build
+
+# 1. Create login credentials (required — nginx protects the entire interface)
+chmod +x setup-auth.sh
+./setup-auth.sh          # prompts for username + password
+
+# 2. Start the stack
+docker compose up --build -d
 ```
 
 The first build takes a few minutes (downloads ffmpeg, yt-dlp, wireproxy, builds Next.js).
@@ -221,12 +227,11 @@ Once started, open **http://\<your-local-ip\>:54321** from any device on your ne
 
 > **Find your local IP:** `ip route get 1` (Linux) or `ipconfig getifaddr en0` (macOS)
 
+> **WireGuard VPN** — wireproxy runs as a dedicated container, no manual installation needed. Upload your `.conf` directly from Settings → WireGuard.
+
 #### Useful commands
 
 ```bash
-# Run in background
-docker compose up --build -d
-
 # Stop
 docker compose down
 
@@ -235,6 +240,9 @@ docker compose logs -f
 
 # Update (after a git pull)
 docker compose up --build -d
+
+# Check stack health
+curl -u <user>:<pass> http://localhost:54321/api/health
 ```
 
 #### Data persistence
@@ -281,60 +289,50 @@ npm run dev
 
 ## 🔒 VPN WireGuard (optional)
 
-MyTube can route all its backend traffic (API calls to YouTube/Google) through a personal WireGuard VPN such as **ProtonVPN**, without affecting the rest of your system. This is done via **wireproxy** — a userspace WireGuard implementation that exposes a local SOCKS5 proxy. No root access required.
+MyTube can route all its backend traffic (API calls to YouTube/Google) through a personal WireGuard VPN such as **ProtonVPN**, without affecting the rest of your system. This is done via **[wireproxy](https://github.com/pufferffish/wireproxy)** — a fully userspace WireGuard implementation (no TUN interface, no root access required).
 
-### 1. Install wireproxy
+### Docker mode — no installation needed
 
-**macOS (Apple Silicon M1/M2/M3)**
+wireproxy runs as a dedicated container. Simply upload your `.conf` from the UI:
+
+1. Open **Settings → WireGuard**
+2. Click **Import .conf file** → select your ProtonVPN `.conf`
+3. Click **Connect** — status turns green
+
+That's it. No host changes, no system impact.
+
+### Local mode — install wireproxy manually
+
+**macOS (Apple Silicon)**
 ```bash
-curl -L https://github.com/windtf/wireproxy/releases/download/v1.1.2/wireproxy_darwin_arm64.tar.gz -o /tmp/wireproxy.tar.gz && \
-tar -xzf /tmp/wireproxy.tar.gz -C /tmp && \
-sudo mv /tmp/wireproxy /usr/local/bin/wireproxy && \
-sudo chmod +x /usr/local/bin/wireproxy && \
-wireproxy --version
+curl -L https://github.com/pufferffish/wireproxy/releases/download/v1.1.2/wireproxy_darwin_arm64.tar.gz | tar -xz -C /tmp
+sudo mv /tmp/wireproxy /usr/local/bin/wireproxy
 ```
 
-**macOS (Intel x86_64)**
+**macOS (Intel)**
 ```bash
-curl -L https://github.com/windtf/wireproxy/releases/download/v1.1.2/wireproxy_darwin_amd64.tar.gz -o /tmp/wireproxy.tar.gz && \
-tar -xzf /tmp/wireproxy.tar.gz -C /tmp && \
-sudo mv /tmp/wireproxy /usr/local/bin/wireproxy && \
-sudo chmod +x /usr/local/bin/wireproxy && \
-wireproxy --version
+curl -L https://github.com/pufferffish/wireproxy/releases/download/v1.1.2/wireproxy_darwin_amd64.tar.gz | tar -xz -C /tmp
+sudo mv /tmp/wireproxy /usr/local/bin/wireproxy
 ```
 
-**Linux**
+**Linux (amd64)**
 ```bash
-# Replace amd64 with arm64 if needed
-curl -L https://github.com/windtf/wireproxy/releases/download/v1.1.2/wireproxy_linux_amd64.tar.gz -o /tmp/wireproxy.tar.gz && \
-tar -xzf /tmp/wireproxy.tar.gz -C /tmp && \
-sudo mv /tmp/wireproxy /usr/local/bin/wireproxy && \
-sudo chmod +x /usr/local/bin/wireproxy
+curl -L https://github.com/pufferffish/wireproxy/releases/download/v1.1.2/wireproxy_linux_amd64.tar.gz | tar -xz -C /tmp
+sudo mv /tmp/wireproxy /usr/local/bin/wireproxy
 ```
 
-### 2. Get a WireGuard config from ProtonVPN
+Then import your `.conf` from **Settings → WireGuard** exactly as above.
+
+### Get a WireGuard config from ProtonVPN
 
 1. Log in to [protonvpn.com](https://protonvpn.com) → Downloads → WireGuard
-2. Select platform: **GNU/Linux**
-3. Choose a server and download the `.conf` file
-
-### 3. Activate from MyTube Settings
-
-1. Start MyTube (`./start.sh`)
-2. Click the **⚙️ Settings** button (top right)
-3. Under **Wireproxy** → click **Import .conf file** → select your ProtonVPN file
-4. Click **Connect** — status turns green (Connected)
-
-All MyTube traffic to YouTube/Google now goes through ProtonVPN. Your other apps are unaffected.
+2. Platform: **GNU/Linux** — choose a server and download the `.conf`
 
 ### Verify it works
 
 ```bash
-# With VPN connected in MyTube — should show a ProtonVPN IP
-curl --socks5 127.0.0.1:25344 https://ipinfo.io
-
-# Without VPN — your real IP
-curl https://ipinfo.io
+# Check current IP as seen by external servers (routes through VPN if active)
+curl -u <user>:<pass> http://localhost:54321/api/vpn/myip
 ```
 
 ---
@@ -443,10 +441,22 @@ Every request your browser makes goes through **your own backend**, never direct
 
 | Endpoint | Description |
 |----------|-------------|
-| `GET /api/vpn/status` | VPN status |
-| `POST /api/vpn/upload` | Upload WireGuard .conf |
+| `GET /api/vpn/status` | VPN status + active config name |
+| `GET /api/vpn/configs` | List saved `.conf` files |
+| `POST /api/vpn/upload` | Upload a WireGuard `.conf` |
+| `POST /api/vpn/select` | Switch active config (VPN must be stopped) |
+| `DELETE /api/vpn/configs/{name}` | Delete a saved config |
 | `POST /api/vpn/start` | Start VPN tunnel |
 | `POST /api/vpn/stop` | Stop VPN tunnel |
+| `POST /api/vpn/auto` | Enable / disable auto-failover between configs |
+| `POST /api/vpn/reset_failover` | Reset failover state (retry all configs) |
+| `GET /api/vpn/myip` | Public IP as seen by external servers |
+
+### Health
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/health` | Stack status — ffmpeg, VPN, cache, uptime |
 
 Interactive docs → **http://localhost:8000/docs**
 
