@@ -25,7 +25,7 @@ def _is_private_ip(ip_str: str) -> bool:
         addr = ipaddress.ip_address(ip_str)
         return any(addr in net for net in _BLOCKED_NETWORKS)
     except ValueError:
-        return True
+        return False  # not an IP literal — hostnames are checked via DNS resolution
 
 
 def validate_proxy_url(url: str, allowed_schemes: tuple = ("http", "https")) -> str:
