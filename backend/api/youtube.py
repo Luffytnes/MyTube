@@ -698,6 +698,9 @@ async def hls_playlist(video_id: str, itag: str, start: int = 0):
             raise HTTPException(status_code=504, detail="Transcoding timeout")
 
         content = playlist_path.read_text()
+        # Declare EVENT so hls.js starts from the first segment, not the live edge
+        if "#EXT-X-PLAYLIST-TYPE" not in content:
+            content = content.replace("#EXTM3U", "#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT", 1)
         # Rewrite segment filenames to include start offset in URL
         content = re.sub(
             r'^(seg\d+\.ts)$',
@@ -795,6 +798,9 @@ async def iptv_vod_hls2_playlist(
         raise HTTPException(status_code=504, detail="HLS transcoding timeout")
 
     content = playlist_path.read_text()
+    # Declare EVENT so Shaka starts from the first segment, not the live edge
+    if "#EXT-X-PLAYLIST-TYPE" not in content:
+        content = content.replace("#EXTM3U", "#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT", 1)
     base = str(request.base_url).rstrip("/")
     seg_base = f"{base}/api/iptv/vod_hls2/{stream_id}/{start}"
     qs = f"ext={ext}&media={media}&audio_idx={audio_idx}"
