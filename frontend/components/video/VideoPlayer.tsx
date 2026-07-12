@@ -213,7 +213,13 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
           const [sPart, ePart] = lines[ti].split('-->').map(p => p.trim().split(/\s/)[0])
           const start = toSec(sPart), end = toSec(ePart)
           const rawTxt = lines.slice(ti + 1).filter(l => l.trim() && !l.startsWith('NOTE')).join('\n')
-          const txt = rawTxt.replace(/<[^>]*>/g, '').replace(/\{[^}]*\}/g, '').trim()
+          const stripped = rawTxt.replace(/<[^>]*>/g, '').replace(/\{[^}]*\}/g, '')
+          const txt = stripped
+            .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+            .replace(/&#x([0-9a-fA-F]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+            .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"').replace(/&apos;|&#39;/g, "'").replace(/&nbsp;/g, ' ')
+            .trim()
           if (txt && !isNaN(start) && !isNaN(end)) cues.push({ start, end, lines: txt.split('\n') })
         }
         setSubCues(cues)
