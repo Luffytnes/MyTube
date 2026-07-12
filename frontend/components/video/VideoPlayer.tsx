@@ -49,6 +49,7 @@ interface VideoPlayerProps {
   hasNext?: boolean
   hasPrev?: boolean
   chapters?: Chapter[]
+  seekToRef?: React.MutableRefObject<((t: number) => void) | null>
 }
 
 function getBestFormat(formats: VideoFormat[]): VideoFormat | null {
@@ -121,7 +122,7 @@ function PanelItem({
   )
 }
 
-export default function VideoPlayer({ videoId, formats, title, isLive, knownDuration, onEnded, onNext, onPrev, hasNext, hasPrev, chapters = [] }: VideoPlayerProps) {
+export default function VideoPlayer({ videoId, formats, title, isLive, knownDuration, onEnded, onNext, onPrev, hasNext, hasPrev, chapters = [], seekToRef }: VideoPlayerProps) {
   const { t } = useRegion()
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -139,6 +140,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   const hlsRestartRef = useRef(0)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const startHdHlsRef = useRef<((startOffset: number, autoplay: boolean, isErrorRestart?: boolean) => void) | null>(null)
+  const isVideoOnlyRef = useRef(false)
 
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -302,8 +304,28 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   }, [videoId, isLive])
 
   const isVideoOnly = !!(selectedFormat && !selectedFormat.hasAudio)
+  isVideoOnlyRef.current = isVideoOnly
   const streamUrl = selectedFormat ? getStreamUrl(videoId, String(selectedFormat.itag)) : getStreamUrl(videoId)
   const audioSrc = isVideoOnly ? getAudioUrl(videoId) : null
+
+  // Expose seekTo so external components (e.g. description timestamps) can seek the video
+  useEffect(() => {
+    if (!seekToRef) return
+    seekToRef.current = (t: number) => {
+      const video = videoRef.current
+      if (!video) return
+      const dur = effectiveDurationRef.current || video.duration || 0
+      if (dur <= 0) return
+      setCurrentTime(t)
+      if (isVideoOnlyRef.current) {
+        startHdHlsRef.current?.(t, !video.paused)
+      } else {
+        video.currentTime = t
+        if (audioRef.current) audioRef.current.currentTime = t
+      }
+    }
+    return () => { if (seekToRef) seekToRef.current = null }
+  }, [seekToRef]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const startHdHls = useCallback((startOffset: number, autoplay: boolean, isErrorRestart = false) => {
     const video = videoRef.current
@@ -341,6 +363,19 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
         if (autoplay && !playStarted && (data.type === 'audio' || data.type === 'audiovideo')) {
           playStarted = true
           if (autoplayFallback) { clearTimeout(autoplayFallback); autoplayFallback = null }
+          // Fix resume A/V offset: ffmpeg fast-seeks video to nearest keyframe which may be
+          // several seconds before the audio's start. Skip the video forward to audio's media
+          // time so both tracks start in sync.
+          try {
+            const audioStart: number = data.timeRanges?.audio?.length > 0 ? data.timeRanges.audio.start(0) : 0
+            const videoStart: number = data.timeRanges?.video?.length > 0 ? data.timeRanges.video.start(0) : 0
+            if (audioStart - videoStart > 0.2) {
+              const onSeeked = () => { video.removeEventListener('seeked', onSeeked); safePlay(video) }
+              video.addEventListener('seeked', onSeeked)
+              video.currentTime = audioStart
+              return
+            }
+          } catch { /* ignore — fall through to safePlay */ }
           safePlay(video)
         }
       })

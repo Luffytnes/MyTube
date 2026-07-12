@@ -118,19 +118,45 @@ function RelatedChannelCard({ id, name }: { id: string; name: string }) {
   )
 }
 
-function renderDescription(text: string): React.ReactNode[] {
-  const parts = text.split(/(#[\wÀ-ɏЀ-ӿ]+)/g)
-  return parts.map((part, i) => {
-    if (/^#[\wÀ-ɏЀ-ӿ]+$/.test(part)) {
-      const tag = part.slice(1)
-      return (
-        <Link key={i} href={`/hashtag/${encodeURIComponent(tag)}`} className="text-blue-400 hover:underline">
-          {part}
-        </Link>
-      )
-    }
-    return part
-  })
+const TS_RE = /^(\s*[-–•]?\s*)((?:\d+:)?\d{1,2}:\d{2})(\s.*)?$/
+
+function toSeconds(ts: string): number {
+  const p = ts.split(':').map(Number)
+  return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p[0] * 60 + p[1]
+}
+
+function renderLine(line: string, li: number, onSeek?: (t: number) => void): React.ReactNode {
+  const tsMatch = onSeek ? line.match(TS_RE) : null
+  if (tsMatch) {
+    const [, prefix, timeStr, rest] = tsMatch
+    const sec = toSeconds(timeStr)
+    const restParts = (rest ?? '').split(/(#[\wÀ-ɏЀ-ӿ]+)/g)
+    return (
+      <span key={`ts-${li}`}>
+        {prefix}
+        <button onClick={() => onSeek!(sec)} className="text-blue-400 hover:underline font-medium">
+          {timeStr}
+        </button>
+        {restParts.map((p, pi) =>
+          /^#[\wÀ-ɏЀ-ӿ]+$/.test(p)
+            ? <Link key={pi} href={`/hashtag/${encodeURIComponent(p.slice(1))}`} className="text-blue-400 hover:underline">{p}</Link>
+            : p
+        )}
+      </span>
+    )
+  }
+  const parts = line.split(/(#[\wÀ-ɏЀ-ӿ]+)/g)
+  return parts.map((p, pi) =>
+    /^#[\wÀ-ɏЀ-ӿ]+$/.test(p)
+      ? <Link key={`h-${li}-${pi}`} href={`/hashtag/${encodeURIComponent(p.slice(1))}`} className="text-blue-400 hover:underline">{p}</Link>
+      : p
+  )
+}
+
+function renderDescription(text: string, onSeek?: (t: number) => void): React.ReactNode[] {
+  return text.split('\n').flatMap((line, li) =>
+    li === 0 ? [renderLine(line, li, onSeek)] : ['\n', renderLine(line, li, onSeek)]
+  )
 }
 
 function parseChapters(description: string): Chapter[] {
@@ -170,6 +196,7 @@ function WatchContent({ params }: WatchPageProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [descExpanded, setDescExpanded] = useState(false)
+  const seekToRef = useRef<((t: number) => void) | null>(null)
   const [showDownload, setShowDownload] = useState(false)
   const [liked, setLiked] = useState(false)
   const [disliked, setDisliked] = useState(false)
@@ -355,6 +382,7 @@ function WatchContent({ params }: WatchPageProps) {
               hasNext={!!(nextQueueItem || video.related?.[0])}
               hasPrev={true}
               chapters={video.chapters?.length ? video.chapters : (video.description ? parseChapters(video.description) : [])}
+              seekToRef={seekToRef}
             />
 
             {/* Autoplay countdown overlay */}
@@ -578,7 +606,7 @@ function WatchContent({ params }: WatchPageProps) {
                     descExpanded ? '' : 'line-clamp-2'
                   }`}
                 >
-                  {renderDescription(video.description)}
+                  {renderDescription(video.description, (t) => seekToRef.current?.(t))}
                 </div>
               ) : (
                 <p className="text-sm text-yt-text-muted italic">No description available.</p>
