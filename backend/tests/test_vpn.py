@@ -1,9 +1,7 @@
 """Tests for VPN failover logic — especially record_youtube_error() in container mode."""
-import asyncio
 import sys
 import os
-import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 

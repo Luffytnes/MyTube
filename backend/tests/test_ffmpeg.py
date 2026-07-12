@@ -1,7 +1,6 @@
 """Tests for ffmpeg command construction — no actual transcoding."""
 import sys
 import os
-import pytest
 from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -138,7 +137,6 @@ class TestVodPtsReset:
     def test_pts_reset_present_for_nonzero_start(self):
         """When starting from a seek position, PTS must be reset to avoid timestamp doubling."""
         import asyncio
-        import json
         captured = {}
 
         async def fake_exec(*args, **kwargs):
