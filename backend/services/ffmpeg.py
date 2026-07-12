@@ -16,6 +16,7 @@ from core.cache import (
     stream_url_cache_set,
 )
 from services.innertube import get_ydl_opts, httpx_client
+from services.vpn import _get_proxy_url
 
 import yt_dlp
 
@@ -78,12 +79,16 @@ async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
         ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 
         seek = ["-ss", str(start)] if start > 0 else []
+        proxy_url = _get_proxy_url()
+        proxy_args = ["-socks_proxy", proxy_url.replace("socks5://", "")] if proxy_url else []
 
         cmd = [
-            "ffmpeg", "-loglevel", "error", "-y",
+            "ffmpeg", "-loglevel", "warning", "-y",
+            *proxy_args,
             *seek,
             "-headers", f"User-Agent: {ua}\r\nReferer: https://www.youtube.com/\r\n",
             "-i", video_url,
+            *proxy_args,
             *seek,
             "-headers", f"User-Agent: {ua}\r\nReferer: https://www.youtube.com/\r\n",
             "-i", audio_url,
@@ -100,8 +105,9 @@ async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
         )
+        asyncio.ensure_future(_log_stderr(process.stderr))
 
         _hls_sessions[session_key] = {"dir": tmpdir, "process": process, "start": start}
         return session_key
