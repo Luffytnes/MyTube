@@ -359,25 +359,29 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
         }
       })
       hls.on(Hls.Events.BUFFER_APPENDED, (_, data: any) => {
-        // Wait for audio data in buffer before starting — avoids video-without-audio at startup
-        if (autoplay && !playStarted && (data.type === 'audio' || data.type === 'audiovideo')) {
-          playStarted = true
-          if (autoplayFallback) { clearTimeout(autoplayFallback); autoplayFallback = null }
-          // Fix resume A/V offset: ffmpeg fast-seeks video to nearest keyframe which may be
-          // several seconds before the audio's start. Skip the video forward to audio's media
-          // time so both tracks start in sync.
-          try {
-            const audioStart: number = data.timeRanges?.audio?.length > 0 ? data.timeRanges.audio.start(0) : 0
-            const videoStart: number = data.timeRanges?.video?.length > 0 ? data.timeRanges.video.start(0) : 0
-            if (audioStart - videoStart > 0.2) {
-              const onSeeked = () => { video.removeEventListener('seeked', onSeeked); safePlay(video) }
-              video.addEventListener('seeked', onSeeked)
-              video.currentTime = audioStart
-              return
-            }
-          } catch { /* ignore — fall through to safePlay */ }
-          safePlay(video)
-        }
+        if (!autoplay || playStarted) return
+        // Wait until both audio AND video buffers have data before starting playback.
+        // This lets us detect the A/V offset caused by ffmpeg fast-seeking video to the
+        // nearest keyframe (e.g. 297 s) while audio seeks precisely to the resume point
+        // (300 s). HLS.js appends them into separate SourceBuffers; timeRanges exposes
+        // the start of each. We skip the video forward to match the audio start.
+        const audioRanges: TimeRanges | undefined = data.timeRanges?.audio
+        const videoRanges: TimeRanges | undefined = data.timeRanges?.video
+        if (!audioRanges || audioRanges.length === 0) return
+        if (!videoRanges || videoRanges.length === 0) return
+        playStarted = true
+        if (autoplayFallback) { clearTimeout(autoplayFallback); autoplayFallback = null }
+        try {
+          const audioStart = audioRanges.start(0)
+          const videoStart = videoRanges.start(0)
+          if (audioStart - videoStart > 0.2) {
+            const onSeeked = () => { video.removeEventListener('seeked', onSeeked); safePlay(video) }
+            video.addEventListener('seeked', onSeeked)
+            video.currentTime = audioStart
+            return
+          }
+        } catch { /* ignore — fall through to safePlay */ }
+        safePlay(video)
       })
       hls.on(Hls.Events.ERROR, (_: unknown, data: { fatal: boolean; type: string; details: string }) => {
         if (!data.fatal || restartQueued) return

@@ -5,7 +5,7 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: { tag: string } }
 ) {
-  const tag = decodeURIComponent(params.tag).replace(/^#/, '')
+  const tag = decodeURIComponent(params.tag).replace(/^#/, '').toLowerCase()
 
   try {
     const yt = await getInnertube()
@@ -32,7 +32,9 @@ export async function GET(
       })
       .filter(Boolean)
 
-    return NextResponse.json({ tag: hashtagText, info: hashtagInfo, videos: items })
+    return NextResponse.json({ tag: hashtagText, info: hashtagInfo, videos: items }, {
+      headers: { 'Cache-Control': 'no-store' },
+    })
   } catch (err: any) {
     console.error('[yt/hashtag]', err?.message)
     return NextResponse.json({ tag: `#${tag}`, info: '', videos: [] })
