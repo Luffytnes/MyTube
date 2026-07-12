@@ -80,7 +80,7 @@ async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
 
         seek = ["-ss", str(start)] if start > 0 else []
         proxy_url = _get_proxy_url()
-        proxy_args = ["-socks_proxy", proxy_url.replace("socks5://", "")] if proxy_url else []
+        proxy_args = ["-socks_proxy", proxy_url] if proxy_url else []
 
         cmd = [
             "ffmpeg", "-loglevel", "warning", "-y",
@@ -88,7 +88,6 @@ async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
             *seek,
             "-headers", f"User-Agent: {ua}\r\nReferer: https://www.youtube.com/\r\n",
             "-i", video_url,
-            *proxy_args,
             *seek,
             "-headers", f"User-Agent: {ua}\r\nReferer: https://www.youtube.com/\r\n",
             "-i", audio_url,
