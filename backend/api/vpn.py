@@ -1,18 +1,21 @@
 """VPN (wireproxy) control API routes."""
 import os
-import subprocess
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from services import vpn as vpn_svc
 from services.vpn import (
     WIREPROXY_BIN,
+    WIREPROXY_HOST,
     VPN_CONFIGS_DIR,
     _get_proxy_url,
     _prepare_conf,
     _vpn_state_load,
     _vpn_state_save,
+    _start_wireproxy_sync,
+    _stop_wireproxy_sync,
     _ytm_cache,
+    is_wireproxy_active,
 )
 from services.innertube import httpx_client
 
@@ -21,7 +24,7 @@ router = APIRouter()
 
 @router.get("/api/vpn/status")
 async def vpn_status():
-    running = vpn_svc._wireproxy_process is not None and vpn_svc._wireproxy_process.poll() is None
+    running = is_wireproxy_active()
     return {
         "running": running,
         "conf_loaded": vpn_svc._wireproxy_conf_path is not None,
@@ -104,7 +107,7 @@ async def vpn_select_conf(body: dict):
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail=f"Config '{name}' not found")
 
-    if vpn_svc._wireproxy_process and vpn_svc._wireproxy_process.poll() is None:
+    if is_wireproxy_active():
         raise HTTPException(status_code=409, detail="Stop the VPN before switching config")
 
     vpn_svc._wireproxy_conf_path = path
@@ -121,8 +124,7 @@ async def vpn_delete_conf(name: str):
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail=f"Config '{name}' not found")
 
-    running = vpn_svc._wireproxy_process is not None and vpn_svc._wireproxy_process.poll() is None
-    if running and vpn_svc._wireproxy_conf_name == name:
+    if is_wireproxy_active() and vpn_svc._wireproxy_conf_name == name:
         raise HTTPException(status_code=409, detail="Cannot delete the active config while VPN is running")
 
     os.remove(path)
@@ -144,55 +146,29 @@ async def vpn_start():
     if not vpn_svc._wireproxy_conf_path or not os.path.exists(vpn_svc._wireproxy_conf_path):
         raise HTTPException(status_code=400, detail="No VPN config loaded. Upload a .conf file first.")
 
-    if vpn_svc._wireproxy_process and vpn_svc._wireproxy_process.poll() is None:
+    if is_wireproxy_active():
         return {"running": True, "message": "Already running"}
 
-    if not os.path.exists(WIREPROXY_BIN):
+    if not WIREPROXY_HOST and not os.path.exists(WIREPROXY_BIN):
         raise HTTPException(
             status_code=500,
             detail=f"wireproxy not found at {WIREPROXY_BIN}. Install it: https://github.com/pufferffish/wireproxy"
         )
 
-    try:
-        vpn_svc._wireproxy_process = subprocess.Popen(
-            [WIREPROXY_BIN, "-c", vpn_svc._wireproxy_conf_path],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-        )
-        # Give it a moment to start
-        import time
-        time.sleep(1.5)
+    import asyncio
+    loop = asyncio.get_event_loop()
+    success = await loop.run_in_executor(None, _start_wireproxy_sync, vpn_svc._wireproxy_conf_path)
+    if not success:
+        raise HTTPException(status_code=500, detail="wireproxy failed to start")
 
-        if vpn_svc._wireproxy_process.poll() is not None:
-            stderr = vpn_svc._wireproxy_process.stderr.read().decode("utf-8", errors="replace") if vpn_svc._wireproxy_process.stderr else ""
-            raise HTTPException(status_code=500, detail=f"wireproxy exited immediately: {stderr[:300]}")
-
-        # Clear ytmusicapi cache so new instances use the proxy
-        _ytm_cache.clear()
-
-        return {"running": True}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to start wireproxy: {str(e)}")
+    return {"running": True}
 
 
 @router.post("/api/vpn/stop")
 async def vpn_stop():
-    if vpn_svc._wireproxy_process:
-        try:
-            vpn_svc._wireproxy_process.terminate()
-            vpn_svc._wireproxy_process.wait(timeout=5)
-        except Exception:
-            try:
-                vpn_svc._wireproxy_process.kill()
-            except Exception:
-                pass
-        vpn_svc._wireproxy_process = None
-
-    # Clear ytmusicapi cache so new instances don't use the proxy
-    _ytm_cache.clear()
-
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _stop_wireproxy_sync)
     return {"running": False}
 
 

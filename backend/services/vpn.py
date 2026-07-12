@@ -27,11 +27,18 @@ _vpn_failover_lock = asyncio.Lock()   # prevent concurrent failovers
 
 WIREPROXY_BIN = shutil.which("wireproxy") or "/usr/local/bin/wireproxy"
 
+# When WIREPROXY_HOST is set, the backend delegates wireproxy to a dedicated
+# container instead of managing it as a subprocess.
+WIREPROXY_HOST: str = os.getenv("WIREPROXY_HOST", "")
+
 SOCKS5_SECTION = f"\n[Socks5]\nBindAddress = 127.0.0.1:{_wireproxy_socks_port}\n"
+SOCKS5_SECTION_EXT = f"\n[Socks5]\nBindAddress = 0.0.0.0:{_wireproxy_socks_port}\n"
 
 # Persistent storage for saved configs
 VPN_CONFIGS_DIR = os.path.join(os.path.expanduser("~"), ".mytube", "vpn_configs")
 VPN_STATE_FILE  = os.path.join(os.path.expanduser("~"), ".mytube", "vpn_state.json")
+# Active conf written to shared volume for the wireproxy container
+_ACTIVE_CONF_PATH = os.path.join(os.path.expanduser("~"), ".mytube", ".wireproxy.conf")
 os.makedirs(VPN_CONFIGS_DIR, exist_ok=True)
 
 
@@ -70,6 +77,13 @@ _vpn_last_activity: float = _time()  # updated on every proxied request
 _VPN_IDLE_RESTART_SECS = 300  # restart after 5 min idle to recover stale tunnels
 
 
+def is_wireproxy_active() -> bool:
+    """True if wireproxy tunnel is running (subprocess or external container)."""
+    if WIREPROXY_HOST:
+        return _wireproxy_conf_path is not None and os.path.exists(_ACTIVE_CONF_PATH)
+    return _wireproxy_process is not None and _wireproxy_process.poll() is None
+
+
 def vpn_record_activity():
     global _vpn_last_activity
     _vpn_last_activity = _time()
@@ -90,10 +104,11 @@ async def _vpn_watchdog():
     2. If idle for >5 min → restart proactively to recover stale WireGuard tunnels.
     """
     await asyncio.sleep(30)  # let the server fully start first
+    socks_host = WIREPROXY_HOST if WIREPROXY_HOST else "127.0.0.1"
     while True:
         await asyncio.sleep(20)
         try:
-            if not (_wireproxy_process and _wireproxy_process.poll() is None):
+            if not is_wireproxy_active():
                 continue
             if not _wireproxy_conf_path:
                 continue
@@ -102,7 +117,7 @@ async def _vpn_watchdog():
             port_alive = False
             try:
                 _, writer = await asyncio.wait_for(
-                    asyncio.open_connection("127.0.0.1", _wireproxy_socks_port),
+                    asyncio.open_connection(socks_host, _wireproxy_socks_port),
                     timeout=3.0,
                 )
                 writer.close()
@@ -137,9 +152,16 @@ def _list_all_confs() -> List[str]:
 
 
 def _stop_wireproxy_sync():
-    """Stop wireproxy synchronously."""
+    """Stop wireproxy synchronously (subprocess or external container)."""
     global _wireproxy_process
-    if _wireproxy_process:
+    if WIREPROXY_HOST:
+        try:
+            os.remove(_ACTIVE_CONF_PATH)
+        except FileNotFoundError:
+            pass
+        except Exception:
+            pass
+    elif _wireproxy_process:
         try:
             _wireproxy_process.terminate()
             _wireproxy_process.wait(timeout=5)
@@ -156,6 +178,31 @@ def _start_wireproxy_sync(conf_path: str) -> bool:
     """Start wireproxy with given conf. Returns True on success."""
     global _wireproxy_process
     import time
+    import re
+
+    if WIREPROXY_HOST:
+        # External container mode: write prepared conf to shared volume.
+        # The wireproxy container polls _ACTIVE_CONF_PATH and restarts on change.
+        try:
+            raw = open(conf_path).read()
+            if "[Socks5]" in raw:
+                prepared = re.sub(
+                    r'BindAddress\s*=\s*\S+',
+                    f'BindAddress = 0.0.0.0:{_wireproxy_socks_port}',
+                    raw,
+                )
+            else:
+                prepared = raw.rstrip() + SOCKS5_SECTION_EXT
+            os.makedirs(os.path.dirname(_ACTIVE_CONF_PATH), exist_ok=True)
+            with open(_ACTIVE_CONF_PATH, "w") as f:
+                f.write(prepared)
+            time.sleep(2)  # give wireproxy container time to restart
+            _ytm_cache.clear()
+            return True
+        except Exception:
+            return False
+
+    # Subprocess mode
     try:
         _wireproxy_process = subprocess.Popen(
             [WIREPROXY_BIN, "-c", conf_path],
@@ -237,6 +284,10 @@ def reset_youtube_errors():
 
 
 def _get_proxy_url() -> Optional[str]:
+    if WIREPROXY_HOST:
+        if _wireproxy_conf_path and os.path.exists(_ACTIVE_CONF_PATH):
+            return f"socks5://{WIREPROXY_HOST}:{_wireproxy_socks_port}"
+        return None
     if _wireproxy_process and _wireproxy_process.poll() is None:
         return f"socks5://127.0.0.1:{_wireproxy_socks_port}"
     return None

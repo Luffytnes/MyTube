@@ -1,4 +1,20 @@
 services:
+  wireproxy:
+    build: ./wireproxy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_ADMIN           # WireGuard requires kernel network capabilities
+    mem_limit: 64m
+    cpus: "0.5"
+    volumes:
+      - mytube-data:/data
+    expose:
+      - "25344"
+
   backend:
     build: ./backend
     restart: unless-stopped
@@ -7,8 +23,6 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    cap_add:
-      - NET_ADMIN           # required by wireproxy for WireGuard tunnel
     mem_limit: 1g
     cpus: "2.0"
     volumes:
@@ -17,6 +31,9 @@ services:
       - "8000"
     environment:
       - HOME=/home/mytube
+      - WIREPROXY_HOST=wireproxy
+    depends_on:
+      - wireproxy
 
   frontend:
     build: ./frontend

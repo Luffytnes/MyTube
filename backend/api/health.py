@@ -8,6 +8,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from core import cache as _cache_module
+from services.vpn import is_wireproxy_active as _vpn_active
 from services import vpn as _vpn
 
 router = APIRouter()
@@ -28,7 +29,7 @@ def _ffmpeg_ok() -> bool:
 
 
 def _wireproxy_ok() -> bool:
-    return _vpn._wireproxy_process is not None and _vpn._wireproxy_process.poll() is None
+    return _vpn_active()
 
 
 @router.get("/api/health")
@@ -48,6 +49,7 @@ async def health():
         "ffmpeg": "ok" if ffmpeg else "unavailable",
         "vpn": "active" if vpn_active else "off",
         "vpn_conf": _vpn._wireproxy_conf_name or None,
+        "vpn_mode": "external" if _vpn.WIREPROXY_HOST else "subprocess",
         "vpn_auto": _vpn._vpn_auto_mode,
         "cache_entries": cache_entries,
         "uptime_seconds": uptime,
