@@ -65,7 +65,10 @@ services:
     cap_drop:
       - ALL
     cap_add:
-      - NET_BIND_SERVICE
+      - NET_BIND_SERVICE   # bind port 80
+      - CHOWN              # chown temp dirs during startup
+      - SETUID             # drop to nginx worker user
+      - SETGID             # drop to nginx worker group
     mem_limit: 64m
     ports:
       - "54321:80"
