@@ -148,7 +148,7 @@ function SearchContent() {
           <div className="px-4 py-4">
             {!loading && !error && totalResults > 0 && (
               <p className="text-sm text-yt-text-muted mb-5">
-                {t('searchResultsFor')} <span className="text-yt-text font-medium">"{query}"</span>
+                {t('searchResultsFor')} <span className="text-yt-text font-medium">&quot;{query}&quot;</span>
               </p>
             )}
 
@@ -228,7 +228,7 @@ function SearchContent() {
                   <div className="flex flex-col items-center justify-center py-20 text-center">
                     <Search className="w-12 h-12 text-yt-text-muted mb-3" />
                     <p className="text-yt-text text-lg font-medium mb-1">
-                      {t('noResultsFor')} "{query}"
+                      {t('noResultsFor')} &quot;{query}&quot;
                     </p>
                   </div>
                 )}
