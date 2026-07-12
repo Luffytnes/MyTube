@@ -403,7 +403,6 @@ async def iptv_vod_stream_url(stream_id: str, request: Request, ext: str = "mp4"
     if not config._xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
     s, u, p = config._xtream_cfg["server"], config._xtream_cfg["username"], config._xtream_cfg["password"]
-    base = str(request.base_url).rstrip("/")
     src_url = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
 
     duration_secs: float | None = None
@@ -540,7 +539,7 @@ async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", med
                 byte_offset = int(0.90 * start / duration * cl)
                 print(f"[seek] byte_offset={byte_offset} ({start}s / {duration:.0f}s, size={cl})", flush=True)
             else:
-                print(f"[seek] no Content-Length from HEAD/Range-probe, byte_offset=0", flush=True)
+                print("[seek] no Content-Length from HEAD/Range-probe, byte_offset=0", flush=True)
         except Exception as e:
             print(f"[seek] probe failed: {e}, byte_offset=0", flush=True)
 

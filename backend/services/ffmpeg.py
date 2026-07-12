@@ -10,7 +10,7 @@ import httpx
 from fastapi import HTTPException
 
 from core import config
-from core.config import _FFMPEG, _FFPROBE, _OUTPUT_ARGS
+from core.config import _FFMPEG
 from core.cache import (
     stream_url_cache_get,
     stream_url_cache_set,

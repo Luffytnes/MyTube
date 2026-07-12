@@ -249,7 +249,7 @@ async def podcast_audio_proxy(url: str, request: Request):
                     async for chunk in resp.aiter_bytes(65536):
                         await chunk_queue.put(chunk)
         except Exception as exc:
-            logger.warning(f"Podcast audio proxy error: {exc}")
+            print(f"[podcast] audio proxy error: {exc}", flush=True)
         finally:
             header_event.set()          # unblock waiter even on error
             await chunk_queue.put(None)  # sentinel → end of stream

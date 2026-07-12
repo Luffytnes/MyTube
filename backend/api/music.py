@@ -389,7 +389,7 @@ async def radio_stream_proxy(url: str, request: Request):
                     async for chunk in resp.aiter_bytes(65536):
                         await chunk_queue.put(chunk)
         except Exception as exc:
-            logger.warning(f"Radio stream proxy error: {exc}")
+            print(f"[radio] stream proxy error: {exc}", flush=True)
         finally:
             header_event.set()
             await chunk_queue.put(None)

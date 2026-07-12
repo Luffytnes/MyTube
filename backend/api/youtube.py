@@ -4,7 +4,6 @@ import asyncio
 import base64
 import html as html_lib
 import re
-import tempfile
 import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional

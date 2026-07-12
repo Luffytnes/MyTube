@@ -7,12 +7,10 @@ import json
 import re
 
 import httpx
-import yt_dlp
 
 from core.config import (
     INVIDIOUS_INSTANCES,
     YDL_OPTS_BASE,
-    YOUTUBE_HEADERS,
     _YT_HEADERS,
     _YT_VIDEOS_TAB_PARAMS,
 )

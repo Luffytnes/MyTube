@@ -1,5 +1,4 @@
 """VPN (wireproxy) control API routes."""
-import asyncio
 import os
 import subprocess
 
