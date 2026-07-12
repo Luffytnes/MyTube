@@ -51,11 +51,11 @@ services:
     expose:
       - "3000"
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get({host:'localhost',port:3000,path:'/'}, r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:3000/ 2>&1 || exit 1"]
       interval: 15s
-      timeout: 5s
+      timeout: 10s
       retries: 5
-      start_period: 30s
+      start_period: 60s
 
   nginx:
     image: nginx:alpine

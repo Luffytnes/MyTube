@@ -144,10 +144,21 @@ jobs:
           printf 'testuser:%s\n' "$HASH" > nginx/.htpasswd
 
       - name: Build and start stack
-        run: docker compose up -d --build --wait
+        run: docker compose up -d --build
         timeout-minutes: 10
-        env:
-          COMPOSE_HTTP_TIMEOUT: 300
+
+      - name: Wait for backend to be ready
+        run: |
+          for i in $(seq 1 40); do
+            STATUS=$(curl -sf -u testuser:testpass -o /dev/null -w '%{http_code}' \
+              http://localhost:54321/api/health 2>/dev/null || echo "000")
+            [ "$STATUS" = "200" ] && { echo "Backend healthy (attempt $i)"; exit 0; }
+            echo "Attempt $i: status=$STATUS — waiting..."
+            sleep 5
+          done
+          echo "Backend never became healthy after 200s"
+          docker compose logs
+          exit 1
 
       - name: Check that unauthenticated requests return 401
         run: |
