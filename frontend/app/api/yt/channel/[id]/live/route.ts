@@ -9,8 +9,12 @@ export async function GET(
     const yt = await getInnertube()
     const ch = await yt.getChannel(params.id)
     const feed = await ch.getLiveStreams()
-    const videos = (feed.videos ?? []).map(parseLockupView).filter(Boolean)
-    return NextResponse.json({ videos, channelId: params.id })
+    const channelId = params.id
+    const videos = (feed.videos ?? [])
+      .map(parseLockupView)
+      .filter(Boolean)
+      .map(v => ({ ...v!, channel: { ...v!.channel, id: v!.channel.id || channelId, thumbnail: v!.channel.thumbnail ?? `/api/channel_thumbnail/${channelId}` } }))
+    return NextResponse.json({ videos, channelId })
   } catch (err: any) {
     console.error('[yt/channel/live]', err?.message)
     return NextResponse.json({ videos: [], channelId: params.id }, { status: 200 })

@@ -25,6 +25,8 @@ function ChannelAvatar({
   size?: 'sm' | 'md'
 }) {
   const [imgFailed, setImgFailed] = useState(false)
+  // Reset on src change so a previously-failed load retries when a new URL arrives
+  useEffect(() => { setImgFailed(false) }, [src])
   const letter = name ? name[0].toUpperCase() : '?'
   const sizeClass = size === 'sm' ? 'w-6 h-6 text-xs' : 'w-9 h-9 text-sm'
 

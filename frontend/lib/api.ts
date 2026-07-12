@@ -119,7 +119,7 @@ function normalizeThumbnail(video: VideoCard): VideoCard {
 export async function getTrending(region = 'US', category = 'all', lang = 'en'): Promise<TrendingResult> {
   // Use YouTube.js for trending (falls back to Python backend if needed)
   try {
-    const params = new URLSearchParams({ category })
+    const params = new URLSearchParams({ category, region, lang })
     const res = await fetch(`${YT_API}/trending?${params}`, { cache: 'no-store' })
     if (!res.ok) throw new Error('yt trending failed')
     const data: TrendingResult = await res.json()
@@ -152,11 +152,19 @@ export async function getVideo(id: string): Promise<VideoDetail> {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.detail || `Failed to fetch video: ${res.statusText}`)
   }
-  const data: VideoDetail = await res.json()
+  const raw = await res.json()
+  const channelId: string = raw.channelId ?? ''
   return {
-    ...data,
+    ...raw,
+    channel: {
+      id: channelId,
+      name: raw.channel ?? '',
+      thumbnail: channelId ? `/api/channel_thumbnail/${channelId}` : null,
+    } as VideoChannel,
     thumbnail: buildThumbnailUrl(id),
-    related: data.related.map(item => (item as RelatedChannel).type === 'channel' ? item : normalizeThumbnail(item as VideoCard)),
+    related: (raw.related ?? []).map((item: any) =>
+      item.type === 'channel' ? item : normalizeThumbnail(item as VideoCard)
+    ),
   }
 }
 

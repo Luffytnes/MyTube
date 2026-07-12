@@ -18,6 +18,9 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 const NAV_ITEMS: { icon: typeof Home; labelKey: keyof Translations; href: string }[] = [
   { icon: Home, labelKey: 'nav_home', href: '/' },
+  { icon: TrendingUp, labelKey: 'nav_trending', href: '/trending' },
+  { icon: Radio, labelKey: 'nav_live', href: '/live' },
+  { icon: Clapperboard, labelKey: 'nav_shorts', href: '/shorts' },
   { icon: History, labelKey: 'nav_history', href: '/history' },
   { icon: Clock, labelKey: 'nav_watchLater', href: '/watch-later' },
   { icon: ThumbsUp, labelKey: 'nav_likes', href: '/likes' },
@@ -89,86 +92,28 @@ export default function Sidebar() {
           })}
         </nav>
 
-        {/* Kids / Live / Shorts / TV / Music / News */}
+        {/* MyTube Apps */}
         <div className="border-t border-yt-border/40 my-3 mx-3" />
         <nav className="px-2 flex flex-col gap-0.5">
-          <Link
-            href="/kids"
-            className={cn(
-              'flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors group',
-              pathname.startsWith('/kids') ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
-            )}
-            title={t('nav_kids')}
-          >
-            <Baby className={cn('w-5 h-5 flex-shrink-0', pathname.startsWith('/kids') ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red transition-colors')} />
-            <span className="hidden xl:block truncate">{t('nav_kids')}</span>
-          </Link>
-          <Link
-            href="/tv"
-            className={cn(
-              'flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors group',
-              pathname.startsWith('/tv') ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
-            )}
-            title={t('nav_iptv')}
-          >
-            <Tv className={cn('w-5 h-5 flex-shrink-0', pathname.startsWith('/tv') ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red transition-colors')} />
-            <span className="hidden xl:block truncate">{t('nav_iptv')}</span>
-          </Link>
-          <Link
-            href="/trending"
-            className={cn(
-              'flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors group',
-              pathname === '/trending' ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
-            )}
-            title={t('nav_trending')}
-          >
-            <TrendingUp className={cn('w-5 h-5 flex-shrink-0', pathname === '/trending' ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red transition-colors')} />
-            <span className="hidden xl:block truncate">{t('nav_trending')}</span>
-          </Link>
-          <Link
-            href="/live"
-            className={cn(
-              'flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors group',
-              pathname.startsWith('/live') ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
-            )}
-            title={t('nav_live')}
-          >
-            <Radio className={cn('w-5 h-5 flex-shrink-0', pathname.startsWith('/live') ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red transition-colors')} />
-            <span className="hidden xl:block truncate">{t('nav_live')}</span>
-          </Link>
-          <Link
-            href="/shorts"
-            className={cn(
-              'flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors group',
-              pathname.startsWith('/shorts') ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
-            )}
-            title={t('nav_shorts')}
-          >
-            <Clapperboard className={cn('w-5 h-5 flex-shrink-0', pathname.startsWith('/shorts') ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red transition-colors')} />
-            <span className="hidden xl:block truncate">{t('nav_shorts')}</span>
-          </Link>
-          <Link
-            href="/music"
-            className={cn(
-              'flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors group',
-              pathname.startsWith('/music') ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
-            )}
-            title={t('nav_music')}
-          >
-            <Music2 className={cn('w-5 h-5 flex-shrink-0', pathname.startsWith('/music') ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red transition-colors')} />
-            <span className="hidden xl:block truncate">{t('nav_music')}</span>
-          </Link>
-          <Link
-            href="/news"
-            className={cn(
-              'flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors group',
-              pathname.startsWith('/news') ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
-            )}
-            title={t('nav_news')}
-          >
-            <Newspaper className={cn('w-5 h-5 flex-shrink-0', pathname.startsWith('/news') ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red transition-colors')} />
-            <span className="hidden xl:block truncate">{t('nav_news')}</span>
-          </Link>
+          {[
+            { href: '/kids', icon: Baby, label: t('nav_kids'), active: pathname.startsWith('/kids') },
+            { href: '/tv', icon: Tv, label: t('nav_iptv'), active: pathname.startsWith('/tv') },
+            { href: '/music', icon: Music2, label: t('nav_music'), active: pathname.startsWith('/music') },
+            { href: '/news', icon: Newspaper, label: t('nav_news'), active: pathname.startsWith('/news') },
+          ].map(({ href, icon: Icon, label, active }) => (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                'flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors group',
+                active ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
+              )}
+              title={label}
+            >
+              <Icon className={cn('w-5 h-5 flex-shrink-0 transition-colors', active ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red')} />
+              <span className="hidden xl:block truncate">{label}</span>
+            </Link>
+          ))}
         </nav>
 
         {/* Subscriptions */}
@@ -307,14 +252,11 @@ export default function Sidebar() {
 
             <div className="border-t border-yt-border/40 my-3 mx-4" />
 
-            {/* Kids / TV / Trending / Live / Shorts / Music / News */}
+            {/* MyTube Apps */}
             <div className="px-2 flex flex-col gap-0.5">
               {[
                 { href: '/kids', icon: Baby, label: t('nav_kids'), active: pathname.startsWith('/kids') },
                 { href: '/tv', icon: Tv, label: t('nav_iptv'), active: pathname.startsWith('/tv') },
-                { href: '/trending', icon: TrendingUp, label: t('nav_trending'), active: pathname === '/trending' },
-                { href: '/live', icon: Radio, label: t('nav_live'), active: pathname.startsWith('/live') },
-                { href: '/shorts', icon: Clapperboard, label: t('nav_shorts'), active: pathname.startsWith('/shorts') },
                 { href: '/music', icon: Music2, label: t('nav_music'), active: pathname.startsWith('/music') },
                 { href: '/news', icon: Newspaper, label: t('nav_news'), active: pathname.startsWith('/news') },
               ].map(({ href, icon: Icon, label, active }) => (

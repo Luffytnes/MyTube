@@ -49,15 +49,16 @@ function ChannelAvatar({
     md: 'w-10 h-10 text-base',
     lg: 'w-12 h-12 text-lg',
   }
-  const letter = name ? name[0].toUpperCase() : '?'
+  const safeName = name ?? ''
+  const letter = safeName ? safeName[0].toUpperCase() : '?'
 
   const colors = [
     '#1a73e8', '#d93025', '#188038', '#e37400',
     '#8430ce', '#007b83', '#c5221f', '#0d652d',
   ]
   let hash = 0
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  for (let i = 0; i < safeName.length; i++) {
+    hash = safeName.charCodeAt(i) + ((hash << 5) - hash)
   }
   const bgColor = colors[Math.abs(hash) % colors.length]
 

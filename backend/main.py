@@ -1517,9 +1517,7 @@ async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
             "-headers", f"User-Agent: {ua}\r\nReferer: https://www.youtube.com/\r\n",
             "-i", audio_url,
             "-map", "0:v:0", "-map", "1:a:0",
-            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
-            "-avoid_negative_ts", "make_zero",
-            "-fflags", "+genpts",
+            "-c:v", "copy", "-c:a", "copy",
             "-f", "hls",
             "-hls_time", "1",
             "-hls_list_size", "0",
@@ -1898,7 +1896,10 @@ async def stream_video(video_id: str, request: Request, itag: Optional[str] = No
         if cached:
             direct_url, ext = cached
         else:
-            format_spec = itag if itag else "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+            # No itag = Shorts player requesting video-only (audio comes from /audio endpoint).
+            # Never use bestvideo+bestaudio: yt-dlp puts adaptive URLs in requested_formats,
+            # not in info["url"], so direct_url ends up None → 404.
+            format_spec = itag if itag else "bestvideo[ext=mp4]/bestvideo[ext=webm]/bestvideo"
             opts = get_ydl_opts(**{"format": format_spec})
             loop = asyncio.get_event_loop()
 

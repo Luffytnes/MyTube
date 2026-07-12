@@ -16,7 +16,7 @@ const CATEGORIES: { key: string; labelKey: keyof Translations }[] = [
 ]
 
 export default function KidsPage() {
-  const { t } = useRegion()
+  const { t, region, lang } = useRegion()
   const [activeCategory, setActiveCategory] = useState('all')
   const [videos, setVideos] = useState<VideoCard[]>([])
   const [loading, setLoading] = useState(true)
@@ -26,7 +26,8 @@ export default function KidsPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/yt/kids?category=${category}`, { cache: 'no-store' })
+      const params = new URLSearchParams({ category, region: region.code, lang })
+      const res = await fetch(`/api/yt/kids?${params}`, { cache: 'no-store' })
       if (!res.ok) throw new Error('Failed to load kids content')
       const data = await res.json()
       setVideos(data.videos ?? [])
@@ -35,7 +36,7 @@ export default function KidsPage() {
     } finally {
       setLoading(false)
     }
-  }, [t])
+  }, [t, region.code, lang])
 
   useEffect(() => { load('all') }, [load])
 

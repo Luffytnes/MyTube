@@ -315,13 +315,28 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
       if (!Hls.isSupported()) { setError('Lecture HD non supportée dans ce navigateur.'); return }
       let restartQueued = false
       let sessionErrors = 0
+      let playStarted = false
+      let autoplayFallback: ReturnType<typeof setTimeout> | null = null
       const hls = new Hls({ enableWorker: false, maxBufferLength: 30, manifestLoadingMaxRetry: 3, manifestLoadingRetryDelay: 1000 })
       hdHlsRef.current = hls
       hls.loadSource(hlsUrl); hls.attachMedia(video)
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setLoading(false)
         if (knownDuration) setDuration(knownDuration)
-        if (autoplay) safePlay(video)
+        if (autoplay) {
+          // Safety net: if audio segment never arrives within 3s, play anyway
+          autoplayFallback = setTimeout(() => {
+            if (!playStarted) { playStarted = true; safePlay(video) }
+          }, 3000)
+        }
+      })
+      hls.on(Hls.Events.BUFFER_APPENDED, (_, data: any) => {
+        // Wait for audio data in buffer before starting — avoids video-without-audio at startup
+        if (autoplay && !playStarted && (data.type === 'audio' || data.type === 'audiovideo')) {
+          playStarted = true
+          if (autoplayFallback) { clearTimeout(autoplayFallback); autoplayFallback = null }
+          safePlay(video)
+        }
       })
       hls.on(Hls.Events.ERROR, (_: unknown, data: { fatal: boolean; type: string; details: string }) => {
         if (!data.fatal || restartQueued) return
@@ -331,6 +346,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
         } else if (hlsRestartRef.current < 2) {
           restartQueued = true
           hlsRestartRef.current++
+          if (autoplayFallback) { clearTimeout(autoplayFallback); autoplayFallback = null }
           hls.destroy()
           hdHlsRef.current = null
           const currentPos = hlsStartOffsetRef.current + (videoRef.current?.currentTime ?? 0)

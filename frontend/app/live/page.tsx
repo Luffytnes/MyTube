@@ -15,7 +15,7 @@ const CATEGORIES: { key: string; labelKey: keyof Translations }[] = [
 ]
 
 export default function LivePage() {
-  const { t } = useRegion()
+  const { t, region, lang } = useRegion()
   const [activeCategory, setActiveCategory] = useState('all')
   const [videos, setVideos] = useState<VideoCard[]>([])
   const [loading, setLoading] = useState(true)
@@ -25,16 +25,17 @@ export default function LivePage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/yt/live?category=${category}`, { cache: 'no-store' })
+      const params = new URLSearchParams({ category, region: region.code, lang })
+      const res = await fetch(`/api/yt/live?${params}`, { cache: 'no-store' })
       if (!res.ok) throw new Error('Failed to load live streams')
       const data = await res.json()
       setVideos(data.videos ?? [])
-    } catch (e: any) {
+    } catch {
       setError(t('live_empty'))
     } finally {
       setLoading(false)
     }
-  }, [t])
+  }, [t, region.code, lang])
 
   useEffect(() => { load('all') }, [load])
 

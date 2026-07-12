@@ -18,8 +18,19 @@ export async function GET(
       } else break
     }
 
-    const videos = (feed.videos ?? []).map(parseLockupView).filter(Boolean)
-    return NextResponse.json({ videos, channelId: params.id, page })
+    const channelId = params.id
+    const videos = (feed.videos ?? [])
+      .map(parseLockupView)
+      .filter(Boolean)
+      .map(v => ({
+        ...v!,
+        channel: {
+          ...v!.channel,
+          id: v!.channel.id || channelId,
+          thumbnail: v!.channel.thumbnail ?? `/api/channel_thumbnail/${channelId}`,
+        },
+      }))
+    return NextResponse.json({ videos, channelId, page })
   } catch (err: any) {
     console.error('[yt/channel/videos]', err?.message)
     return NextResponse.json({ videos: [], channelId: params.id, page }, { status: 200 })

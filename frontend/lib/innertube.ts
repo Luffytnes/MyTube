@@ -1,17 +1,21 @@
 import { Innertube } from 'youtubei.js'
 
-let _instance: Innertube | null = null
-let _promise: Promise<Innertube> | null = null
+const _instances = new Map<string, Innertube>()
+const _promises = new Map<string, Promise<Innertube>>()
 
-export async function getInnertube(): Promise<Innertube> {
-  if (_instance) return _instance
-  if (_promise) return _promise
-  _promise = Innertube.create({ generate_session_locally: true }).then(yt => {
-    _instance = yt
-    _promise = null
+export async function getInnertube(gl = 'US', hl = 'en'): Promise<Innertube> {
+  const key = `${gl}:${hl}`
+  const existing = _instances.get(key)
+  if (existing) return existing
+  const pending = _promises.get(key)
+  if (pending) return pending
+  const p = Innertube.create({ generate_session_locally: true, lang: hl, location: gl }).then(yt => {
+    _instances.set(key, yt)
+    _promises.delete(key)
     return yt
   })
-  return _promise
+  _promises.set(key, p)
+  return p
 }
 
 export function fmtDuration(secs: number | undefined): string {
@@ -44,6 +48,16 @@ export function parseCount(text: string): number {
   }
 }
 
+function channelThumb(author: any): string | null {
+  // YouTube.js populates author.thumbnails from channelThumbnailSupportedRenderers — public CDN URL
+  const cdnUrl: string | undefined = author?.thumbnails?.[0]?.url
+  if (cdnUrl) return cdnUrl
+  // Fallback: backend proxy (requires a valid channel ID)
+  const id: string = author?.id ?? ''
+  if (id && id !== 'N/A') return `/api/channel_thumbnail/${id}`
+  return null
+}
+
 // Video from search results
 export function parseVideoItem(v: any): VideoCard | null {
   try {
@@ -52,6 +66,7 @@ export function parseVideoItem(v: any): VideoCard | null {
     const title = v?.title?.text ?? ''
     if (!title) return null
     const isLive = v?.badges?.some((b: any) => b?.style === 'BADGE_STYLE_TYPE_LIVE_NOW') ?? false
+    const authorId = v?.author?.id ?? ''
     return {
       id,
       title,
@@ -60,7 +75,11 @@ export function parseVideoItem(v: any): VideoCard | null {
       views: v?.short_view_count_text?.text ?? v?.view_count?.text ?? v?.view_count?.simple_text ?? '',
       published: v?.published?.text ?? '',
       isLive,
-      channel: { id: v?.author?.id ?? '', name: v?.author?.name ?? '', thumbnail: null },
+      channel: {
+        id: authorId !== 'N/A' ? authorId : '',
+        name: v?.author?.name ?? '',
+        thumbnail: channelThumb(v?.author),
+      },
     }
   } catch { return null }
 }
@@ -72,6 +91,7 @@ export function parseCompactVideo(v: any): VideoCard | null {
     if (!id) return null
     const title = v?.title?.text ?? ''
     if (!title) return null
+    const authorId = v?.author?.id ?? ''
     return {
       id,
       title,
@@ -80,9 +100,9 @@ export function parseCompactVideo(v: any): VideoCard | null {
       views: v?.view_count?.text ?? v?.short_view_count?.text ?? '',
       published: v?.published?.text ?? '',
       channel: {
-        id: v?.author?.id ?? '',
+        id: authorId !== 'N/A' ? authorId : '',
         name: v?.author?.name ?? v?.short_byline_text?.runs?.[0]?.text ?? '',
-        thumbnail: null,
+        thumbnail: channelThumb(v?.author),
       },
     }
   } catch { return null }

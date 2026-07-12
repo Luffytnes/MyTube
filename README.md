@@ -18,10 +18,6 @@
 
 MyTube is a **self-hosted YouTube + IPTV frontend** that lets you browse, search, and watch YouTube videos without Google ever knowing you're there. All requests are proxied through your own server — your browser never contacts Google directly.
 
-**v1.5 adds MyTube TV** — a fully integrated IPTV player supporting live channels, films, and series via any Xtream Codes provider, with real-time transcoding so any format plays in your browser.
-
-**v1.5.1** brings TMDB-powered discovery, smart jacket matching, reliable VOD seeking, and a reworked TV home page.
-
 > **Why?** Because your viewing habits are yours. No recommendation algorithm, no targeted ads, no watch history sent to Google.
 
 ---
@@ -36,6 +32,7 @@ MyTube is a **self-hosted YouTube + IPTV frontend** that lets you browse, search
 - **Speed selector** — 0.25× to 2×
 - **Download** in multiple formats (video+audio, video only, audio only)
 - **Watch Later** and **History** stored locally
+- **Liked videos** — like any video, stored locally, accessible at `/likes`
 - **Resume playback** — pick up where you left off
 - **"Continue watching"** section on the home page with progress bar
 
@@ -46,6 +43,23 @@ MyTube is a **self-hosted YouTube + IPTV frontend** that lets you browse, search
 - **Video chapters** — timestamps parsed from the description, shown as markers on the progress bar with the current chapter name displayed
 - **Subtitles / CC** — manual and auto-generated tracks loaded on demand, proxied through your server
 - **Picture-in-picture** support via browser native API
+
+### 📱 Shorts
+- Dedicated **Shorts section** at `/shorts` — vertical video feed with TikTok-style navigation
+- **Category filters** — All, Entertainment, Gaming, Music, Food, Sports
+- **Swipe** (mobile) or **↑ / ↓ arrow keys** (desktop) to navigate between Shorts
+- Sound off by default (browser autoplay policy) — click the mute button to enable audio
+- **Prefetch** — next Short is loaded in the background for instant transition
+
+### 🔴 Live Streams
+- Dedicated **Live section** at `/live` — YouTube live streams by category
+- **Category filters** — All, News, Music, Gaming, Sports
+- Live streams open in the standard player with HLS playback
+
+### 👶 MyTube Kids
+- Dedicated **Kids section** at `/kids` — safe content filtered by category
+- **Category filters** — All, Cartoons, Education, Music, Stories, Science
+- Same privacy guarantees as the rest of MyTube
 
 ### 📋 Queue
 - **Add any video to the queue** — button on every video card (hover) and on the watch page action bar
@@ -67,6 +81,7 @@ MyTube is a **self-hosted YouTube + IPTV frontend** that lets you browse, search
 ### 📡 Channels
 - Full channel pages with **banner, avatar, subscriber count**
 - Channel video list with **pagination**
+- Channel **Shorts** and **Live** tabs
 - **Subscribe** to channels — stored locally, no account needed
 - Subscriptions appear in the sidebar with avatar
 
@@ -110,24 +125,23 @@ MyTube is a **self-hosted YouTube + IPTV frontend** that lets you browse, search
 - **Real-time transcoding** — ffmpeg re-encodes on the fly to H.264 fMP4, so MKV/HEVC/AC3 content plays natively in every browser
   - VideoToolbox hardware encoder (macOS) with libx264 software fallback
   - Audio downmixed to stereo AAC — avoids Apple AudioToolbox multi-channel rejection in Firefox/Safari
-  - Reconnecting HTTP downloader — transparently resumes with `Range: bytes=N-` when the provider closes the connection after 60 s
-- **VOD seeking** — 4-strategy cascade: direct HTTP Range seek (45 s window for MKV header parsing), byte-offset pipe (MP4 only), full-pipe fallback, VideoToolbox fallback; `sb.timestampOffset` corrects ffmpeg PTS reset on the MSE side
+  - Reconnecting HTTP downloader — transparently resumes with `Range: bytes=N-` when the provider closes the connection
+- **VOD seeking** — 4-strategy cascade: direct HTTP Range seek, byte-offset pipe (MP4 only), full-pipe fallback, VideoToolbox fallback
 - **Search** — unified search across live channels, films, and series
 - **Favorites** — star any channel, film, or series; pinned in the sidebar and on the Favorites page
-- **Continue watching** — position saved immediately on exit; home page and film detail page refresh on return; "Continuer · Xmin (X%)" button with progress bar + "Reprendre depuis le début" option
+- **Continue watching** — position saved immediately on exit; "Continuer · Xmin (X%)" button with progress bar
 - **Audio track selection** — switch between all audio tracks in a multi-audio file
 - **Subtitle support** — load embedded subtitle tracks from the source file
-- **Provider configuration** — enter Xtream Codes server URL, username, and password in Settings; credentials stored only on your server
+- **Provider configuration** — enter Xtream Codes server URL, username, and password in Settings
 
-#### 🎬 TMDB integration (new in v1.5.1)
+#### 🎬 TMDB integration
 
 - Enter your [TMDB](https://www.themoviedb.org/) API key in **Settings → MyTube TV** — key is persisted across restarts
-- **TV home page** shows four discovery rows: *Films populaires*, *Séries populaires*, *Films les mieux notés*, *Séries les mieux notées* — powered by TMDB, works in any language
-- Clicking a card opens a detail modal (backdrop, poster, synopsis, rating, year); the **"Regarder" / "Voir les épisodes"** button is active if the title is found in your catalog, grayed out otherwise
+- **TV home page** shows four discovery rows: popular films, popular series, top-rated films, top-rated series — powered by TMDB, works in any language
+- Clicking a card opens a detail modal (backdrop, poster, synopsis, rating, year); the **Watch / See episodes** button is active if the title is found in your catalog
 - **Smart jacket images** — each card first tries the IPTV provider icon, then falls back to the TMDB poster automatically
-- **Title cleaning** follows the Jellyfin/Plex convention: strip language prefixes (`FR |`, `VF |`…) and quality tags (`[1080p]`, `[MULTI]`…), extract year; year is passed as a separate TMDB search parameter for near-100 % match accuracy
-- **Catalog matching** uses `difflib.SequenceMatcher` (≥ 60 % similarity threshold) instead of substring search — prevents false positives like short titles matching unrelated content
-- Separate catalog search for movies vs series — series TMDB cards correctly resolve to series entries, not films
+- **Title cleaning** follows the Jellyfin/Plex convention: strip language prefixes (`FR |`, `VF |`…) and quality tags (`[1080p]`, `[MULTI]`…), extract year
+- **Catalog matching** uses `difflib.SequenceMatcher` (≥ 60 % similarity threshold) — prevents false positives on short titles
 - **Fully translated** in all 9 languages
 
 ### 🌍 Multilingual
@@ -137,7 +151,7 @@ MyTube is a **self-hosted YouTube + IPTV frontend** that lets you browse, search
 ### ⚙️ Settings
 - **Theme** — Light / Dark / Auto
 - **Language & Region** picker
-- **Playback** — default quality, speed, volume, loop, autoplay next, resume position (enabled by default), hide watched videos
+- **Playback** — default quality, speed, volume, loop, autoplay next, resume position, hide watched videos
 - **Grid density** — Compact / Normal / Comfortable
 - **Default subtitles** — choose a language applied automatically on every video
 - **History TTL** — keep watch history for 7, 30, 90 days, or forever
@@ -145,6 +159,8 @@ MyTube is a **self-hosted YouTube + IPTV frontend** that lets you browse, search
 - **WireGuard VPN** — route all backend traffic through a personal VPN (e.g. ProtonVPN), no system impact
 
 ### ⌨️ Keyboard Shortcuts
+
+#### Video Player
 | Key | Action |
 |-----|--------|
 | `Space` / `K` | Play / Pause |
@@ -153,6 +169,12 @@ MyTube is a **self-hosted YouTube + IPTV frontend** that lets you browse, search
 | `←` `→` | Seek ±5 seconds |
 | `↑` `↓` | Volume ±10% |
 
+#### Shorts
+| Key | Action |
+|-----|--------|
+| `↑` | Previous Short |
+| `↓` | Next Short |
+
 ---
 
 ## 🏗️ Tech Stack
@@ -160,24 +182,27 @@ MyTube is a **self-hosted YouTube + IPTV frontend** that lets you browse, search
 | Layer | Technology |
 |-------|-----------|
 | Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS |
+| YouTube data | youtubei.js (InnerTube API) — channel info, Shorts, Live, Kids |
 | Backend | Python, FastAPI, yt-dlp, httpx |
+| HLS streaming | hls.js — YouTube video player + IPTV live channels |
+| IPTV VOD player | Shaka Player — MSE-based adaptive streaming |
 | Music & Podcasts | ytmusicapi, Podcast Index API |
 | Radio | Radio Browser API (free, no key required) |
+| IPTV transcoding | ffmpeg (VideoToolbox / libx264) |
 | VPN tunnel | wireproxy (WireGuard userspace) |
 | Icons | Lucide React |
-| Data | YouTube internal API + yt-dlp fallback |
 
 ---
 
 ## 🚀 Quick Start
 
-Two installation methods are available: **local** (development) or **Docker** (recommended for home server / LAN access).
+Two installation methods: **local** (development) or **Docker** (recommended for home server / LAN access).
 
 ---
 
 ### 🐳 Docker (recommended)
 
-The Docker setup runs MyTube on your local network — accessible from any device at `http://192.168.1.X:54321` without any configuration.
+The Docker setup runs MyTube on your local network — accessible from any device at `http://192.168.1.X:54321`.
 
 #### Prerequisites
 - [Docker](https://docs.docker.com/get-docker/) + [Docker Compose](https://docs.docker.com/compose/install/)
@@ -333,14 +358,15 @@ Every request your browser makes goes through **your own backend**, never direct
 | Video streams | Proxied through your server |
 | Thumbnails | Fetched server-side |
 | Subtitles / CC | Proxied through your server |
-| Search & trending | YouTube internal API via your server |
+| Search & trending | YouTube InnerTube API via your server |
+| Shorts / Live / Kids | YouTube InnerTube API via your server |
 | Music & Podcasts | ytmusicapi via your server |
 | Podcast artwork | Proxied through your server |
 | Radio streams & favicons | Proxied through your server |
 | Channel avatars & banners | Fetched server-side |
 | Watch history | `localStorage` only — never leaves your browser |
 | Subscriptions | `localStorage` only — never leaves your browser |
-| Queue / Playlists / Likes | `localStorage` only — never leaves your browser |
+| Likes / Queue / Playlists | `localStorage` only — never leaves your browser |
 | IPTV streams & icons | Transcoded / proxied through your server |
 | IPTV credentials | Stored server-side only, never sent to the browser |
 | VPN (optional) | wireproxy — userspace WireGuard, no system impact |
@@ -349,6 +375,8 @@ Every request your browser makes goes through **your own backend**, never direct
 ---
 
 ## 📡 API Reference
+
+### YouTube
 
 | Endpoint | Description |
 |----------|-------------|
@@ -365,13 +393,28 @@ Every request your browser makes goes through **your own backend**, never direct
 | `GET /api/channel/{id}/videos` | Channel videos |
 | `GET /api/channel_thumbnail/{id}` | Channel avatar |
 | `GET /api/channel_banner/{id}` | Channel banner |
+
+### Music & Radio
+
+| Endpoint | Description |
+|----------|-------------|
 | `GET /api/music/search?q=...&lang=fr` | Music search |
 | `GET /api/podcasts/search?q=...` | Podcast search |
 | `GET /api/podcasts/{id}` | Podcast detail + episodes |
 | `GET /api/podcasts/image/proxy?url=...` | Proxy podcast/radio artwork |
 | `GET /api/radio/stations?country=FR&tag=pop` | Radio stations by country/genre |
 | `GET /api/radio/stream/proxy?url=...` | Proxy radio stream |
+
+### News
+
+| Endpoint | Description |
+|----------|-------------|
 | `GET /api/news?region=FR&category=technology` | News articles (Google News RSS) |
+
+### IPTV / TV
+
+| Endpoint | Description |
+|----------|-------------|
 | `GET /api/iptv/channels?category_id=1` | Live IPTV channels |
 | `GET /api/iptv/stream/{id}` | Live channel stream (HLS proxy) |
 | `GET /api/iptv/vod?category_id=1` | VOD film list |
@@ -384,12 +427,22 @@ Every request your browser makes goes through **your own backend**, never direct
 | `GET /api/iptv/search_catalog?q=...&type=movie\|tv` | Catalog search with similarity matching |
 | `GET /api/iptv/icon?url=...` | Channel/content icon proxy |
 | `POST /api/iptv/config` | Save Xtream Codes credentials |
-| `GET /api/tmdb/discover?type=movie\|tv&list=popular\|top_rated` | TMDB discovery lists (30 min cache) |
-| `GET /api/tmdb/details?name=...&type=movie\|tv` | TMDB metadata + credits by title |
-| `GET /api/tmdb/poster?name=...&type=movie\|tv` | TMDB poster image by title (proxied) |
-| `GET /api/tmdb/image?path=/w500/xyz.jpg` | TMDB image proxy by path |
+
+### TMDB
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/tmdb/discover?type=movie\|tv&list=popular\|top_rated` | Discovery lists (30 min cache) |
+| `GET /api/tmdb/details?name=...&type=movie\|tv` | Metadata + credits by title |
+| `GET /api/tmdb/poster?name=...&type=movie\|tv` | Poster image by title (proxied) |
+| `GET /api/tmdb/image?path=/w500/xyz.jpg` | Image proxy by path |
 | `GET /api/tmdb/key` | Read TMDB API key |
-| `POST /api/tmdb/key` | Save TMDB API key (persisted to disk) |
+| `POST /api/tmdb/key` | Save TMDB API key |
+
+### VPN
+
+| Endpoint | Description |
+|----------|-------------|
 | `GET /api/vpn/status` | VPN status |
 | `POST /api/vpn/upload` | Upload WireGuard .conf |
 | `POST /api/vpn/start` | Start VPN tunnel |
