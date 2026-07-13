@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     wget \
     ca-certificates \
+    proxychains4 \
     && rm -rf /var/lib/apt/lists/*
 
 # yt-dlp (pinned via requirements.txt — installed below)

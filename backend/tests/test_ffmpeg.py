@@ -17,25 +17,13 @@ def _cmd_as_string(cmd: list) -> str:
 
 
 # ---------------------------------------------------------------------------
-# YouTube HLS session — proxy injection
+# YouTube HLS session — proxy injection via proxychains4
 # ---------------------------------------------------------------------------
 
 class TestHlsSessionProxyArgs:
-    """_start_hls_session must inject -socks_proxy when VPN is active."""
+    """_start_hls_session must wrap ffmpeg with proxychains4 when VPN is active."""
 
-    def _patch_deps(self, proxy_url=None):
-        return [
-            patch("services.ffmpeg._get_video_and_audio_urls",
-                  return_value=("https://cdn.example.com/video.mp4",
-                                "https://cdn.example.com/audio.mp4")),
-            patch("services.ffmpeg._get_proxy_url", return_value=proxy_url),
-            patch("asyncio.create_subprocess_exec", new_callable=MagicMock),
-            patch("asyncio.ensure_future"),
-            patch("tempfile.mkdtemp", return_value="/tmp/fake_hls"),
-            patch("services.ffmpeg._hls_sessions", {}),
-        ]
-
-    def test_proxy_arg_present_when_vpn_active(self):
+    def test_proxychains_used_when_vpn_active(self):
         import asyncio
         captured = {}
 
@@ -60,11 +48,12 @@ class TestHlsSessionProxyArgs:
             asyncio.run(_start_hls_session("test_vid", "137", start=0))
 
         assert "cmd" in captured, "create_subprocess_exec was not called"
-        cmd = _cmd_as_string(captured["cmd"])
-        assert "-socks_proxy" in cmd, "Expected -socks_proxy in ffmpeg command"
-        assert PROXY_URL in cmd, f"Expected {PROXY_URL} in ffmpeg command"
+        cmd_list = captured["cmd"]
+        assert cmd_list[0] == "proxychains4", f"Expected proxychains4 first, got {cmd_list[0]}"
+        assert "ffmpeg" in cmd_list, "Expected ffmpeg in command"
+        assert "-socks_proxy" not in cmd_list, "-socks_proxy must not appear (replaced by proxychains)"
 
-    def test_proxy_arg_absent_when_vpn_inactive(self):
+    def test_no_proxychains_when_vpn_inactive(self):
         import asyncio
         captured = {}
 
@@ -89,11 +78,12 @@ class TestHlsSessionProxyArgs:
             asyncio.run(_start_hls_session("test_vid2", "137", start=0))
 
         assert "cmd" in captured
-        cmd = _cmd_as_string(captured["cmd"])
-        assert "-socks_proxy" not in cmd, "Did not expect -socks_proxy when VPN is off"
+        cmd_list = captured["cmd"]
+        assert cmd_list[0] == "ffmpeg", f"Expected ffmpeg first when VPN off, got {cmd_list[0]}"
+        assert "proxychains4" not in cmd_list, "proxychains4 must not appear when VPN is off"
 
-    def test_proxy_arg_appears_once(self):
-        """Global ffmpeg option -socks_proxy must appear only once, not once per -i."""
+    def test_proxychains_appears_once(self):
+        """proxychains4 prefix must appear exactly once in the command."""
         import asyncio
         captured = {}
 
@@ -119,8 +109,8 @@ class TestHlsSessionProxyArgs:
 
         assert "cmd" in captured
         cmd_list = captured["cmd"]
-        count = cmd_list.count("-socks_proxy")
-        assert count == 1, f"-socks_proxy must appear exactly once, found {count} times"
+        count = cmd_list.count("proxychains4")
+        assert count == 1, f"proxychains4 must appear exactly once, found {count} times"
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +176,7 @@ class TestVodPtsReset:
             )
 
     def test_no_shell_injection_in_proxy_url(self):
-        """Proxy URL must be passed as a list argument, not interpolated into a shell string."""
+        """Proxy URL is written to a config file — shell injection via exec list is impossible."""
         import asyncio
         captured = {}
 
@@ -214,9 +204,9 @@ class TestVodPtsReset:
 
         if "cmd" in captured:
             # create_subprocess_exec receives a list — shell injection is impossible
-            # Verify the command is a list (exec form, not shell=True)
             assert isinstance(captured["cmd"], list), "Command must be a list (exec form)"
-            # The malicious string appears verbatim as a single argument, not interpreted
-            assert any(malicious_proxy in str(a) for a in captured["cmd"]), (
-                "Proxy URL should be in command args"
+            # The malicious proxy string must NOT appear verbatim in the command args
+            # (it's written to a config file, not injected into the command)
+            assert "rm" not in " ".join(str(a) for a in captured["cmd"]), (
+                "Shell injection detected in command args"
             )

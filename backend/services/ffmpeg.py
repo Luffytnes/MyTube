@@ -4,7 +4,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 import httpx
 from fastapi import HTTPException
@@ -20,9 +20,28 @@ from services.vpn import _get_proxy_url
 
 import yt_dlp
 
+_PROXYCHAINS_CONF = "/tmp/mytube_proxychains.conf"
+
 # Active HLS transcoding sessions: key = f"{video_id}:{itag}"
 _hls_sessions: Dict[str, Dict[str, Any]] = {}
 _hls_lock = asyncio.Lock()
+
+
+def _proxychains_prefix(proxy_url: Optional[str]) -> List[str]:
+    """Return ["proxychains4", "-q", "-f", conf] when proxy is active, else []."""
+    if not proxy_url:
+        return []
+    from urllib.parse import urlparse
+    p = urlparse(proxy_url)
+    host = p.hostname or "wireproxy"
+    try:
+        port = p.port or 25344
+    except ValueError:
+        port = 25344
+    conf = f"strict_chain\nproxy_dns\n[ProxyList]\nsocks5 {host} {port}\n"
+    with open(_PROXYCHAINS_CONF, "w") as f:
+        f.write(conf)
+    return ["proxychains4", "-q", "-f", _PROXYCHAINS_CONF]
 
 
 async def _get_video_and_audio_urls(video_id: str, itag: str) -> tuple:
@@ -43,21 +62,29 @@ async def _get_video_and_audio_urls(video_id: str, itag: str) -> tuple:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
             if not info:
+                print(f"[hls] yt-dlp returned no info for {video_id}", flush=True)
                 return None, None
+            formats = info.get("formats", [])
             v_url = None
-            for fmt in info.get("formats", []):
+            for fmt in formats:
                 if str(fmt.get("format_id")) == str(itag):
                     v_url = fmt.get("url")
                     stream_url_cache_set(video_cache_key, v_url, fmt.get("ext", "mp4"))
                     break
+            if not v_url:
+                available = [fmt.get("format_id") for fmt in formats if fmt.get("url")]
+                print(f"[hls] itag {itag} not found for {video_id}. Available: {available}", flush=True)
             a_url = None
-            for fmt in sorted(info.get("formats", []), key=lambda f: -(f.get("abr") or 0)):
-                if (fmt.get("acodec", "none") != "none"
-                        and fmt.get("vcodec", "none") == "none"
-                        and fmt.get("ext") in ("m4a", "mp4")):
+            audio_fmts = [f for f in sorted(formats, key=lambda f: -(f.get("abr") or 0))
+                          if f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"]
+            for fmt in audio_fmts:
+                if fmt.get("ext") in ("m4a", "mp4"):
                     a_url = fmt.get("url")
                     stream_url_cache_set(audio_cache_key, a_url, fmt.get("ext", "m4a"))
                     break
+            if not a_url:
+                fallback_exts = [f"{f.get('format_id')}/{f.get('ext')}" for f in audio_fmts]
+                print(f"[hls] no m4a/mp4 audio for {video_id}. Audio formats: {fallback_exts}", flush=True)
             return v_url, a_url
 
     return await loop.run_in_executor(None, _fetch)
@@ -80,11 +107,10 @@ async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
 
         seek = ["-ss", str(start)] if start > 0 else []
         proxy_url = _get_proxy_url()
-        proxy_args = ["-socks_proxy", proxy_url] if proxy_url else []
+        cmd_prefix = _proxychains_prefix(proxy_url)
 
         cmd = [
-            "ffmpeg", "-loglevel", "warning", "-y",
-            *proxy_args,
+            *cmd_prefix, "ffmpeg", "-loglevel", "warning", "-y",
             *seek,
             "-headers", f"User-Agent: {ua}\r\nReferer: https://www.youtube.com/\r\n",
             "-i", video_url,
