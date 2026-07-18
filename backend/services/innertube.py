@@ -8,6 +8,7 @@ import re
 
 import httpx
 import yt_dlp
+from cachetools import TTLCache
 
 from core.config import (
     INVIDIOUS_INSTANCES,
@@ -422,10 +423,10 @@ def _extract_continuation_videos(data: Dict[str, Any]) -> tuple[List[Dict[str, A
 
 
 # Cache: (query, page) -> continuation token for next page
-_search_continuations: Dict[str, str] = {}
+_search_continuations: TTLCache = TTLCache(maxsize=500, ttl=3600)
 
 # Cache: (channel_id, page) -> continuation token for channel videos
-_channel_continuations: Dict[str, str] = {}
+_channel_continuations: TTLCache = TTLCache(maxsize=500, ttl=3600)
 
 
 def _extract_channel_videos(data: Dict[str, Any]) -> tuple[List[Dict[str, Any]], Optional[str], str]:

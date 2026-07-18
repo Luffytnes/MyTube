@@ -1,9 +1,9 @@
 """Google News RSS API route, caching and RSS parsing helpers."""
 import html as html_lib
 import re
-from time import time as _time
-from typing import Any, Dict
+from typing import Any
 
+from cachetools import TTLCache
 from fastapi import APIRouter, HTTPException
 
 from services.innertube import httpx_client
@@ -11,20 +11,15 @@ from services.innertube import httpx_client
 router = APIRouter()
 
 NEWS_CACHE_TTL = 900  # 15 minutes
-_news_cache: Dict[str, tuple] = {}
+_news_cache: TTLCache = TTLCache(maxsize=100, ttl=NEWS_CACHE_TTL)
 
 
 def news_cache_get(key: str):
-    if key in _news_cache:
-        ts, data = _news_cache[key]
-        if _time() - ts < NEWS_CACHE_TTL:
-            return data
-        del _news_cache[key]
-    return None
+    return _news_cache.get(key)
 
 
 def news_cache_set(key: str, data: Any):
-    _news_cache[key] = (_time(), data)
+    _news_cache[key] = data
 
 
 GOOGLE_NEWS_CATEGORIES = {

@@ -1,7 +1,6 @@
 """Tests for core/cache.py — TTL caches."""
 import sys
 import os
-import time
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -10,7 +9,7 @@ import core.cache as cache_module
 from core.cache import (
     cache_get, cache_set,
     thumb_cache_get, thumb_cache_set,
-    live_url_cache_get, live_url_cache_set, LIVE_URL_TTL,
+    live_url_cache_get, live_url_cache_set,
     stream_url_cache_get, stream_url_cache_set, stream_url_cache_invalidate,
 )
 
@@ -82,11 +81,11 @@ class TestLiveUrlCache:
         live_url_cache_set("vid1", "https://example.com/stream.m3u8")
         assert live_url_cache_get("vid1") == "https://example.com/stream.m3u8"
 
-    def test_expired_returns_none(self):
-        live_url_cache_set("vid1", "https://example.com/stream.m3u8")
-        past = time.time() - LIVE_URL_TTL - 1
-        cache_module._live_url_cache["vid1"] = (past, "https://example.com/stream.m3u8")
-        assert live_url_cache_get("vid1") is None
+    def test_bounded_maxsize(self):
+        """TTLCache evicts entries when maxsize is reached."""
+        for i in range(cache_module._live_url_cache.maxsize + 5):
+            live_url_cache_set(f"vid_{i}", f"https://example.com/{i}.m3u8")
+        assert len(cache_module._live_url_cache) <= cache_module._live_url_cache.maxsize
 
 
 # ---------------------------------------------------------------------------

@@ -7,10 +7,12 @@ import subprocess
 from time import time as _time
 from typing import List, Optional
 
+from cachetools import TTLCache
+
 # YouTube Music instance cache — cleared whenever the proxy changes so new
 # YTMusic clients pick up (or drop) the proxy. Lives here because the VPN
 # lifecycle owns its invalidation.
-_ytm_cache: dict = {}
+_ytm_cache: TTLCache = TTLCache(maxsize=20, ttl=86400)
 
 _wireproxy_process: Optional[subprocess.Popen] = None
 _wireproxy_conf_path: Optional[str] = None  # path to the currently active .conf

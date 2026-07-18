@@ -2,14 +2,14 @@
 import json
 import os
 import re
-from time import time as _time
-from typing import Dict
+
+from cachetools import TTLCache
 
 from services.innertube import httpx_client
 
 _TMDB_BASE = "https://api.themoviedb.org/3"
 _TMDB_IMG  = "https://image.tmdb.org/t/p"
-_tmdb_cache: Dict[str, tuple] = {}
+_tmdb_cache: TTLCache = TTLCache(maxsize=2000, ttl=3600)
 _tmdb_cfg_path = os.path.join(os.path.expanduser("~"), ".mytube", "tmdb.json")
 
 
@@ -106,9 +106,7 @@ async def _tmdb_search(name: str, media_type: str) -> dict | None:
         return None
     cache_key = f"tmdb:{media_type}:{name.lower()}"
     if cache_key in _tmdb_cache:
-        ts, data = _tmdb_cache[cache_key]
-        if _time() - ts < 3600:
-            return data
+        return _tmdb_cache[cache_key]
     endpoint = "tv" if media_type == "tv" else "movie"
     year_param = "first_air_date_year" if media_type == "tv" else "year"
     clean, year = _clean_title_for_tmdb(name)
@@ -132,9 +130,9 @@ async def _tmdb_search(name: str, media_type: str) -> dict | None:
                 results = r.json().get("results") or []
                 if results:
                     result = _pick_best_tmdb_result(results, clean)
-                    _tmdb_cache[cache_key] = (_time(), result)
+                    _tmdb_cache[cache_key] = result
                     return result
-        _tmdb_cache[cache_key] = (_time(), None)
+        _tmdb_cache[cache_key] = None
         return None
     except Exception:
         return None
@@ -146,9 +144,7 @@ async def _tmdb_details(tmdb_id: int, media_type: str) -> dict | None:
         return None
     cache_key = f"tmdb:detail:{media_type}:{tmdb_id}"
     if cache_key in _tmdb_cache:
-        ts, data = _tmdb_cache[cache_key]
-        if _time() - ts < 3600:
-            return data
+        return _tmdb_cache[cache_key]
     endpoint = "tv" if media_type == "tv" else "movie"
     try:
         async with httpx_client(timeout=8.0) as client:
@@ -158,7 +154,7 @@ async def _tmdb_details(tmdb_id: int, media_type: str) -> dict | None:
         if r.status_code != 200:
             return None
         data = r.json()
-        _tmdb_cache[cache_key] = (_time(), data)
+        _tmdb_cache[cache_key] = data
         return data
     except Exception:
         return None

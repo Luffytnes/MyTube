@@ -1,6 +1,5 @@
 """In-memory TTL caches shared across the MyTube backend."""
-from time import time as _time
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from cachetools import TTLCache
 
@@ -56,43 +55,33 @@ async def _get_channel_thumbnails(channel_id: str) -> list:
 
 
 # In-memory cache for live HLS URLs (short TTL — YouTube URLs expire)
-_live_url_cache: Dict[str, tuple] = {}
 LIVE_URL_TTL = 180  # 3 minutes
+_live_url_cache: TTLCache = TTLCache(maxsize=200, ttl=LIVE_URL_TTL)
 
 
 def live_url_cache_get(video_id: str) -> Optional[str]:
-    if video_id in _live_url_cache:
-        ts, url = _live_url_cache[video_id]
-        if _time() - ts < LIVE_URL_TTL:
-            return url
-        del _live_url_cache[video_id]
-    return None
+    return _live_url_cache.get(video_id)
 
 
 def live_url_cache_set(video_id: str, url: str) -> None:
-    _live_url_cache[video_id] = (_time(), url)
+    _live_url_cache[video_id] = url
 
 
 # Cache for direct stream URLs (YouTube CDN URLs last ~6h — we cache for 3h)
-_stream_url_cache: Dict[str, tuple] = {}
 STREAM_URL_TTL = 10800  # 3 hours
+_stream_url_cache: TTLCache = TTLCache(maxsize=1000, ttl=STREAM_URL_TTL)
 
 
 def stream_url_cache_get(key: str) -> Optional[tuple]:
-    if key in _stream_url_cache:
-        ts, url, ext = _stream_url_cache[key]
-        if _time() - ts < STREAM_URL_TTL:
-            return url, ext
-        del _stream_url_cache[key]
-    return None
+    return _stream_url_cache.get(key)
 
 
 def stream_url_cache_set(key: str, url: str, ext: str) -> None:
-    _stream_url_cache[key] = (_time(), url, ext)
+    _stream_url_cache[key] = (url, ext)
 
 
 def stream_url_cache_invalidate(video_id: str) -> None:
     """Remove all cached URLs for a given video (e.g. after a 403 error)."""
-    keys = [k for k in _stream_url_cache if k.startswith(f"stream:{video_id}:")]
+    keys = [k for k in list(_stream_url_cache.keys()) if k.startswith(f"stream:{video_id}:")]
     for k in keys:
-        del _stream_url_cache[k]
+        _stream_url_cache.pop(k, None)
