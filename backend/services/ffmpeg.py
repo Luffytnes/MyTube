@@ -50,8 +50,10 @@ def _proxychains_prefix(proxy_url: Optional[str]) -> List[str]:
     except ValueError:
         port = 25344
     conf = f"strict_chain\nproxy_dns\n[ProxyList]\nsocks5 {host} {port}\n"
-    with open(_PROXYCHAINS_CONF, "w") as f:
+    tmp = _PROXYCHAINS_CONF + ".tmp"
+    with open(tmp, "w") as f:
         f.write(conf)
+    os.replace(tmp, _PROXYCHAINS_CONF)
     return ["proxychains4", "-q", "-f", _PROXYCHAINS_CONF]
 
 
