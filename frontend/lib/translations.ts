@@ -69,7 +69,7 @@ export interface Translations {
   settings_vpn_saved_configs: string; settings_vpn_no_saved: string; settings_vpn_delete: string
   settings_vpn_switch_stop: string; settings_vpn_select: string
   settings_vpn_auto_mode: string; settings_vpn_auto_mode_desc: string
-  settings_vpn_all_failed: string; settings_vpn_reset_failover: string
+  settings_vpn_all_failed: string; settings_vpn_reset_failover: string; settings_vpn_rotated: string
   settings_tab_playback: string
   settings_history_watch: string; settings_history_search: string
   settings_playback_quality: string; settings_playback_autoplay: string
@@ -204,7 +204,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_myip: 'IP seen by servers', settings_vpn_myip_refresh: 'Refresh', settings_vpn_myip_error: 'Unable to retrieve IP',
     settings_vpn_saved_configs: 'Saved configurations', settings_vpn_no_saved: 'No saved configuration', settings_vpn_delete: 'Delete', settings_vpn_switch_stop: 'Stop VPN before switching config', settings_vpn_select: 'Use',
     settings_vpn_auto_mode: 'Automatic failover', settings_vpn_auto_mode_desc: 'Switch to next config if YouTube blocks the current IP',
-    settings_vpn_all_failed: 'No config could reach YouTube. Wireproxy has been disabled.', settings_vpn_reset_failover: 'Retry all configs',
+    settings_vpn_all_failed: 'No config could reach YouTube. Wireproxy has been disabled.', settings_vpn_reset_failover: 'Retry all configs', settings_vpn_rotated: 'VPN rotated →',
     settings_tab_playback: 'Video',
     settings_history_watch: 'Watch history', settings_history_search: 'Search history',
     settings_playback_quality: 'Default quality', settings_playback_autoplay: 'Autoplay',
@@ -329,7 +329,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_myip: 'IP vue par les serveurs', settings_vpn_myip_refresh: 'Actualiser', settings_vpn_myip_error: 'Impossible de récupérer l\'IP',
     settings_vpn_saved_configs: 'Configurations sauvegardées', settings_vpn_no_saved: 'Aucune configuration sauvegardée', settings_vpn_delete: 'Supprimer', settings_vpn_switch_stop: 'Arrêtez le VPN avant de changer de config', settings_vpn_select: 'Utiliser',
     settings_vpn_auto_mode: 'Basculement automatique', settings_vpn_auto_mode_desc: 'Change de config si YouTube bloque l\'IP actuelle',
-    settings_vpn_all_failed: 'Aucun .conf ne permet d\'accéder à YouTube. Wireproxy a été désactivé.', settings_vpn_reset_failover: 'Réessayer tous les .conf',
+    settings_vpn_all_failed: 'Aucun .conf ne permet d\'accéder à YouTube. Wireproxy a été désactivé.', settings_vpn_reset_failover: 'Réessayer tous les .conf', settings_vpn_rotated: 'VPN basculé →',
     settings_tab_playback: 'Vidéo',
     settings_history_watch: 'Historique de visionnage', settings_history_search: 'Historique de recherche',
     settings_playback_quality: 'Qualité par défaut', settings_playback_autoplay: 'Lecture automatique',
@@ -452,7 +452,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_myip: 'IP vista por los servidores', settings_vpn_myip_refresh: 'Actualizar', settings_vpn_myip_error: 'No se puede obtener la IP',
     settings_vpn_saved_configs: 'Configuraciones guardadas', settings_vpn_no_saved: 'Sin configuración guardada', settings_vpn_delete: 'Eliminar', settings_vpn_switch_stop: 'Detén el VPN antes de cambiar', settings_vpn_select: 'Usar',
     settings_vpn_auto_mode: 'Conmutación automática', settings_vpn_auto_mode_desc: 'Cambia de config si YouTube bloquea la IP actual',
-    settings_vpn_all_failed: 'Ningún .conf puede acceder a YouTube. Wireproxy ha sido desactivado.', settings_vpn_reset_failover: 'Reintentar todos los .conf',
+    settings_vpn_all_failed: 'Ningún .conf puede acceder a YouTube. Wireproxy ha sido desactivado.', settings_vpn_reset_failover: 'Reintentar todos los .conf', settings_vpn_rotated: 'VPN rotado →',
     settings_tab_playback: 'Vídeo',
     settings_history_watch: 'Historial de visionado', settings_history_search: 'Historial de búsqueda',
     settings_playback_quality: 'Calidad por defecto', settings_playback_autoplay: 'Reproducción automática',
@@ -575,7 +575,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_myip: 'IP von Servern gesehen', settings_vpn_myip_refresh: 'Aktualisieren', settings_vpn_myip_error: 'IP nicht abrufbar',
     settings_vpn_saved_configs: 'Gespeicherte Konfigurationen', settings_vpn_no_saved: 'Keine gespeicherte Konfiguration', settings_vpn_delete: 'Löschen', settings_vpn_switch_stop: 'VPN stoppen vor dem Wechsel', settings_vpn_select: 'Verwenden',
     settings_vpn_auto_mode: 'Automatisches Failover', settings_vpn_auto_mode_desc: 'Wechselt die Konfiguration, wenn YouTube die aktuelle IP sperrt',
-    settings_vpn_all_failed: 'Keine Konfiguration konnte YouTube erreichen. Wireproxy wurde deaktiviert.', settings_vpn_reset_failover: 'Alle Konfigurationen erneut versuchen',
+    settings_vpn_all_failed: 'Keine Konfiguration konnte YouTube erreichen. Wireproxy wurde deaktiviert.', settings_vpn_reset_failover: 'Alle Konfigurationen erneut versuchen', settings_vpn_rotated: 'VPN gewechselt →',
     settings_tab_playback: 'Video',
     settings_history_watch: 'Wiedergabeverlauf', settings_history_search: 'Suchverlauf',
     settings_playback_quality: 'Standardqualität', settings_playback_autoplay: 'Autoplay',
@@ -698,7 +698,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_myip: 'IP vista pelos servidores', settings_vpn_myip_refresh: 'Atualizar', settings_vpn_myip_error: 'Não foi possível obter o IP',
     settings_vpn_saved_configs: 'Configurações salvas', settings_vpn_no_saved: 'Nenhuma configuração salva', settings_vpn_delete: 'Excluir', settings_vpn_switch_stop: 'Pare o VPN antes de trocar', settings_vpn_select: 'Usar',
     settings_vpn_auto_mode: 'Failover automático', settings_vpn_auto_mode_desc: 'Troca de config se o YouTube bloquear o IP atual',
-    settings_vpn_all_failed: 'Nenhum .conf conseguiu acessar o YouTube. Wireproxy foi desativado.', settings_vpn_reset_failover: 'Tentar todos os .conf novamente',
+    settings_vpn_all_failed: 'Nenhum .conf conseguiu acessar o YouTube. Wireproxy foi desativado.', settings_vpn_reset_failover: 'Tentar todos os .conf novamente', settings_vpn_rotated: 'VPN alternado →',
     settings_tab_playback: 'Vídeo',
     settings_history_watch: 'Histórico de visualização', settings_history_search: 'Histórico de pesquisa',
     settings_playback_quality: 'Qualidade padrão', settings_playback_autoplay: 'Reprodução automática',
@@ -821,7 +821,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_myip: 'IP vista dai server', settings_vpn_myip_refresh: 'Aggiorna', settings_vpn_myip_error: 'Impossibile ottenere l\'IP',
     settings_vpn_saved_configs: 'Configurazioni salvate', settings_vpn_no_saved: 'Nessuna configurazione salvata', settings_vpn_delete: 'Elimina', settings_vpn_switch_stop: 'Ferma il VPN prima di cambiare', settings_vpn_select: 'Usa',
     settings_vpn_auto_mode: 'Failover automatico', settings_vpn_auto_mode_desc: 'Cambia config se YouTube blocca l\'IP corrente',
-    settings_vpn_all_failed: 'Nessun .conf riesce ad accedere a YouTube. Wireproxy è stato disabilitato.', settings_vpn_reset_failover: 'Riprovare tutte le config',
+    settings_vpn_all_failed: 'Nessun .conf riesce ad accedere a YouTube. Wireproxy è stato disabilitato.', settings_vpn_reset_failover: 'Riprovare tutte le config', settings_vpn_rotated: 'VPN cambiato →',
     settings_tab_playback: 'Video',
     settings_history_watch: 'Cronologia visualizzazioni', settings_history_search: 'Cronologia ricerche',
     settings_playback_quality: 'Qualità predefinita', settings_playback_autoplay: 'Riproduzione automatica',
@@ -944,7 +944,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_myip: 'サーバーが見るIP', settings_vpn_myip_refresh: '更新', settings_vpn_myip_error: 'IPを取得できません',
     settings_vpn_saved_configs: '保存済み設定', settings_vpn_no_saved: '保存済み設定なし', settings_vpn_delete: '削除', settings_vpn_switch_stop: '切替前にVPNを停止してください', settings_vpn_select: '使用',
     settings_vpn_auto_mode: '自動フェイルオーバー', settings_vpn_auto_mode_desc: 'YouTubeが現在のIPをブロックした場合に自動切替',
-    settings_vpn_all_failed: 'どの.confもYouTubeにアクセスできませんでした。Wireproxyが無効化されました。', settings_vpn_reset_failover: 'すべての.confを再試行',
+    settings_vpn_all_failed: 'どの.confもYouTubeにアクセスできませんでした。Wireproxyが無効化されました。', settings_vpn_reset_failover: 'すべての.confを再試行', settings_vpn_rotated: 'VPN切替 →',
     settings_tab_playback: '動画',
     settings_history_watch: '視聴履歴', settings_history_search: '検索履歴',
     settings_playback_quality: 'デフォルト画質', settings_playback_autoplay: '自動再生',
@@ -1067,7 +1067,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_myip: '서버에 표시되는 IP', settings_vpn_myip_refresh: '새로고침', settings_vpn_myip_error: 'IP를 가져올 수 없음',
     settings_vpn_saved_configs: '저장된 구성', settings_vpn_no_saved: '저장된 구성 없음', settings_vpn_delete: '삭제', settings_vpn_switch_stop: '전환 전에 VPN을 중지하세요', settings_vpn_select: '사용',
     settings_vpn_auto_mode: '자동 장애 조치', settings_vpn_auto_mode_desc: 'YouTube가 현재 IP를 차단하면 다음 구성으로 전환',
-    settings_vpn_all_failed: '어떤 .conf도 YouTube에 접근할 수 없습니다. Wireproxy가 비활성화되었습니다.', settings_vpn_reset_failover: '모든 .conf 다시 시도',
+    settings_vpn_all_failed: '어떤 .conf도 YouTube에 접근할 수 없습니다. Wireproxy가 비활성화되었습니다.', settings_vpn_reset_failover: '모든 .conf 다시 시도', settings_vpn_rotated: 'VPN 전환 →',
     settings_tab_playback: '동영상',
     settings_history_watch: '시청 기록', settings_history_search: '검색 기록',
     settings_playback_quality: '기본 화질', settings_playback_autoplay: '자동 재생',
@@ -1190,7 +1190,7 @@ export const translations: Record<Lang, Translations> = {
     settings_vpn_myip: 'IP видимый серверами', settings_vpn_myip_refresh: 'Обновить', settings_vpn_myip_error: 'Не удалось получить IP',
     settings_vpn_saved_configs: 'Сохранённые конфигурации', settings_vpn_no_saved: 'Нет сохранённых конфигураций', settings_vpn_delete: 'Удалить', settings_vpn_switch_stop: 'Остановите VPN перед сменой конфигурации', settings_vpn_select: 'Выбрать',
     settings_vpn_auto_mode: 'Автоматический failover', settings_vpn_auto_mode_desc: 'Переключается на следующий .conf если YouTube блокирует IP',
-    settings_vpn_all_failed: 'Ни один .conf не смог подключиться к YouTube. Wireproxy отключён.', settings_vpn_reset_failover: 'Повторить все .conf',
+    settings_vpn_all_failed: 'Ни один .conf не смог подключиться к YouTube. Wireproxy отключён.', settings_vpn_reset_failover: 'Повторить все .conf', settings_vpn_rotated: 'VPN переключён →',
     settings_tab_playback: 'Видео',
     settings_history_watch: 'История просмотров', settings_history_search: 'История поиска',
     settings_playback_quality: 'Качество по умолчанию', settings_playback_autoplay: 'Автовоспроизведение',

@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback, FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Search, Shield, Play, X, Clock, Trash2, Settings, AlertTriangle } from 'lucide-react'
+import { Search, Shield, Play, X, Clock, Trash2, Settings, AlertTriangle, RefreshCw } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 import SettingsPanel from './SettingsPanel'
 import {
@@ -26,7 +26,9 @@ export default function Header() {
   const [vpnConnected, setVpnConnected] = useState(false)
   const [vpnConfName, setVpnConfName] = useState<string | null>(null)
   const [vpnAllFailed, setVpnAllFailed] = useState(false)
+  const [vpnRotatedConf, setVpnRotatedConf] = useState<string | null>(null)
   const [shieldTooltip, setShieldTooltip] = useState('')
+  const prevConfNameRef = useRef<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -35,9 +37,20 @@ export default function Header() {
       const res = await fetch(`${API_BASE}/api/vpn/status`)
       if (res.ok) {
         const data = await res.json()
+        const newConf: string | null = data.conf_name ?? null
         setVpnConnected(!!data.running)
-        setVpnConfName(data.conf_name ?? null)
+        setVpnConfName(newConf)
         setVpnAllFailed(!!data.all_failed)
+        if (
+          data.running &&
+          newConf !== null &&
+          prevConfNameRef.current !== null &&
+          prevConfNameRef.current !== newConf
+        ) {
+          setVpnRotatedConf(newConf)
+          setTimeout(() => setVpnRotatedConf(null), 5000)
+        }
+        prevConfNameRef.current = newConf
       }
     } catch {}
   }, [])
@@ -130,6 +143,13 @@ export default function Header() {
         <button onClick={() => setVpnAllFailed(false)} className="ml-1 hover:opacity-70 transition-opacity">
           <X className="w-4 h-4" />
         </button>
+      </div>
+    )}
+    {/* VPN rotation toast — anchored top-right near the shield */}
+    {vpnRotatedConf && (
+      <div className="fixed top-16 right-4 z-50 flex items-center gap-2 px-3 py-2 rounded-xl bg-yt-secondary border border-green-500/40 text-green-400 text-xs shadow-lg">
+        <RefreshCw className="w-3.5 h-3.5 flex-shrink-0" />
+        <span>{t('settings_vpn_rotated')} <span className="font-medium text-yt-text">{vpnRotatedConf.replace(/\.conf$/, '')}</span></span>
       </div>
     )}
     <header className="fixed top-0 left-0 right-0 z-50 flex items-center h-14 px-4 bg-yt-bg border-b border-yt-border/40">
