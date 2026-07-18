@@ -17,7 +17,7 @@ from core.cache import (
     stream_url_cache_set,
 )
 from services.innertube import get_ydl_opts, httpx_client, ydl_extract
-from services.vpn import _get_proxy_url
+from services.vpn import _get_proxy_url, record_youtube_error
 
 _PROXYCHAINS_CONF = "/tmp/mytube_proxychains.conf"
 
@@ -394,14 +394,25 @@ async def _hls_idle_cleanup_loop() -> None:
                 _kill_vod_session(_iptv_vod_hls_sessions.pop(k))
 
 
+_FFMPEG_BLOCK_PATTERNS = (
+    "server returned 403",
+    "http error 403",
+    "server returned 429",
+    "http error 429",
+    "server returned 500",
+    "http error 500",
+)
+
 async def _log_stderr(stderr: asyncio.StreamReader) -> None:
-    """Drain stderr line-by-line and log it. Must start BEFORE reading stdout
-    to prevent the 64 KB pipe-buffer from filling and deadlocking ffmpeg."""
+    """Drain stderr line-by-line, log it, and trigger VPN failover on HTTP blocks."""
     try:
         async for raw in stderr:
             msg = raw.decode("utf-8", errors="replace").rstrip()
             if msg:
                 print(f"[ffmpeg] {msg}", flush=True)
+                low = msg.lower()
+                if any(p in low for p in _FFMPEG_BLOCK_PATTERNS):
+                    record_youtube_error(403)
     except Exception:
         pass
 
