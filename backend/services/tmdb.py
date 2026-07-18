@@ -23,9 +23,8 @@ def _tmdb_load() -> str:
 
 def _tmdb_save(key: str) -> None:
     try:
-        os.makedirs(os.path.dirname(_tmdb_cfg_path), exist_ok=True)
-        with open(_tmdb_cfg_path, "w") as f:
-            json.dump({"key": key}, f)
+        from core.config import write_secret_file
+        write_secret_file(_tmdb_cfg_path, json.dumps({"key": key}))
     except Exception:
         pass
 

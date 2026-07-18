@@ -94,8 +94,8 @@ async def vpn_upload_conf(file: UploadFile = File(...)):
 
     name = _safe_conf_name(file.filename or "vpn.conf")
     path = os.path.join(VPN_CONFIGS_DIR, name)
-    with open(path, "w") as f:
-        f.write(conf)
+    from core.config import write_secret_file
+    write_secret_file(path, conf)
 
     vpn_svc._wireproxy_conf_path = path
     vpn_svc._wireproxy_conf_name = name

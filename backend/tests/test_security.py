@@ -423,6 +423,44 @@ class TestPodcastAudioProxySSRF:
         self._assert_blocked("file:///etc/passwd")
 
 
+class TestWriteSecretFile:
+    """write_secret_file creates 0o600 files atomically."""
+
+    def test_creates_with_correct_permissions(self, tmp_path):
+        import stat
+        from core.config import write_secret_file
+        target = str(tmp_path / "secret.json")
+        write_secret_file(target, '{"key": "val"}')
+        mode = stat.S_IMODE(os.stat(target).st_mode)
+        assert mode == 0o600
+
+    def test_content_written_correctly(self, tmp_path):
+        from core.config import write_secret_file
+        target = str(tmp_path / "secret.json")
+        write_secret_file(target, "hello")
+        with open(target) as f:
+            assert f.read() == "hello"
+
+    def test_crash_leaves_original_intact(self, tmp_path):
+        """Simulated write failure must not corrupt the original file."""
+        from core.config import write_secret_file
+        target = str(tmp_path / "secret.json")
+        write_secret_file(target, "original")
+        with patch("os.replace", side_effect=OSError("disk full")):
+            with pytest.raises(OSError):
+                write_secret_file(target, "corrupt")
+        with open(target) as f:
+            assert f.read() == "original"
+        # tmp file must be cleaned up
+        assert not os.path.exists(target + ".tmp")
+
+    def test_creates_parent_directory(self, tmp_path):
+        from core.config import write_secret_file
+        target = str(tmp_path / "sub" / "secret.json")
+        write_secret_file(target, "data")
+        assert os.path.exists(target)
+
+
 class TestPodcastConfigKeyMasking:
     """GET /api/podcasts/config must never expose the raw API key."""
 

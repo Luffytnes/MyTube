@@ -13,6 +13,7 @@ from fastapi.responses import Response, StreamingResponse
 
 from services.innertube import httpx_client
 from core.security import validate_proxy_url
+from core.config import write_secret_file
 
 router = APIRouter()
 
@@ -36,9 +37,7 @@ def _podcast_config_load() -> dict:
 
 def _podcast_config_save():
     try:
-        os.makedirs(os.path.dirname(PODCAST_CONFIG_FILE), exist_ok=True)
-        with open(PODCAST_CONFIG_FILE, "w") as f:
-            json.dump({"key": _pi_key_override, "secret": _pi_secret_override}, f)
+        write_secret_file(PODCAST_CONFIG_FILE, json.dumps({"key": _pi_key_override, "secret": _pi_secret_override}))
     except Exception:
         pass
 

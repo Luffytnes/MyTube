@@ -6,6 +6,28 @@ from typing import Any, Dict
 
 import httpx
 
+
+def write_secret_file(path: str, content: str) -> None:
+    """Write *content* to *path* atomically with 0o600 permissions.
+
+    Creates the parent directory (mode 0o700) if needed.  On failure the
+    temporary file is removed and the original *path* is left untouched.
+    """
+    parent = os.path.dirname(path) or "."
+    os.makedirs(parent, mode=0o700, exist_ok=True)
+    tmp = path + ".tmp"
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(content)
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
 # --- Invidious ---------------------------------------------------------------
 INVIDIOUS_INSTANCES = [
     "https://iv.melmac.space",
@@ -83,9 +105,7 @@ def _xtream_load():
 
 def _xtream_save():
     try:
-        os.makedirs(os.path.dirname(_xtream_cfg_path), exist_ok=True)
-        with open(_xtream_cfg_path, "w") as f:
-            json.dump(_xtream_cfg, f)
+        write_secret_file(_xtream_cfg_path, json.dumps(_xtream_cfg))
     except Exception:
         pass
 

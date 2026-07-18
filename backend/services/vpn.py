@@ -39,7 +39,7 @@ VPN_CONFIGS_DIR = os.path.join(os.path.expanduser("~"), ".mytube", "vpn_configs"
 VPN_STATE_FILE  = os.path.join(os.path.expanduser("~"), ".mytube", "vpn_state.json")
 # Active conf written to shared volume for the wireproxy container
 _ACTIVE_CONF_PATH = os.path.join(os.path.expanduser("~"), ".mytube", ".wireproxy.conf")
-os.makedirs(VPN_CONFIGS_DIR, exist_ok=True)
+os.makedirs(VPN_CONFIGS_DIR, mode=0o700, exist_ok=True)
 
 
 def _vpn_state_load() -> dict:
@@ -52,8 +52,8 @@ def _vpn_state_load() -> dict:
 
 def _vpn_state_save(state: dict):
     try:
-        with open(VPN_STATE_FILE, "w") as f:
-            json.dump(state, f)
+        from core.config import write_secret_file
+        write_secret_file(VPN_STATE_FILE, json.dumps(state))
     except Exception:
         pass
 
@@ -193,18 +193,8 @@ def _start_wireproxy_sync(conf_path: str) -> bool:
                 )
             else:
                 prepared = raw.rstrip() + SOCKS5_SECTION_EXT
-            os.makedirs(os.path.dirname(_ACTIVE_CONF_PATH), exist_ok=True)
-            tmp_path = _ACTIVE_CONF_PATH + ".tmp"
-            try:
-                with open(tmp_path, "w") as f:
-                    f.write(prepared)
-                os.replace(tmp_path, _ACTIVE_CONF_PATH)
-            except Exception:
-                try:
-                    os.unlink(tmp_path)
-                except OSError:
-                    pass
-                raise
+            from core.config import write_secret_file
+            write_secret_file(_ACTIVE_CONF_PATH, prepared)
             time.sleep(2)  # give wireproxy container time to restart
             _ytm_cache.clear()
             return True
