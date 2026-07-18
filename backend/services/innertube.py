@@ -7,6 +7,7 @@ import json
 import re
 
 import httpx
+import yt_dlp
 
 from core.config import (
     INVIDIOUS_INSTANCES,
@@ -32,6 +33,16 @@ def _get_instances() -> list:
     return INVIDIOUS_INSTANCES
 
 
+_YT_BLOCK_PATTERNS = (
+    "sign in to confirm",
+    "not a bot",
+    "http error 403",
+    "http error 429",
+    "429 too many requests",
+    "unable to download api page",
+)
+
+
 def get_ydl_opts(**extra) -> Dict[str, Any]:
     """Return yt-dlp options with proxy injected when VPN is active."""
     opts = {**YDL_OPTS_BASE, **extra}
@@ -39,6 +50,25 @@ def get_ydl_opts(**extra) -> Dict[str, Any]:
     if proxy:
         opts["proxy"] = proxy
     return opts
+
+
+async def ydl_extract(url: str, opts: dict) -> Optional[dict]:
+    """Run yt_dlp.extract_info in a thread; feed VPN failover on blocking errors."""
+    loop = asyncio.get_event_loop()
+
+    def _run():
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            return ydl.extract_info(url, download=False)
+
+    try:
+        info = await loop.run_in_executor(None, _run)
+        reset_youtube_errors()
+        return info
+    except Exception as exc:
+        msg = str(exc).lower()
+        if any(p in msg for p in _YT_BLOCK_PATTERNS):
+            record_youtube_error(403)
+        raise
 
 
 def httpx_client(**kwargs) -> httpx.AsyncClient:
