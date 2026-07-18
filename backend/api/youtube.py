@@ -453,8 +453,6 @@ async def get_video(video_id: str):
         }
     except HTTPException:
         raise
-    except HTTPException:
-        raise
     except Exception as e:
         msg = str(e).lower()
         if any(k in msg for k in ("not available", "private video", "has been removed", "age-restricted", "sign in", "unavailable", "your country", "not made this video", "geo", "blocked")):
