@@ -39,6 +39,7 @@ _YT_BLOCK_PATTERNS = (
     "not a bot",
     "http error 403",
     "http error 429",
+    "http error 500",
     "429 too many requests",
     "unable to download api page",
 )
