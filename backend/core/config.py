@@ -70,6 +70,7 @@ _YT_VIDEOS_TAB_PARAMS = "EgZ2aWRlb3PyBgQKAjoA"
 # --- ffmpeg binaries ---------------------------------------------------------
 _FFMPEG = shutil.which("ffmpeg") or "/opt/homebrew/bin/ffmpeg"
 _FFPROBE = shutil.which("ffprobe") or "/opt/homebrew/bin/ffprobe"
+_PROXYCHAINS4 = shutil.which("proxychains4")
 
 _OUTPUT_ARGS = [
     # Disable subtitle/data streams (fMP4 can't mux most subtitle codecs)

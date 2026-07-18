@@ -685,8 +685,6 @@ async def hls_playlist(video_id: str, itag: str, start: int = 0):
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        print(f"[hls_playlist] 500 — {traceback.format_exc()}", flush=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

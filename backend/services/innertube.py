@@ -68,9 +68,7 @@ async def ydl_extract(url: str, opts: dict) -> Optional[dict]:
         return info
     except Exception as exc:
         msg = str(exc).lower()
-        matched = any(p in msg for p in _YT_BLOCK_PATTERNS)
-        print(f"[ydl_extract] error url={url!r} matched={matched} msg={str(exc)!r}", flush=True)
-        if matched:
+        if any(p in msg for p in _YT_BLOCK_PATTERNS):
             record_youtube_error(403)
         raise
 

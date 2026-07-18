@@ -5,7 +5,7 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from core.config import _FFMPEG
+from core.config import _FFMPEG, _PROXYCHAINS4
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -50,8 +50,11 @@ class TestHlsSessionProxyArgs:
 
         assert "cmd" in captured, "create_subprocess_exec was not called"
         cmd_list = captured["cmd"]
-        assert cmd_list[0] == "proxychains4", f"Expected proxychains4 first, got {cmd_list[0]}"
-        assert _FFMPEG in cmd_list, f"Expected {_FFMPEG} in command"
+        if _PROXYCHAINS4:
+            assert cmd_list[0] == _PROXYCHAINS4, f"Expected proxychains4 first, got {cmd_list[0]}"
+            assert _FFMPEG in cmd_list, f"Expected {_FFMPEG} in command"
+        else:
+            assert cmd_list[0] == _FFMPEG, f"Expected {_FFMPEG} first (no proxychains4), got {cmd_list[0]}"
         assert "-socks_proxy" not in cmd_list, "-socks_proxy must not appear (replaced by proxychains)"
 
     def test_no_proxychains_when_vpn_inactive(self):
@@ -81,7 +84,7 @@ class TestHlsSessionProxyArgs:
         assert "cmd" in captured
         cmd_list = captured["cmd"]
         assert cmd_list[0] == _FFMPEG, f"Expected {_FFMPEG} first when VPN off, got {cmd_list[0]}"
-        assert "proxychains4" not in cmd_list, "proxychains4 must not appear when VPN is off"
+        assert (_PROXYCHAINS4 is None or _PROXYCHAINS4 not in cmd_list), "proxychains4 must not appear when VPN is off"
 
     def test_proxychains_appears_once(self):
         """proxychains4 prefix must appear exactly once in the command."""
@@ -110,8 +113,9 @@ class TestHlsSessionProxyArgs:
 
         assert "cmd" in captured
         cmd_list = captured["cmd"]
-        count = cmd_list.count("proxychains4")
-        assert count == 1, f"proxychains4 must appear exactly once, found {count} times"
+        if _PROXYCHAINS4:
+            count = cmd_list.count(_PROXYCHAINS4)
+            assert count == 1, f"proxychains4 must appear exactly once, found {count} times"
 
 
 # ---------------------------------------------------------------------------

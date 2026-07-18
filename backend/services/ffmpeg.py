@@ -11,7 +11,7 @@ import httpx
 from fastapi import HTTPException
 
 from core import config
-from core.config import _FFMPEG, _FFPROBE
+from core.config import _FFMPEG, _FFPROBE, _PROXYCHAINS4
 from core.cache import (
     stream_url_cache_get,
     stream_url_cache_set,
@@ -39,8 +39,8 @@ _hls_lock = asyncio.Lock()
 
 
 def _proxychains_prefix(proxy_url: Optional[str]) -> List[str]:
-    """Return ["proxychains4", "-q", "-f", conf] when proxy is active, else []."""
-    if not proxy_url:
+    """Return ["proxychains4", "-q", "-f", conf] when proxy is active and available, else []."""
+    if not proxy_url or not _PROXYCHAINS4:
         return []
     from urllib.parse import urlparse
     p = urlparse(proxy_url)
@@ -54,7 +54,7 @@ def _proxychains_prefix(proxy_url: Optional[str]) -> List[str]:
     with open(tmp, "w") as f:
         f.write(conf)
     os.replace(tmp, _PROXYCHAINS_CONF)
-    return ["proxychains4", "-q", "-f", _PROXYCHAINS_CONF]
+    return [_PROXYCHAINS4, "-q", "-f", _PROXYCHAINS_CONF]
 
 
 async def _get_video_and_audio_urls(video_id: str, itag: str) -> tuple:
