@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 import httpx
-from core.security import validate_proxy_url
+from core.security import validate_proxy_url_async
 from core.cache import (
     cache_get,
     cache_set,
@@ -125,7 +125,7 @@ async def list_invidious_instances():
 async def select_invidious_instance(body: dict):
     url = (body.get("url") or "").rstrip("/")
     if url:
-        await asyncio.to_thread(validate_proxy_url, url, ("https",))
+        await validate_proxy_url_async(url, ("https",))
     innertube._preferred_instance = url if url else None
     return {"selected": innertube._preferred_instance}
 
@@ -522,7 +522,7 @@ async def hls_proxy(url: str, request: Request):
         decoded_url = base64.urlsafe_b64decode(url + "==").decode()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid URL encoding")
-    validate_proxy_url(decoded_url)
+    await validate_proxy_url_async(decoded_url)
 
     try:
         base = str(request.base_url).rstrip("/")

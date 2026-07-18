@@ -12,7 +12,7 @@ import httpx
 from fastapi import APIRouter, Body, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 
-from core.security import validate_proxy_url, ssrf_redirect_hook
+from core.security import validate_proxy_url_async, ssrf_redirect_hook
 from core import config
 from core.config import _FFMPEG, _FFPROBE, _OUTPUT_ARGS
 from core.cache import cache_get, cache_set
@@ -158,7 +158,7 @@ async def iptv_hls_proxy(url: str, request: Request):
         decoded_url = base64.urlsafe_b64decode(url + "==").decode()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid URL encoding")
-    validate_proxy_url(decoded_url)
+    await validate_proxy_url_async(decoded_url)
     try:
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, event_hooks={"response": [ssrf_redirect_hook]}) as client:
             resp = await client.get(decoded_url)
@@ -187,7 +187,7 @@ async def iptv_hls_proxy(url: str, request: Request):
 async def iptv_icon_proxy(url: str):
     if not url or not url.startswith("http"):
         raise HTTPException(status_code=400, detail="Invalid URL")
-    validate_proxy_url(url)
+    await validate_proxy_url_async(url)
     try:
         parsed = urlparse(url)
         referer = f"{parsed.scheme}://{parsed.netloc}/"

@@ -1,4 +1,5 @@
 """SSRF protection — validate proxy URLs before fetching."""
+import asyncio
 import ipaddress
 import socket
 from urllib.parse import urlparse
@@ -64,6 +65,11 @@ def validate_proxy_url(url: str, allowed_schemes: tuple = ("http", "https")) -> 
     return url
 
 
+async def validate_proxy_url_async(url: str, allowed_schemes: tuple = ("http", "https")) -> str:
+    """Async wrapper: runs the blocking DNS resolution in a thread."""
+    return await asyncio.to_thread(validate_proxy_url, url, allowed_schemes)
+
+
 async def ssrf_redirect_hook(response) -> None:
     """httpx async response event hook: block redirects pointing to private/internal addresses.
 
@@ -75,6 +81,5 @@ async def ssrf_redirect_hook(response) -> None:
         location = response.headers.get("location", "")
         if location:
             from urllib.parse import urljoin
-            import asyncio
             absolute = urljoin(str(response.request.url), location)
             await asyncio.to_thread(validate_proxy_url, absolute)
