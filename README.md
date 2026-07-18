@@ -6,7 +6,7 @@
 
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Next.js](https://img.shields.io/badge/Frontend-Next.js%2014-black?style=flat-square&logo=next.js)](https://nextjs.org)
-[![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
 
@@ -434,7 +434,7 @@ Every request your browser makes goes through **your own backend**, never direct
 | `GET /api/tmdb/details?name=...&type=movie\|tv` | Metadata + credits by title |
 | `GET /api/tmdb/poster?name=...&type=movie\|tv` | Poster image by title (proxied) |
 | `GET /api/tmdb/image?path=/w500/xyz.jpg` | Image proxy by path |
-| `GET /api/tmdb/key` | Read TMDB API key |
+| `GET /api/tmdb/key` | Check if TMDB API key is configured (`{"configured": bool}`) |
 | `POST /api/tmdb/key` | Save TMDB API key |
 
 ### VPN
@@ -465,7 +465,7 @@ Interactive docs → **http://localhost:8000/docs**
 ## ⚠️ Notes
 
 - Age-restricted content requires YouTube authentication (not supported)
-- Bot detection by YouTube may occasionally limit quality — the built-in VPN feature helps
+- Bot detection by YouTube may occasionally block requests — the VPN feature auto-rotates configs when blocking is detected (403 / 429)
 - Your server's IP is used for requests to YouTube (or your VPN's IP if enabled)
 
 ---
