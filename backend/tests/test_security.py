@@ -1,4 +1,4 @@
-"""Tests for SSRF protection (core/security.py)."""
+"""Tests for SSRF protection (core/security.py), conf name sanitization, and TMDB key endpoint."""
 import asyncio
 import socket as _socket
 import sys
@@ -235,3 +235,85 @@ class TestSsrfRedirectHook:
         from core.security import ssrf_redirect_hook
         response = self._make_response("")
         asyncio.run(ssrf_redirect_hook(response))  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# _safe_conf_name — path traversal and sanitization
+# ---------------------------------------------------------------------------
+
+class TestSafeConfName:
+    @pytest.fixture(autouse=True)
+    def _import(self):
+        from api.vpn import _safe_conf_name
+        self.fn = _safe_conf_name
+
+    def test_path_traversal_stripped(self):
+        assert self.fn("../../etc/passwd") == "passwd.conf"
+
+    def test_special_chars_replaced(self):
+        assert self.fn("my vpn!.conf") == "my_vpn_.conf"
+
+    def test_empty_string_returns_default(self):
+        assert self.fn("") == "vpn.conf"
+
+    def test_none_returns_default(self):
+        assert self.fn(None) == "vpn.conf"  # type: ignore[arg-type]
+
+    def test_no_conf_extension_appended(self):
+        assert self.fn("myvpn") == "myvpn.conf"
+
+    def test_valid_name_unchanged(self):
+        assert self.fn("my-vpn.conf") == "my-vpn.conf"
+
+
+# ---------------------------------------------------------------------------
+# GET /api/tmdb/key — never exposes the raw key
+# ---------------------------------------------------------------------------
+
+class TestTmdbKeyEndpoint:
+    @pytest.fixture(autouse=True)
+    def _client(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from api.tmdb import router
+        app = FastAPI()
+        app.include_router(router)
+        self.client = TestClient(app)
+
+    def test_response_has_configured_bool(self):
+        response = self.client.get("/api/tmdb/key")
+        assert response.status_code == 200
+        data = response.json()
+        assert "configured" in data
+        assert isinstance(data["configured"], bool)
+
+    def test_raw_key_never_in_response(self):
+        import services.tmdb as tmdb_svc
+        sentinel = "SENTINEL_SECRET_ABC123"
+        original = tmdb_svc._TMDB_API_KEY
+        try:
+            tmdb_svc._TMDB_API_KEY = sentinel
+            response = self.client.get("/api/tmdb/key")
+            assert sentinel not in response.text
+        finally:
+            tmdb_svc._TMDB_API_KEY = original
+
+    def test_configured_true_when_key_set(self):
+        import services.tmdb as tmdb_svc
+        original = tmdb_svc._TMDB_API_KEY
+        try:
+            tmdb_svc._TMDB_API_KEY = "any_key_value"
+            response = self.client.get("/api/tmdb/key")
+            assert response.json()["configured"] is True
+        finally:
+            tmdb_svc._TMDB_API_KEY = original
+
+    def test_configured_false_when_no_key(self):
+        import services.tmdb as tmdb_svc
+        original = tmdb_svc._TMDB_API_KEY
+        try:
+            tmdb_svc._TMDB_API_KEY = ""
+            response = self.client.get("/api/tmdb/key")
+            assert response.json()["configured"] is False
+        finally:
+            tmdb_svc._TMDB_API_KEY = original
