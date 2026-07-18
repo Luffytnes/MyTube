@@ -27,7 +27,7 @@ from core.cache import (
     stream_url_cache_set,
     stream_url_cache_invalidate,
 )
-from core.config import YOUTUBE_HEADERS
+from core.config import YOUTUBE_HEADERS, _FFMPEG
 from services import innertube
 from services.innertube import (
     get_ydl_opts,
@@ -1460,7 +1460,7 @@ async def download_video(
             # Use ffmpeg to merge video-only + audio-only streams on the fly
             async def ffmpeg_merge_generator():
                 cmd = [
-                    "ffmpeg", "-y",
+                    _FFMPEG, "-y",
                     "-headers", "".join(f"{k}: {v}\r\n" for k, v in yt_headers.items()),
                     "-i", video_url,
                     "-headers", "".join(f"{k}: {v}\r\n" for k, v in yt_headers.items()),

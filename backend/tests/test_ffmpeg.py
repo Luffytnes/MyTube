@@ -5,6 +5,7 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from core.config import _FFMPEG
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -50,7 +51,7 @@ class TestHlsSessionProxyArgs:
         assert "cmd" in captured, "create_subprocess_exec was not called"
         cmd_list = captured["cmd"]
         assert cmd_list[0] == "proxychains4", f"Expected proxychains4 first, got {cmd_list[0]}"
-        assert "ffmpeg" in cmd_list, "Expected ffmpeg in command"
+        assert _FFMPEG in cmd_list, f"Expected {_FFMPEG} in command"
         assert "-socks_proxy" not in cmd_list, "-socks_proxy must not appear (replaced by proxychains)"
 
     def test_no_proxychains_when_vpn_inactive(self):
@@ -79,7 +80,7 @@ class TestHlsSessionProxyArgs:
 
         assert "cmd" in captured
         cmd_list = captured["cmd"]
-        assert cmd_list[0] == "ffmpeg", f"Expected ffmpeg first when VPN off, got {cmd_list[0]}"
+        assert cmd_list[0] == _FFMPEG, f"Expected {_FFMPEG} first when VPN off, got {cmd_list[0]}"
         assert "proxychains4" not in cmd_list, "proxychains4 must not appear when VPN is off"
 
     def test_proxychains_appears_once(self):

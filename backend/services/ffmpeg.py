@@ -11,7 +11,7 @@ import httpx
 from fastapi import HTTPException
 
 from core import config
-from core.config import _FFMPEG
+from core.config import _FFMPEG, _FFPROBE
 from core.cache import (
     stream_url_cache_get,
     stream_url_cache_set,
@@ -167,7 +167,7 @@ async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
         cmd_prefix = _proxychains_prefix(proxy_url)
 
         cmd = [
-            *cmd_prefix, "ffmpeg", "-loglevel", "warning", "-y",
+            *cmd_prefix, _FFMPEG, "-loglevel", "warning", "-y",
             *seek,
             "-headers", f"User-Agent: {ua}\r\nReferer: https://www.youtube.com/\r\n",
             "-i", video_url,
@@ -241,7 +241,7 @@ async def _probe_vod_duration(path: str) -> float:
     """Quick ffprobe to read duration from local file. Returns 0.0 on failure."""
     try:
         proc = await asyncio.create_subprocess_exec(
-            "ffprobe", "-v", "error",
+            _FFPROBE, "-v", "error",
             "-show_entries", "format=duration",
             "-of", "default=noprint_wrappers=1:nokey=1",
             path,
