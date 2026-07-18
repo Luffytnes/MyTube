@@ -4,5 +4,5 @@ yt-dlp==2026.6.9
 httpx[socks]==0.28.1
 python-dotenv==1.2.2
 python-multipart==0.0.31
-ytmusicapi==1.11.5
+ytmusicapi==1.12.1
 cachetools==5.5.2
