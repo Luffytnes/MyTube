@@ -6,6 +6,7 @@ The implementation is split across:
   - api/       APIRouter modules grouped by feature
 """
 import asyncio
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,12 +23,21 @@ from api.vpn import router as vpn_router
 from api.tmdb import router as tmdb_router
 from api.podcasts import router as podcasts_router
 
-app = FastAPI(title="MyTube API", version="1.0.0")
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    asyncio.create_task(_vpn_watchdog())
+    asyncio.create_task(_vod_cache_cleanup_loop())
+    yield
+
+
+app = FastAPI(title="MyTube API", version="1.0.0", lifespan=lifespan)
+
+# allow_credentials must be False when allow_origins=["*"] (browsers enforce this)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -40,12 +50,6 @@ app.include_router(news_router)
 app.include_router(vpn_router)
 app.include_router(tmdb_router)
 app.include_router(podcasts_router)
-
-
-@app.on_event("startup")
-async def start_vpn_watchdog():
-    asyncio.create_task(_vpn_watchdog())
-    asyncio.create_task(_vod_cache_cleanup_loop())
 
 
 if __name__ == "__main__":

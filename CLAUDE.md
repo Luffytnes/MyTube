@@ -40,6 +40,10 @@ nginx/            Reverse proxy + auth HTTP Basic
 - Ne pas modifier ce qui n'est pas dans le scope de la tâche
 - Préférer les modifications minimales cohérentes avec l'existant
 
+## Contraintes d'architecture
+
+- Backend lancé en **single-worker** uvicorn — l'état en mémoire (caches, sessions VPN, sessions HLS) est partagé dans le process. Ne pas passer à `--workers N > 1` sans migrer vers un état partagé externe (Redis, etc.).
+
 ## Agents disponibles
 
 - **backend** : API, services, logique métier, tests backend

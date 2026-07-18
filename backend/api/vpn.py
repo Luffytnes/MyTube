@@ -1,5 +1,6 @@
 """VPN (wireproxy) control API routes."""
 import os
+import re
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
@@ -20,6 +21,15 @@ from services.vpn import (
 from services.innertube import httpx_client
 
 router = APIRouter()
+
+
+def _safe_conf_name(raw: str) -> str:
+    """Sanitize a VPN config filename: basename only, safe chars only, must end in .conf."""
+    name = os.path.basename(raw or "vpn.conf")
+    name = re.sub(r"[^A-Za-z0-9._-]", "_", name)
+    if not name.endswith(".conf"):
+        name += ".conf"
+    return name or "vpn.conf"
 
 
 @router.get("/api/vpn/status")
@@ -82,7 +92,7 @@ async def vpn_upload_conf(file: UploadFile = File(...)):
 
     conf = _prepare_conf(raw)
 
-    name = file.filename or "vpn.conf"
+    name = _safe_conf_name(file.filename or "vpn.conf")
     path = os.path.join(VPN_CONFIGS_DIR, name)
     with open(path, "w") as f:
         f.write(conf)
@@ -99,9 +109,10 @@ async def vpn_upload_conf(file: UploadFile = File(...)):
 @router.post("/api/vpn/select")
 async def vpn_select_conf(body: dict):
     """Select a previously saved config as active."""
-    name = body.get("name")
-    if not name:
+    raw_name = body.get("name")
+    if not raw_name:
         raise HTTPException(status_code=400, detail="Missing 'name'")
+    name = _safe_conf_name(raw_name)
 
     path = os.path.join(VPN_CONFIGS_DIR, name)
     if not os.path.exists(path):
@@ -120,6 +131,7 @@ async def vpn_select_conf(body: dict):
 @router.delete("/api/vpn/configs/{name}")
 async def vpn_delete_conf(name: str):
     """Delete a saved config. Cannot delete the active one while VPN is running."""
+    name = _safe_conf_name(name)
     path = os.path.join(VPN_CONFIGS_DIR, name)
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail=f"Config '{name}' not found")

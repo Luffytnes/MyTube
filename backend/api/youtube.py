@@ -5,6 +5,7 @@ import base64
 import html as html_lib
 import re
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
@@ -55,29 +56,30 @@ from services.ffmpeg import (
 )
 router = APIRouter()
 
-# Per-category, per-language search queries
+# Per-category, per-language search queries — year injected at startup
+_Y = str(datetime.now().year)
 CATEGORY_SEARCH_I18N: Dict[str, Dict[str, List[str]]] = {
     "music": {
-        "en": ["official music video 2024", "top songs music video"],
-        "fr": ["clip officiel 2024", "meilleures chansons"],
-        "es": ["video musical oficial 2024", "mejores canciones"],
-        "de": ["offizielles Musikvideo 2024", "beste Lieder"],
-        "pt": ["clipe oficial 2024", "melhores músicas"],
-        "it": ["video musicale ufficiale 2024", "migliori canzoni"],
-        "ja": ["公式ミュージックビデオ 2024", "人気曲"],
-        "ko": ["공식 뮤직비디오 2024", "인기 노래"],
-        "ru": ["официальный клип 2024", "лучшие песни"],
+        "en": [f"official music video {_Y}", "top songs music video"],
+        "fr": [f"clip officiel {_Y}", "meilleures chansons"],
+        "es": [f"video musical oficial {_Y}", "mejores canciones"],
+        "de": [f"offizielles Musikvideo {_Y}", "beste Lieder"],
+        "pt": [f"clipe oficial {_Y}", "melhores músicas"],
+        "it": [f"video musicale ufficiale {_Y}", "migliori canzoni"],
+        "ja": [f"公式ミュージックビデオ {_Y}", "人気曲"],
+        "ko": [f"공식 뮤직비디오 {_Y}", "인기 노래"],
+        "ru": [f"официальный клип {_Y}", "лучшие песни"],
     },
     "gaming": {
-        "en": ["gaming highlights 2024", "best video game gameplay"],
-        "fr": ["gameplay jeux vidéo 2024", "meilleurs jeux vidéo"],
-        "es": ["gameplay videojuegos 2024", "mejores juegos"],
-        "de": ["Gaming Highlights 2024", "bestes Gameplay Videospiele"],
-        "pt": ["gameplay jogos 2024", "melhores jogos"],
-        "it": ["gameplay videogiochi 2024", "migliori giochi"],
-        "ja": ["ゲーム実況 2024", "人気ゲームプレイ"],
-        "ko": ["게임 하이라이트 2024", "인기 게임플레이"],
-        "ru": ["геймплей игры 2024", "лучшие видеоигры"],
+        "en": [f"gaming highlights {_Y}", "best video game gameplay"],
+        "fr": [f"gameplay jeux vidéo {_Y}", "meilleurs jeux vidéo"],
+        "es": [f"gameplay videojuegos {_Y}", "mejores juegos"],
+        "de": [f"Gaming Highlights {_Y}", "bestes Gameplay Videospiele"],
+        "pt": [f"gameplay jogos {_Y}", "melhores jogos"],
+        "it": [f"gameplay videogiochi {_Y}", "migliori giochi"],
+        "ja": [f"ゲーム実況 {_Y}", "人気ゲームプレイ"],
+        "ko": [f"게임 하이라이트 {_Y}", "인기 게임플레이"],
+        "ru": [f"геймплей игры {_Y}", "лучшие видеоигры"],
     },
     "news": {
         "en": ["world news today", "breaking news"],
@@ -91,15 +93,15 @@ CATEGORY_SEARCH_I18N: Dict[str, Dict[str, List[str]]] = {
         "ru": ["новости сегодня", "последние новости"],
     },
     "movies": {
-        "en": ["official movie trailer 2024", "film review"],
-        "fr": ["bande annonce film 2024", "critique film"],
-        "es": ["tráiler película 2024", "reseña película"],
-        "de": ["offizieller Filmtrailer 2024", "Filmkritik"],
-        "pt": ["trailer oficial filme 2024", "análise filme"],
-        "it": ["trailer ufficiale film 2024", "recensione film"],
-        "ja": ["映画予告編 2024", "映画レビュー"],
-        "ko": ["영화 공식 예고편 2024", "영화 리뷰"],
-        "ru": ["официальный трейлер фильма 2024", "обзор фильма"],
+        "en": [f"official movie trailer {_Y}", "film review"],
+        "fr": [f"bande annonce film {_Y}", "critique film"],
+        "es": [f"tráiler película {_Y}", "reseña película"],
+        "de": [f"offizieller Filmtrailer {_Y}", "Filmkritik"],
+        "pt": [f"trailer oficial filme {_Y}", "análise filme"],
+        "it": [f"trailer ufficiale film {_Y}", "recensione film"],
+        "ja": [f"映画予告編 {_Y}", "映画レビュー"],
+        "ko": [f"영화 공식 예고편 {_Y}", "영화 리뷰"],
+        "ru": [f"официальный трейлер фильма {_Y}", "обзор фильма"],
     },
 }
 

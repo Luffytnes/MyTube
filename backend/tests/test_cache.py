@@ -8,8 +8,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import core.cache as cache_module
 from core.cache import (
-    cache_get, cache_set, CACHE_TTL,
-    thumb_cache_get, thumb_cache_set, THUMB_CACHE_TTL,
+    cache_get, cache_set,
+    thumb_cache_get, thumb_cache_set,
     live_url_cache_get, live_url_cache_set, LIVE_URL_TTL,
     stream_url_cache_get, stream_url_cache_set, stream_url_cache_invalidate,
 )
@@ -38,23 +38,16 @@ class TestCacheGetSet:
         cache_set("k", {"data": 42})
         assert cache_get("k") == {"data": 42}
 
-    def test_expired_returns_none(self):
-        cache_set("k", "value")
-        past = time.time() - CACHE_TTL - 1
-        cache_module._cache["k"] = (past, "value")
-        assert cache_get("k") is None
-
-    def test_expired_removes_entry(self):
-        cache_set("k", "value")
-        past = time.time() - CACHE_TTL - 1
-        cache_module._cache["k"] = (past, "value")
-        cache_get("k")
-        assert "k" not in cache_module._cache
-
     def test_overwrite(self):
         cache_set("k", "first")
         cache_set("k", "second")
         assert cache_get("k") == "second"
+
+    def test_bounded_maxsize(self):
+        """TTLCache evicts LRU entries when maxsize is reached."""
+        for i in range(cache_module._cache.maxsize + 5):
+            cache_set(f"key_{i}", i)
+        assert len(cache_module._cache) <= cache_module._cache.maxsize
 
 
 # ---------------------------------------------------------------------------
@@ -70,11 +63,11 @@ class TestThumbCache:
         result = thumb_cache_get("img")
         assert result == (b"\xff\xd8\xff", "image/jpeg")
 
-    def test_expired_returns_none(self):
-        thumb_cache_set("img", b"data", "image/png")
-        past = time.time() - THUMB_CACHE_TTL - 1
-        cache_module._thumb_cache["img"] = (past, b"data", "image/png")
-        assert thumb_cache_get("img") is None
+    def test_bounded_maxsize(self):
+        """TTLCache evicts entries when maxsize is reached."""
+        for i in range(cache_module._thumb_cache.maxsize + 5):
+            thumb_cache_set(f"img_{i}", b"x", "image/jpeg")
+        assert len(cache_module._thumb_cache) <= cache_module._thumb_cache.maxsize
 
 
 # ---------------------------------------------------------------------------

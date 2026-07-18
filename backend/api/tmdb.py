@@ -248,7 +248,7 @@ async def tmdb_person_credits(person_id: int):
 
 @router.get("/api/tmdb/key")
 async def tmdb_get_key():
-    return {"key": tmdb_svc._TMDB_API_KEY}
+    return {"configured": bool(tmdb_svc._TMDB_API_KEY)}
 
 
 @router.post("/api/tmdb/key")

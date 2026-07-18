@@ -4,60 +4,46 @@ from time import time as _time
 from typing import Any, Dict, Optional
 
 import yt_dlp
+from cachetools import TTLCache
 
 from services.innertube import get_ydl_opts
 
-# Simple TTL cache (trending/search results)
-_cache: Dict[str, tuple] = {}
+# Simple TTL cache (trending/search results) — bounded to 200 entries
 CACHE_TTL = 300  # 5 minutes
+_cache: TTLCache = TTLCache(maxsize=200, ttl=CACHE_TTL)
 
 
 def cache_get(key: str) -> Optional[Any]:
-    if key in _cache:
-        ts, data = _cache[key]
-        if _time() - ts < CACHE_TTL:
-            return data
-        del _cache[key]
-    return None
+    return _cache.get(key)
 
 
 def cache_set(key: str, data: Any) -> None:
-    _cache[key] = (_time(), data)
+    _cache[key] = data
 
 
-# In-memory thumbnail cache (1 hour TTL)
-_thumb_cache: Dict[str, tuple] = {}
+# In-memory thumbnail cache (1 hour TTL) — bounded to 500 entries (~image bytes)
 THUMB_CACHE_TTL = 3600
+_thumb_cache: TTLCache = TTLCache(maxsize=500, ttl=THUMB_CACHE_TTL)
 
 
 def thumb_cache_get(key: str):
-    if key in _thumb_cache:
-        ts, data, ct = _thumb_cache[key]
-        if _time() - ts < THUMB_CACHE_TTL:
-            return data, ct
-        del _thumb_cache[key]
-    return None
+    return _thumb_cache.get(key)
 
 
 def thumb_cache_set(key: str, data: bytes, ct: str) -> None:
-    _thumb_cache[key] = (_time(), data, ct)
+    _thumb_cache[key] = (data, ct)
 
 
 # Cache for raw yt-dlp channel thumbnails list (shared between avatar + banner)
-_channel_thumbs_cache: Dict[str, tuple] = {}
+_channel_thumbs_cache: TTLCache = TTLCache(maxsize=200, ttl=THUMB_CACHE_TTL)
 
 
 def _channel_thumbs_cache_get(channel_id: str):
-    if channel_id in _channel_thumbs_cache:
-        ts, data = _channel_thumbs_cache[channel_id]
-        if _time() - ts < THUMB_CACHE_TTL:
-            return data
-        del _channel_thumbs_cache[channel_id]
-    return None
+    return _channel_thumbs_cache.get(channel_id)
 
 
 def _channel_thumbs_cache_set(channel_id: str, data: list) -> None:
-    _channel_thumbs_cache[channel_id] = (_time(), data)
+    _channel_thumbs_cache[channel_id] = data
 
 
 async def _get_channel_thumbnails(channel_id: str) -> list:

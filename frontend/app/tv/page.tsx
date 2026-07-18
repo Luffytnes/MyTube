@@ -749,7 +749,7 @@ function TvPageContent() {
     fetch(`${API_BASE}/api/tmdb/key`)
       .then(r => r.json())
       .then(d => {
-        const hasKey = !!(d.key)
+        const hasKey = !!(d.configured)
         setTmdbKeySet(hasKey)
         if (!hasKey) {
           setTmdbSections(prev => prev.map(s => ({ ...s, loading: false })))
