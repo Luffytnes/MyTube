@@ -15,10 +15,8 @@ from core.cache import (
     stream_url_cache_get,
     stream_url_cache_set,
 )
-from services.innertube import get_ydl_opts, httpx_client
+from services.innertube import get_ydl_opts, httpx_client, ydl_extract
 from services.vpn import _get_proxy_url
-
-import yt_dlp
 
 _PROXYCHAINS_CONF = "/tmp/mytube_proxychains.conf"
 
@@ -68,7 +66,6 @@ async def _get_video_and_audio_urls(video_id: str, itag: str) -> tuple:
         return cached_v[0], cached_a[0]
 
     opts = get_ydl_opts(**{"quiet": True, "no_warnings": True})
-    loop = asyncio.get_event_loop()
 
     # Height in pixels for the most common YouTube video-only itags
     _ITAG_HEIGHT: Dict[str, int] = {
@@ -82,74 +79,71 @@ async def _get_video_and_audio_urls(video_id: str, itag: str) -> tuple:
         "266": 2160, "272": 2160, "315": 2160, "313": 2160, "401": 2160,
     }
 
-    def _fetch():
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-            if not info:
-                print(f"[hls] yt-dlp returned no info for {video_id}", flush=True)
-                return None, None
-            formats = info.get("formats", [])
-            v_url = None
-            for fmt in formats:
-                if str(fmt.get("format_id")) == str(itag):
-                    v_url = fmt.get("url")
-                    stream_url_cache_set(video_cache_key, v_url, fmt.get("ext", "mp4"))
-                    break
+    info = await ydl_extract(f"https://www.youtube.com/watch?v={video_id}", opts)
+    if not info:
+        print(f"[hls] yt-dlp returned no info for {video_id}", flush=True)
+        return None, None
 
-            # Fallback: itag missing from this API response (YouTube occasionally returns
-            # different format sets). Try the best video-only format at the same height.
-            if not v_url:
-                target_h = _ITAG_HEIGHT.get(str(itag))
-                if target_h:
-                    video_fmts = [
-                        f for f in formats
-                        if f.get("vcodec", "none") != "none"
-                        and f.get("acodec", "none") == "none"
-                        and f.get("url")
-                    ]
-                    # Exact height first, then best height below target
-                    exact = [f for f in video_fmts if f.get("height") == target_h]
-                    below = sorted(
-                        [f for f in video_fmts if (f.get("height") or 0) < target_h],
-                        key=lambda f: -(f.get("height") or 0),
-                    )
-                    candidates = exact or below
-                    # Prefer H.264 (avc) for client compatibility
-                    h264 = [f for f in candidates if "avc" in (f.get("vcodec") or "")]
-                    best = h264[0] if h264 else (candidates[0] if candidates else None)
-                    if best:
-                        v_url = best.get("url")
-                        stream_url_cache_set(video_cache_key, v_url, best.get("ext", "mp4"))
-                        print(
-                            f"[hls] itag {itag} unavailable for {video_id}, "
-                            f"using {best.get('format_id')} ({best.get('height')}p) as fallback",
-                            flush=True,
-                        )
-                    else:
-                        available = [f.get("format_id") for f in formats if f.get("url")]
-                        print(
-                            f"[hls] no fallback for itag {itag} ({target_h}p) on {video_id}. "
-                            f"Available: {available}",
-                            flush=True,
-                        )
-                else:
-                    available = [f.get("format_id") for f in formats if f.get("url")]
-                    print(f"[hls] unknown itag {itag} not found for {video_id}. Available: {available}", flush=True)
+    formats = info.get("formats", [])
+    v_url = None
+    for fmt in formats:
+        if str(fmt.get("format_id")) == str(itag):
+            v_url = fmt.get("url")
+            stream_url_cache_set(video_cache_key, v_url, fmt.get("ext", "mp4"))
+            break
 
-            a_url = None
-            audio_fmts = [f for f in sorted(formats, key=lambda f: -(f.get("abr") or 0))
-                          if f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"]
-            for fmt in audio_fmts:
-                if fmt.get("ext") in ("m4a", "mp4"):
-                    a_url = fmt.get("url")
-                    stream_url_cache_set(audio_cache_key, a_url, fmt.get("ext", "m4a"))
-                    break
-            if not a_url:
-                fallback_exts = [f"{f.get('format_id')}/{f.get('ext')}" for f in audio_fmts]
-                print(f"[hls] no m4a/mp4 audio for {video_id}. Audio formats: {fallback_exts}", flush=True)
-            return v_url, a_url
+    # Fallback: itag missing from this API response (YouTube occasionally returns
+    # different format sets). Try the best video-only format at the same height.
+    if not v_url:
+        target_h = _ITAG_HEIGHT.get(str(itag))
+        if target_h:
+            video_fmts = [
+                f for f in formats
+                if f.get("vcodec", "none") != "none"
+                and f.get("acodec", "none") == "none"
+                and f.get("url")
+            ]
+            # Exact height first, then best height below target
+            exact = [f for f in video_fmts if f.get("height") == target_h]
+            below = sorted(
+                [f for f in video_fmts if (f.get("height") or 0) < target_h],
+                key=lambda f: -(f.get("height") or 0),
+            )
+            candidates = exact or below
+            # Prefer H.264 (avc) for client compatibility
+            h264 = [f for f in candidates if "avc" in (f.get("vcodec") or "")]
+            best = h264[0] if h264 else (candidates[0] if candidates else None)
+            if best:
+                v_url = best.get("url")
+                stream_url_cache_set(video_cache_key, v_url, best.get("ext", "mp4"))
+                print(
+                    f"[hls] itag {itag} unavailable for {video_id}, "
+                    f"using {best.get('format_id')} ({best.get('height')}p) as fallback",
+                    flush=True,
+                )
+            else:
+                available = [f.get("format_id") for f in formats if f.get("url")]
+                print(
+                    f"[hls] no fallback for itag {itag} ({target_h}p) on {video_id}. "
+                    f"Available: {available}",
+                    flush=True,
+                )
+        else:
+            available = [f.get("format_id") for f in formats if f.get("url")]
+            print(f"[hls] unknown itag {itag} not found for {video_id}. Available: {available}", flush=True)
 
-    return await loop.run_in_executor(None, _fetch)
+    a_url = None
+    audio_fmts = [f for f in sorted(formats, key=lambda f: -(f.get("abr") or 0))
+                  if f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"]
+    for fmt in audio_fmts:
+        if fmt.get("ext") in ("m4a", "mp4"):
+            a_url = fmt.get("url")
+            stream_url_cache_set(audio_cache_key, a_url, fmt.get("ext", "m4a"))
+            break
+    if not a_url:
+        fallback_exts = [f"{f.get('format_id')}/{f.get('ext')}" for f in audio_fmts]
+        print(f"[hls] no m4a/mp4 audio for {video_id}. Audio formats: {fallback_exts}", flush=True)
+    return v_url, a_url
 
 
 async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:

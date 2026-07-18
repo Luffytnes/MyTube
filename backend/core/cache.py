@@ -1,12 +1,10 @@
 """In-memory TTL caches shared across the MyTube backend."""
-import asyncio
 from time import time as _time
 from typing import Any, Dict, Optional
 
-import yt_dlp
 from cachetools import TTLCache
 
-from services.innertube import get_ydl_opts
+from services.innertube import get_ydl_opts, ydl_extract
 
 # Simple TTL cache (trending/search results) — bounded to 200 entries
 CACHE_TTL = 300  # 5 minutes
@@ -51,14 +49,8 @@ async def _get_channel_thumbnails(channel_id: str) -> list:
     if cached is not None:
         return cached
     opts = get_ydl_opts(**{"extract_flat": True, "playlistend": 1})
-    loop = asyncio.get_event_loop()
-
-    def _fetch():
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(f"https://www.youtube.com/channel/{channel_id}", download=False)
-            return info.get("thumbnails", []) if info else []
-
-    thumbs = await loop.run_in_executor(None, _fetch)
+    info = await ydl_extract(f"https://www.youtube.com/channel/{channel_id}", opts)
+    thumbs = info.get("thumbnails", []) if info else []
     _channel_thumbs_cache_set(channel_id, thumbs)
     return thumbs
 

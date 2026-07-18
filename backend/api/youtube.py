@@ -13,8 +13,6 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 import httpx
-import yt_dlp
-
 from core.security import validate_proxy_url
 from core.cache import (
     cache_get,
@@ -32,6 +30,7 @@ from core.config import YOUTUBE_HEADERS
 from services import innertube
 from services.innertube import (
     get_ydl_opts,
+    ydl_extract,
     httpx_client,
     rewrite_hls_manifest,
     _get_instances,
@@ -173,16 +172,11 @@ async def get_trending(region: str = "US", category: str = "all", lang: str = "e
 
         # Last resort: yt-dlp
         try:
-            loop = asyncio.get_event_loop()
             opts = get_ydl_opts(**{"extract_flat": True})
             ydl_videos: List[Dict[str, Any]] = []
 
-            def _fetch(q: str):
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    return ydl.extract_info(f"ytsearch12:{q}", download=False)
-
             for q in queries[:1]:
-                res = await loop.run_in_executor(None, lambda q=q: _fetch(q))
+                res = await ydl_extract(f"ytsearch12:{q}", opts)
                 if res and "entries" in res:
                     for entry in res["entries"]:
                         if entry and entry.get("id") and entry["id"] not in seen_ids:
@@ -306,13 +300,7 @@ async def search_videos(q: str = Query(..., min_length=1), page: int = Query(1, 
         offset = (page - 1) * 20
         search_query = f"ytsearch{20 + offset}:{q}"
         opts = get_ydl_opts(**{"extract_flat": True})
-        loop = asyncio.get_event_loop()
-
-        def _search():
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                return ydl.extract_info(search_query, download=False)
-
-        info = await loop.run_in_executor(None, _search)
+        info = await ydl_extract(search_query, opts)
         entries = info.get("entries", []) if info else []
         page_entries = entries[offset:offset + 20] if offset < len(entries) else entries
         fallback_videos = [extract_video_card(e) for e in page_entries if e and e.get("id")]
@@ -325,16 +313,7 @@ async def search_videos(q: str = Query(..., min_length=1), page: int = Query(1, 
 async def get_video(video_id: str):
     try:
         opts = get_ydl_opts(**{"format": "bestvideo+bestaudio/best"})
-
-        loop = asyncio.get_event_loop()
-
-        def _fetch():
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                return ydl.extract_info(
-                    f"https://www.youtube.com/watch?v={video_id}", download=False
-                )
-
-        info = await loop.run_in_executor(None, _fetch)
+        info = await ydl_extract(f"https://www.youtube.com/watch?v={video_id}", opts)
         if not info:
             raise HTTPException(status_code=404, detail="Video not found")
 
@@ -425,12 +404,7 @@ async def get_video(video_id: str):
             if search_q:
                 try:
                     opts_rel = get_ydl_opts(**{"extract_flat": True})
-
-                    def _search_related():
-                        with yt_dlp.YoutubeDL(opts_rel) as ydl:
-                            return ydl.extract_info(f"ytsearch12:{search_q}", download=False)
-
-                    rel_info = await loop.run_in_executor(None, _search_related)
+                    rel_info = await ydl_extract(f"ytsearch12:{search_q}", opts_rel)
                     if rel_info and "entries" in rel_info:
                         existing_ids = {r["id"] for r in related} | {video_id}
                         for entry in rel_info["entries"]:
@@ -497,32 +471,24 @@ async def get_live_stream(video_id: str):
 async def live_hls_master(video_id: str, request: Request):
     """Fetch the YouTube live HLS master playlist and rewrite URLs through our proxy."""
     try:
-        loop = asyncio.get_event_loop()
-
         # Use cached URL if still fresh, otherwise fetch via yt-dlp
         hls_url = live_url_cache_get(video_id)
         if not hls_url:
-            def _get_hls():
-                with yt_dlp.YoutubeDL(get_ydl_opts()) as ydl:
-                    info = ydl.extract_info(
-                        f"https://www.youtube.com/watch?v={video_id}", download=False
-                    )
-                    if not info:
-                        return None
-                    # Prefer master manifest — contains all quality levels, hls.js picks best
-                    if info.get("manifest_url"):
-                        return info["manifest_url"]
+            _info = await ydl_extract(f"https://www.youtube.com/watch?v={video_id}", get_ydl_opts())
+            if _info:
+                if _info.get("manifest_url"):
+                    hls_url = _info["manifest_url"]
+                else:
                     # Fall back to the highest-resolution HLS format
                     hls_fmts = [
-                        f for f in info.get("formats", [])
+                        f for f in _info.get("formats", [])
                         if f.get("protocol", "") in ("m3u8", "m3u8_native") or f.get("ext", "") == "m3u8"
                     ]
                     if hls_fmts:
                         best = max(hls_fmts, key=lambda f: f.get("height") or 0)
-                        return best.get("url")
-                    return info.get("url")
-
-            hls_url = await loop.run_in_executor(None, _get_hls)
+                        hls_url = best.get("url")
+                    else:
+                        hls_url = _info.get("url")
             if not hls_url:
                 raise HTTPException(status_code=404, detail="No HLS stream found for this video")
             live_url_cache_set(video_id, hls_url)
@@ -601,22 +567,19 @@ async def stream_audio(video_id: str, request: Request, itag: Optional[str] = No
         else:
             format_spec = itag if itag else "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio"
             opts = get_ydl_opts(**{"format": format_spec})
-            loop = asyncio.get_event_loop()
-
-            def _get_audio_url():
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    info = ydl.extract_info(
-                        f"https://www.youtube.com/watch?v={video_id}", download=False
-                    )
-                    if not info:
-                        return None, "m4a"
-                    if itag:
-                        for fmt in info.get("formats", []):
-                            if str(fmt.get("format_id")) == str(itag):
-                                return fmt.get("url"), fmt.get("ext", "m4a")
-                    return info.get("url"), info.get("ext", "m4a")
-
-            direct_url, ext = await loop.run_in_executor(None, _get_audio_url)
+            _info = await ydl_extract(f"https://www.youtube.com/watch?v={video_id}", opts)
+            if not _info:
+                direct_url, ext = None, "m4a"
+            elif itag:
+                _found = next(
+                    (f for f in _info.get("formats", []) if str(f.get("format_id")) == str(itag)),
+                    None,
+                )
+                direct_url = _found.get("url") if _found else None
+                ext = _found.get("ext", "m4a") if _found else "m4a"
+            else:
+                direct_url = _info.get("url")
+                ext = _info.get("ext", "m4a")
             if direct_url:
                 stream_url_cache_set(cache_key, direct_url, ext or "m4a")
 
@@ -869,22 +832,19 @@ async def stream_video(video_id: str, request: Request, itag: Optional[str] = No
             # not in info["url"], so direct_url ends up None → 404.
             format_spec = itag if itag else "bestvideo[ext=mp4]/bestvideo[ext=webm]/bestvideo"
             opts = get_ydl_opts(**{"format": format_spec})
-            loop = asyncio.get_event_loop()
-
-            def _get_video_url():
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    info = ydl.extract_info(
-                        f"https://www.youtube.com/watch?v={video_id}", download=False
-                    )
-                    if not info:
-                        return None, None
-                    if itag:
-                        for fmt in info.get("formats", []):
-                            if str(fmt.get("format_id")) == str(itag):
-                                return fmt.get("url"), fmt.get("ext", "mp4")
-                    return info.get("url"), info.get("ext", "mp4")
-
-            direct_url, ext = await loop.run_in_executor(None, _get_video_url)
+            _info = await ydl_extract(f"https://www.youtube.com/watch?v={video_id}", opts)
+            if not _info:
+                direct_url, ext = None, None
+            elif itag:
+                _found = next(
+                    (f for f in _info.get("formats", []) if str(f.get("format_id")) == str(itag)),
+                    None,
+                )
+                direct_url = _found.get("url") if _found else None
+                ext = _found.get("ext", "mp4") if _found else None
+            else:
+                direct_url = _info.get("url")
+                ext = _info.get("ext", "mp4")
             if direct_url:
                 stream_url_cache_set(cache_key, direct_url, ext or "mp4")
 
@@ -952,42 +912,32 @@ async def stream_trailer(video_id: str, request: Request):
             direct_url, ext = cached
         else:
             opts = get_ydl_opts()
-            loop = asyncio.get_event_loop()
-
-            def _get_trailer_url():
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    info = ydl.extract_info(
-                        f"https://www.youtube.com/watch?v={video_id}", download=False
-                    )
-                    if not info:
-                        return None, None
-
-                    formats = info.get("formats", [])
-
-                    # Find combined (pre-merged) formats: vcodec and acodec both present
-                    combined = [
-                        f for f in formats
-                        if f.get("url")
-                        and f.get("vcodec") not in (None, "none")
-                        and f.get("acodec") not in (None, "none")
-                    ]
-
-                    if combined:
-                        # Prefer mp4 at ≤720p, fall back to any combined
-                        pool = [f for f in combined if (f.get("height") or 999) <= 720 and f.get("ext") == "mp4"]
-                        if not pool:
-                            pool = [f for f in combined if (f.get("height") or 999) <= 720]
-                        if not pool:
-                            pool = [f for f in combined if f.get("ext") == "mp4"]
-                        if not pool:
-                            pool = combined
-                        chosen = max(pool, key=lambda f: (f.get("height") or 0, f.get("tbr") or 0))
-                        return chosen["url"], chosen.get("ext", "mp4")
-
-                    # No combined format found
-                    return None, None
-
-            direct_url, ext = await loop.run_in_executor(None, _get_trailer_url)
+            _info = await ydl_extract(f"https://www.youtube.com/watch?v={video_id}", opts)
+            if not _info:
+                direct_url, ext = None, None
+            else:
+                _formats = _info.get("formats", [])
+                # Find combined (pre-merged) formats: vcodec and acodec both present
+                combined = [
+                    f for f in _formats
+                    if f.get("url")
+                    and f.get("vcodec") not in (None, "none")
+                    and f.get("acodec") not in (None, "none")
+                ]
+                if combined:
+                    # Prefer mp4 at ≤720p, fall back to any combined
+                    pool = [f for f in combined if (f.get("height") or 999) <= 720 and f.get("ext") == "mp4"]
+                    if not pool:
+                        pool = [f for f in combined if (f.get("height") or 999) <= 720]
+                    if not pool:
+                        pool = [f for f in combined if f.get("ext") == "mp4"]
+                    if not pool:
+                        pool = combined
+                    chosen = max(pool, key=lambda f: (f.get("height") or 0, f.get("tbr") or 0))
+                    direct_url = chosen["url"]
+                    ext = chosen.get("ext", "mp4")
+                else:
+                    direct_url, ext = None, None
             if direct_url:
                 stream_url_cache_set(cache_key, direct_url, ext or "mp4")
 
@@ -1045,20 +995,12 @@ async def get_dash_mpd(video_id: str, request: Request):
     which use the stream URL cache to avoid repeated yt-dlp calls.
     """
     try:
-        loop = asyncio.get_event_loop()
         opts = get_ydl_opts(**{
             "quiet": True,
             "no_warnings": True,
             "nocheckcertificate": True,
         })
-
-        def _fetch_all():
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                return ydl.extract_info(
-                    f"https://www.youtube.com/watch?v={video_id}", download=False
-                )
-
-        info = await loop.run_in_executor(None, _fetch_all)
+        info = await ydl_extract(f"https://www.youtube.com/watch?v={video_id}", opts)
         if not info:
             raise HTTPException(status_code=404, detail="Video not found")
 
@@ -1202,15 +1144,7 @@ async def get_playlist(playlist_id: str):
             "playlistend": 100,
             "quiet": True,
         })
-        loop = asyncio.get_event_loop()
-
-        def _fetch():
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                return ydl.extract_info(
-                    f"https://www.youtube.com/playlist?list={playlist_id}", download=False
-                )
-
-        info = await loop.run_in_executor(None, _fetch)
+        info = await ydl_extract(f"https://www.youtube.com/playlist?list={playlist_id}", opts)
         if not info:
             raise HTTPException(status_code=404, detail="Playlist not found")
 
@@ -1252,15 +1186,7 @@ async def list_subtitles(video_id: str):
             "writeautomaticsub": False,
             "skip_download": True,
         })
-        loop = asyncio.get_event_loop()
-
-        def _fetch():
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                return ydl.extract_info(
-                    f"https://www.youtube.com/watch?v={video_id}", download=False
-                )
-
-        info = await loop.run_in_executor(None, _fetch)
+        info = await ydl_extract(f"https://www.youtube.com/watch?v={video_id}", opts)
         if not info:
             return {"subtitles": []}
 
@@ -1293,15 +1219,7 @@ async def get_subtitle_vtt(video_id: str, lang: str, auto: bool = False):
     """Proxy a subtitle VTT file for a given language."""
     try:
         opts = get_ydl_opts(**{"skip_download": True})
-        loop = asyncio.get_event_loop()
-
-        def _fetch():
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                return ydl.extract_info(
-                    f"https://www.youtube.com/watch?v={video_id}", download=False
-                )
-
-        info = await loop.run_in_executor(None, _fetch)
+        info = await ydl_extract(f"https://www.youtube.com/watch?v={video_id}", opts)
         if not info:
             raise HTTPException(status_code=404, detail="Video not found")
 
@@ -1362,11 +1280,7 @@ async def get_thumbnail(video_id: str):
 @router.get("/api/debug/channel_thumbnails/{channel_id}")
 async def debug_channel_thumbnails(channel_id: str):
     opts = get_ydl_opts(**{"extract_flat": True, "playlistend": 1})
-    loop = asyncio.get_event_loop()
-    def _fetch():
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            return ydl.extract_info(f"https://www.youtube.com/channel/{channel_id}", download=False)
-    info = await loop.run_in_executor(None, _fetch)
+    info = await ydl_extract(f"https://www.youtube.com/channel/{channel_id}", opts)
     if not info:
         return {"error": "not found"}
     return {"thumbnails": info.get("thumbnails", [])}
@@ -1484,50 +1398,45 @@ async def download_video(
 ):
     try:
         opts = get_ydl_opts(**{"format": "bestvideo+bestaudio/best"})
-        loop = asyncio.get_event_loop()
-
-        def _get_info():
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(
-                    f"https://www.youtube.com/watch?v={video_id}", download=False
+        _dl_info = await ydl_extract(f"https://www.youtube.com/watch?v={video_id}", opts)
+        if not _dl_info:
+            video_url, title, ext, audio_url, needs_merge = None, None, None, None, None
+        else:
+            title = _dl_info.get("title", video_id)
+            if itag:
+                video_fmt = next(
+                    (f for f in _dl_info.get("formats", []) if str(f.get("format_id")) == str(itag)),
+                    None,
                 )
-                if not info:
-                    return None, None, None, None, None
-                title = info.get("title", video_id)
-                if itag:
-                    # Find the requested video format
-                    video_fmt = next(
-                        (f for f in info.get("formats", []) if str(f.get("format_id")) == str(itag)),
-                        None
-                    )
-                    if not video_fmt:
-                        return None, title, "mp4", None, None
+                if not video_fmt:
+                    video_url, ext, audio_url, needs_merge = None, "mp4", None, None
+                else:
                     has_video = video_fmt.get("vcodec", "none") != "none"
                     has_audio = video_fmt.get("acodec", "none") != "none"
                     video_url = video_fmt.get("url")
                     ext = video_fmt.get("ext", "mp4")
                     if has_video and not has_audio:
-                        # Video-only: find best audio to merge with ffmpeg
                         audio_fmt = next(
-                            (f for f in sorted(info.get("formats", []), key=lambda f: -(f.get("abr") or 0))
+                            (f for f in sorted(_dl_info.get("formats", []), key=lambda f: -(f.get("abr") or 0))
                              if f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"),
-                            None
+                            None,
                         )
                         audio_url = audio_fmt.get("url") if audio_fmt else None
-                        return video_url, title, "mp4", audio_url, True
+                        ext, needs_merge = "mp4", True
                     else:
-                        return video_url, title, ext, None, False
-                elif format == "mp3":
-                    audio_fmt = next(
-                        (f for f in sorted(info.get("formats", []), key=lambda f: -(f.get("abr") or 0))
-                         if f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"),
-                        None
-                    )
-                    return audio_fmt.get("url") if audio_fmt else None, title, "m4a", None, False
-                else:
-                    return info.get("url"), title, info.get("ext", "mp4"), None, False
-
-        video_url, title, ext, audio_url, needs_merge = await loop.run_in_executor(None, _get_info)
+                        audio_url, needs_merge = None, False
+            elif format == "mp3":
+                audio_fmt = next(
+                    (f for f in sorted(_dl_info.get("formats", []), key=lambda f: -(f.get("abr") or 0))
+                     if f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"),
+                    None,
+                )
+                video_url = audio_fmt.get("url") if audio_fmt else None
+                ext, audio_url, needs_merge = "m4a", None, False
+            else:
+                video_url = _dl_info.get("url")
+                ext = _dl_info.get("ext", "mp4")
+                audio_url, needs_merge = None, False
 
         if not video_url:
             raise HTTPException(status_code=404, detail="Download URL not found")
@@ -1737,15 +1646,7 @@ async def get_channel_banner(channel_id: str):
 async def get_channel(channel_id: str):
     try:
         opts = get_ydl_opts(**{"extract_flat": True, "playlistend": 1})
-        loop = asyncio.get_event_loop()
-
-        def _fetch():
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                return ydl.extract_info(
-                    f"https://www.youtube.com/channel/{channel_id}", download=False
-                )
-
-        info = await loop.run_in_executor(None, _fetch)
+        info = await ydl_extract(f"https://www.youtube.com/channel/{channel_id}", opts)
         if not info:
             raise HTTPException(status_code=404, detail="Channel not found")
 
@@ -1799,15 +1700,7 @@ async def get_channel_videos(channel_id: str, page: int = Query(1, ge=1)):
         start = (page - 1) * 20 + 1
         end = page * 20
         opts = get_ydl_opts(**{"extract_flat": True, "playliststart": start, "playlistend": end})
-        loop = asyncio.get_event_loop()
-
-        def _fetch():
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                return ydl.extract_info(
-                    f"https://www.youtube.com/channel/{channel_id}/videos", download=False
-                )
-
-        info = await loop.run_in_executor(None, _fetch)
+        info = await ydl_extract(f"https://www.youtube.com/channel/{channel_id}/videos", opts)
         channel_name = (info.get("channel") or info.get("uploader") or info.get("title") or "") if info else ""
         videos = []
         if info and "entries" in info:
