@@ -124,6 +124,8 @@ async def list_invidious_instances():
 @router.post("/api/invidious/select")
 async def select_invidious_instance(body: dict):
     url = (body.get("url") or "").rstrip("/")
+    if url:
+        await asyncio.to_thread(validate_proxy_url, url, ("https",))
     innertube._preferred_instance = url if url else None
     return {"selected": innertube._preferred_instance}
 

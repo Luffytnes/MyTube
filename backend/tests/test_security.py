@@ -423,6 +423,45 @@ class TestPodcastAudioProxySSRF:
         self._assert_blocked("file:///etc/passwd")
 
 
+class TestInvidiousSelectSSRF:
+    """select_invidious_instance must reject private/non-https URLs."""
+
+    @pytest.fixture(autouse=True)
+    def _client(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from api.youtube import router
+        app = FastAPI()
+        app.include_router(router)
+        self.client = TestClient(app)
+
+    def _post(self, url: str):
+        return self.client.post("/api/invidious/select", json={"url": url})
+
+    def test_private_ip_blocked(self):
+        assert self._post("https://192.168.1.1").status_code == 400
+
+    def test_loopback_blocked(self):
+        assert self._post("http://127.0.0.1").status_code == 400
+
+    def test_file_scheme_blocked(self):
+        assert self._post("file:///etc/passwd").status_code == 400
+
+    def test_http_scheme_blocked(self):
+        # Only https is allowed for Invidious instances
+        with patch("core.security._dns_resolve", side_effect=_dns_public):
+            assert self._post("http://yewtu.be").status_code == 400
+
+    def test_empty_url_allowed(self):
+        # Empty string = deselect, must not raise
+        assert self._post("").status_code == 200
+
+    def test_valid_https_allowed(self):
+        with patch("core.security._dns_resolve", side_effect=_dns_public):
+            resp = self._post("https://yewtu.be")
+        assert resp.status_code == 200
+
+
 class TestVodParamsWhitelist:
     """_check_vod_params rejects path-traversal ext/media/stream_id values."""
 
