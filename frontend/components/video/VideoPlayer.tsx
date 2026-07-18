@@ -141,6 +141,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const startHdHlsRef = useRef<((startOffset: number, autoplay: boolean, isErrorRestart?: boolean) => void) | null>(null)
   const isVideoOnlyRef = useRef(false)
+  const aligningRef = useRef(false)
 
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -331,6 +332,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
     const video = videoRef.current
     if (!video || !selectedFormat) return
     if (!isErrorRestart) hlsRestartRef.current = 0
+    aligningRef.current = false
     const hadPreviousSession = !!hdHlsRef.current
     if (hdHlsRef.current) { hdHlsRef.current.destroy(); hdHlsRef.current = null }
     if (hadPreviousSession || isErrorRestart) { video.removeAttribute('src'); video.load() }
@@ -364,26 +366,36 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
         const videoRanges: TimeRanges | undefined = data.timeRanges?.video
         if (!audioRanges || audioRanges.length === 0) return
         if (!videoRanges || videoRanges.length === 0) return
-        // Align A/V once regardless of autoplay: ffmpeg video fast-seeks to the nearest
-        // keyframe while audio seeks precisely; correcting currentTime here fixes desync
-        // on resume even when playback is paused (autoplay=false).
+
         if (!aligned) {
-          aligned = true
           try {
             const audioStart = audioRanges.start(0)
             const videoStart = videoRanges.start(0)
             if (audioStart - videoStart > 0.2) {
+              // Wait until both buffers have ≥1s beyond the seek target to avoid a
+              // buffer stall immediately after seeking (which would restart the session).
+              if (videoRanges.end(0) < audioStart + 1.0 || audioRanges.end(0) < audioStart + 1.0) return
+              // Playback already past the alignment point — nothing to correct.
+              if (!video.paused && video.currentTime > audioStart) { aligned = true; return }
+              aligned = true
+              aligningRef.current = true
+              const onSeeked = () => {
+                video.removeEventListener('seeked', onSeeked)
+                aligningRef.current = false
+                if (autoplay && playStarted) safePlay(video)
+              }
+              video.addEventListener('seeked', onSeeked)
               if (autoplay && !playStarted) {
                 playStarted = true
                 if (autoplayFallback) { clearTimeout(autoplayFallback); autoplayFallback = null }
-                const onSeeked = () => { video.removeEventListener('seeked', onSeeked); safePlay(video) }
-                video.addEventListener('seeked', onSeeked)
               }
               video.currentTime = audioStart
               return
             }
           } catch { /* ignore */ }
+          aligned = true
         }
+
         if (!autoplay || playStarted) return
         playStarted = true
         if (autoplayFallback) { clearTimeout(autoplayFallback); autoplayFallback = null }
@@ -391,6 +403,13 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
       })
       hls.on(Hls.Events.ERROR, (_: unknown, data: { fatal: boolean; type: string; details: string }) => {
         if (!data.fatal || restartQueued) return
+        // A buffer stall during the A/V alignment seek can surface as a fatal media
+        // error; recover in place rather than destroying and restarting the session.
+        if (aligningRef.current && data.type === 'mediaError') {
+          aligningRef.current = false
+          hls.recoverMediaError()
+          return
+        }
         sessionErrors++
         if (sessionErrors === 1 && data.type === 'mediaError') {
           hls.recoverMediaError()
