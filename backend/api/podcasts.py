@@ -78,9 +78,9 @@ def _pi_configured() -> bool:
 
 @router.get("/api/podcasts/config")
 async def get_podcast_config():
-    """Return current Podcast Index config (secret masked)."""
+    """Return current Podcast Index config — key and secret are never exposed."""
     return {
-        "key": _pi_effective_key(),
+        "key": "set" if _pi_effective_key() else "",
         "secret": "set" if _pi_effective_secret() else "",
     }
 

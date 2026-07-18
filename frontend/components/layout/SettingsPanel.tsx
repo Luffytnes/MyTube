@@ -45,6 +45,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const [importStatus, setImportStatus] = useState<'idle' | 'ok' | 'err'>('idle')
   const [clearConfirm, setClearConfirm] = useState<string | null>(null)
   const [piKey, setPiKey] = useState('')
+  const [piKeyConfigured, setPiKeyConfigured] = useState(false)
   const [piSecret, setPiSecret] = useState('')
   const [piShowSecret, setPiShowSecret] = useState(false)
   const [piSaving, setPiSaving] = useState(false)
@@ -301,7 +302,8 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       .then((r) => r.ok ? r.json() : null)
       .then((d) => {
         if (d) {
-          setPiKey(d.key || '')
+          setPiKeyConfigured(d.key === 'set')
+          setPiKey('')
           setPiSecret(d.secret ? '••••••••' : '')
         }
       })
@@ -314,7 +316,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       await fetch(`${API_BASE}/api/podcasts/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: piKey, secret: piSecret === '••••••••' ? null : piSecret }),
+        body: JSON.stringify({ key: piKey.trim() || null, secret: piSecret === '••••••••' ? null : piSecret }),
       })
       setPiSaved(true)
       setTimeout(() => setPiSaved(false), 2000)
@@ -736,11 +738,14 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   <div className="space-y-3">
                     <div>
                       <label className="block text-xs text-yt-text-muted mb-1">API Key</label>
+                      {piKeyConfigured && !piKey && (
+                        <p className="text-xs text-green-400 mb-1">✓ Clé configurée — saisissez une nouvelle clé pour la remplacer</p>
+                      )}
                       <input
                         type="text"
                         value={piKey}
                         onChange={(e) => setPiKey(e.target.value)}
-                        placeholder="Votre clé API"
+                        placeholder={piKeyConfigured ? 'Nouvelle clé API' : 'Votre clé API'}
                         className="w-full px-3 py-2 rounded-xl bg-yt-secondary border border-yt-border text-sm text-yt-text placeholder-yt-text-muted focus:outline-none focus:border-yt-red transition-colors"
                       />
                     </div>
@@ -765,7 +770,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     </div>
                     <button
                       onClick={handleSavePiKeys}
-                      disabled={piSaving || !piKey.trim() || !piSecret.trim()}
+                      disabled={piSaving || (!piKey.trim() && !piKeyConfigured) || !piSecret.trim()}
                       className="flex items-center gap-2 px-4 py-2 rounded-xl bg-yt-red hover:bg-yt-red-hover disabled:opacity-40 text-white text-sm font-medium transition-colors"
                     >
                       {piSaving ? (

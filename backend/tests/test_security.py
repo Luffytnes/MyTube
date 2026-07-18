@@ -423,6 +423,59 @@ class TestPodcastAudioProxySSRF:
         self._assert_blocked("file:///etc/passwd")
 
 
+class TestPodcastConfigKeyMasking:
+    """GET /api/podcasts/config must never expose the raw API key."""
+
+    @pytest.fixture(autouse=True)
+    def _client(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from api.podcasts import router
+        app = FastAPI()
+        app.include_router(router)
+        self.client = TestClient(app)
+
+    def test_response_has_key_and_secret(self):
+        resp = self.client.get("/api/podcasts/config")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "key" in data and "secret" in data
+
+    def test_raw_key_never_in_response(self):
+        import api.podcasts as podcasts_mod
+        sentinel = "SENTINEL_PI_KEY_XYZ"
+        original = podcasts_mod._pi_key_override
+        try:
+            podcasts_mod._pi_key_override = sentinel
+            resp = self.client.get("/api/podcasts/config")
+            assert sentinel not in resp.text
+        finally:
+            podcasts_mod._pi_key_override = original
+
+    def test_configured_shows_set(self):
+        import api.podcasts as podcasts_mod
+        original = podcasts_mod._pi_key_override
+        try:
+            podcasts_mod._pi_key_override = "some_key"
+            resp = self.client.get("/api/podcasts/config")
+            assert resp.json()["key"] == "set"
+        finally:
+            podcasts_mod._pi_key_override = original
+
+    def test_not_configured_shows_empty(self):
+        import api.podcasts as podcasts_mod
+        original_k = podcasts_mod._pi_key_override
+        original_e = podcasts_mod.PODCAST_INDEX_KEY
+        try:
+            podcasts_mod._pi_key_override = ""
+            podcasts_mod.PODCAST_INDEX_KEY = ""
+            resp = self.client.get("/api/podcasts/config")
+            assert resp.json()["key"] == ""
+        finally:
+            podcasts_mod._pi_key_override = original_k
+            podcasts_mod.PODCAST_INDEX_KEY = original_e
+
+
 class TestInvidiousSelectSSRF:
     """select_invidious_instance must reject private/non-https URLs."""
 
