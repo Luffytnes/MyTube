@@ -267,12 +267,14 @@ async def _vpn_failover():
 def record_youtube_error(status_code: int):
     """Call this when YouTube returns a blocking error. Triggers failover if needed."""
     global _vpn_error_count
+    print(f"[vpn] record_youtube_error auto={_vpn_auto_mode} active={is_wireproxy_active()} code={status_code} count={_vpn_error_count}", flush=True)
     if not _vpn_auto_mode:
         return
     if not is_wireproxy_active():
         return
     if status_code in (403, 429, 451):
         _vpn_error_count += 1
+        print(f"[vpn] error_count={_vpn_error_count} threshold={_vpn_failover_threshold} → {'FAILOVER' if _vpn_error_count >= _vpn_failover_threshold else 'wait'}", flush=True)
         if _vpn_error_count >= _vpn_failover_threshold:
             _vpn_error_count = 0
             asyncio.create_task(_vpn_failover())
