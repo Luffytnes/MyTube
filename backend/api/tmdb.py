@@ -48,8 +48,7 @@ async def tmdb_poster(name: str = "", type: str = "movie"):
         if img.status_code != 200:
             raise HTTPException(status_code=404, detail="Image not found")
         return Response(content=img.content, media_type=img.headers.get("content-type", "image/jpeg"),
-                        headers={"Cache-Control": "public, max-age=86400",
-                                 "Access-Control-Allow-Origin": "*"})
+                        headers={"Cache-Control": "public, max-age=86400"})
     except HTTPException:
         raise
     except Exception:
@@ -83,8 +82,7 @@ async def tmdb_image(path: str = ""):
         if img.status_code != 200:
             raise HTTPException(status_code=404, detail="Image not found")
         return Response(content=img.content, media_type=img.headers.get("content-type", "image/jpeg"),
-                        headers={"Cache-Control": "public, max-age=86400",
-                                 "Access-Control-Allow-Origin": "*"})
+                        headers={"Cache-Control": "public, max-age=86400"})
     except HTTPException:
         raise
     except Exception:

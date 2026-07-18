@@ -506,7 +506,7 @@ async def live_hls_master(video_id: str, request: Request):
         return Response(
             content=rewritten,
             media_type="application/vnd.apple.mpegurl",
-            headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache, no-store"},
+            headers={"Cache-Control": "no-cache, no-store"},
         )
     except HTTPException:
         raise
@@ -539,14 +539,13 @@ async def hls_proxy(url: str, request: Request):
             return Response(
                 content=rewritten,
                 media_type="application/vnd.apple.mpegurl",
-                headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache, no-store"},
+                headers={"Cache-Control": "no-cache, no-store"},
             )
 
         # TS segment or key file — stream it back
         return Response(
             content=resp.content,
             media_type=ct or "video/mp2t",
-            headers={"Access-Control-Allow-Origin": "*"},
         )
     except HTTPException:
         raise
@@ -681,7 +680,7 @@ async def hls_playlist(video_id: str, itag: str, start: int = 0):
         return Response(
             content=content,
             media_type="application/vnd.apple.mpegurl",
-            headers={"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"},
+            headers={"Cache-Control": "no-cache"},
         )
     except HTTPException:
         raise
@@ -706,7 +705,7 @@ async def hls_segment(video_id: str, itag: str, start: int, segment: str):
     for _ in range(50):
         if seg_path.exists() and seg_path.stat().st_size > 0:
             return FileResponse(seg_path, media_type="video/mp2t",
-                                headers={"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"})
+                                headers={"Cache-Control": "no-cache"})
         await asyncio.sleep(0.1)
 
     raise HTTPException(status_code=404, detail="Segment not ready")
@@ -788,7 +787,7 @@ async def iptv_vod_hls2_playlist(
     return Response(
         content=content,
         media_type="application/vnd.apple.mpegurl",
-        headers={"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"},
+        headers={"Cache-Control": "no-cache"},
     )
 
 
@@ -814,7 +813,7 @@ async def iptv_vod_hls2_segment(
         if seg_path.exists() and seg_path.stat().st_size > 0:
             return FileResponse(
                 seg_path, media_type="video/mp2t",
-                headers={"Cache-Control": "public, max-age=31536000", "Access-Control-Allow-Origin": "*"},
+                headers={"Cache-Control": "public, max-age=31536000"},
             )
         proc = session["process"]
         if proc.returncode is not None and proc.returncode != 0:
@@ -1125,10 +1124,7 @@ async def get_dash_mpd(video_id: str, request: Request):
         return Response(
             content=mpd,
             media_type="application/dash+xml",
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Cache-Control": "public, max-age=3600",
-            },
+            headers={"Cache-Control": "public, max-age=3600"},
         )
     except HTTPException:
         raise
@@ -1250,7 +1246,7 @@ async def get_subtitle_vtt(video_id: str, lang: str, auto: bool = False):
             return Response(
                 content=resp.content,
                 media_type="text/vtt; charset=utf-8",
-                headers={"Cache-Control": "public, max-age=3600", "Access-Control-Allow-Origin": "*"},
+                headers={"Cache-Control": "public, max-age=3600"},
             )
     except HTTPException:
         raise

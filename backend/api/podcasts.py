@@ -271,7 +271,6 @@ async def podcast_audio_proxy(url: str, request: Request):
     resp_headers: Dict[str, str] = {
         "Accept-Ranges": "bytes",
         "Cache-Control": "no-cache",
-        "Access-Control-Allow-Origin": "*",
     }
     if cl := upstream_meta.get("content_length"):
         resp_headers["Content-Length"] = cl

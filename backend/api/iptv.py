@@ -143,7 +143,7 @@ async def iptv_hls_stream(stream_id: str, request: Request):
         return Response(
             content=rewritten,
             media_type="application/vnd.apple.mpegurl",
-            headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache, no-store"},
+            headers={"Cache-Control": "no-cache, no-store"},
         )
     except HTTPException:
         raise
@@ -170,12 +170,11 @@ async def iptv_hls_proxy(url: str, request: Request):
             return Response(
                 content=rewritten,
                 media_type="application/vnd.apple.mpegurl",
-                headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache, no-store"},
+                headers={"Cache-Control": "no-cache, no-store"},
             )
         return Response(
             content=resp.content,
             media_type=ct or "video/mp2t",
-            headers={"Access-Control-Allow-Origin": "*"},
         )
     except HTTPException:
         raise
@@ -408,7 +407,7 @@ async def iptv_vod_subtitle(stream_id: str, ext: str = "mp4", media: str = "movi
     return Response(
         content=stdout,
         media_type="text/vtt",
-        headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache"},
+        headers={"Cache-Control": "no-cache"},
     )
 
 
@@ -495,7 +494,7 @@ async def iptv_vod_hls(stream_id: str, request: Request, media: str = "movie"):
     return Response(
         content=rewritten,
         media_type="application/vnd.apple.mpegurl",
-        headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-cache, no-store"},
+        headers={"Cache-Control": "no-cache, no-store"},
     )
 
 
@@ -676,7 +675,6 @@ async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", med
     return StreamingResponse(
         _stream(),
         media_type="video/mp4",
-        headers={"Access-Control-Allow-Origin": "*"},
     )
 
 

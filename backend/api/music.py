@@ -418,7 +418,7 @@ async def radio_stream_proxy(url: str, request: Request):
     return StreamingResponse(
         generate(),
         status_code=upstream_status[0],
-        headers={"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"},
+        headers={"Cache-Control": "no-cache"},
         media_type=upstream_meta.get("content_type", "audio/mpeg"),
     )
 
