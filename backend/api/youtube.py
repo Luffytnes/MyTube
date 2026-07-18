@@ -765,8 +765,10 @@ async def iptv_vod_hls2_playlist(
     start: int = 0,
 ):
     from core import config
+    from api.iptv import _check_vod_params
     if not config._xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
+    _check_vod_params(ext, media, stream_id)
 
     # Kill sessions for same stream but different parameters
     async with _iptv_vod_hls_lock:
@@ -826,6 +828,8 @@ async def iptv_vod_hls2_segment(
     stream_id: str, start: int, segment: str,
     ext: str = "mp4", media: str = "movie", audio_idx: int = 0,
 ):
+    from api.iptv import _check_vod_params
+    _check_vod_params(ext, media, stream_id)
     if not re.match(r"^seg\d+\.ts$", segment):
         raise HTTPException(status_code=400, detail="Invalid segment")
 

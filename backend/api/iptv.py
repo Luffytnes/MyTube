@@ -23,6 +23,19 @@ from services.ffmpeg import _vod_dl_cache
 
 router = APIRouter()
 
+_ALLOWED_EXT   = {"mp4", "mkv", "avi", "ts", "m2ts", "mts", "webm", "mov", "flv", "m3u8"}
+_ALLOWED_MEDIA = {"movie", "series"}
+
+
+def _check_vod_params(ext: str = "", media: str = "", stream_id: str = "") -> None:
+    """Raise 400 if any VOD parameter is outside its allowed set."""
+    if ext and ext.lower() not in _ALLOWED_EXT:
+        raise HTTPException(status_code=400, detail=f"Invalid ext: {ext!r}")
+    if media and media not in _ALLOWED_MEDIA:
+        raise HTTPException(status_code=400, detail=f"Invalid media: {media!r}")
+    if stream_id and not re.fullmatch(r"[A-Za-z0-9_-]+", stream_id):
+        raise HTTPException(status_code=400, detail=f"Invalid stream_id: {stream_id!r}")
+
 
 @router.get("/api/iptv/status")
 async def iptv_status():
@@ -270,6 +283,7 @@ async def iptv_vod_tracks(stream_id: str, ext: str = "mp4", media: str = "movie"
     """List audio and subtitle tracks via ffprobe."""
     if not config._xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
+    _check_vod_params(ext, media, stream_id)
     s, u, p = config._xtream_cfg["server"], config._xtream_cfg["username"], config._xtream_cfg["password"]
     src_url = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
     streams = []
@@ -343,6 +357,7 @@ async def iptv_vod_subtitle(stream_id: str, ext: str = "mp4", media: str = "movi
     """
     if not config._xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
+    _check_vod_params(ext, media, stream_id)
     s, u, p = config._xtream_cfg["server"], config._xtream_cfg["username"], config._xtream_cfg["password"]
     remote_url = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
 
@@ -402,6 +417,7 @@ async def iptv_vod_stream_url(stream_id: str, request: Request, ext: str = "mp4"
     """Return the ffmpeg-transcoded proxy URL + duration via ffprobe (3 s timeout)."""
     if not config._xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
+    _check_vod_params(ext, media, stream_id)
     s, u, p = config._xtream_cfg["server"], config._xtream_cfg["username"], config._xtream_cfg["password"]
     src_url = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
 
@@ -467,6 +483,7 @@ async def iptv_vod_hls(stream_id: str, request: Request, media: str = "movie"):
     """Proxy VOD HLS manifest + rewrite segment URLs through our proxy."""
     if not config._xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
+    _check_vod_params(media=media, stream_id=stream_id)
     s, u, p = config._xtream_cfg["server"], config._xtream_cfg["username"], config._xtream_cfg["password"]
     m3u8_url = f"{s}/{media}/{u}/{p}/{stream_id}.m3u8"
     async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
@@ -496,6 +513,7 @@ async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", med
     """
     if not config._xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
+    _check_vod_params(ext, media, stream_id)
     s, u, p = config._xtream_cfg["server"], config._xtream_cfg["username"], config._xtream_cfg["password"]
     src = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
 

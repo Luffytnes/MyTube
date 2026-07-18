@@ -449,6 +449,8 @@ async def _download_to_file(url: str, path: str, entry: dict) -> None:
 
 async def _ensure_vod_download(cache_key: str, url: str) -> dict:
     """Return the cache entry for *cache_key*, starting a download if needed."""
+    if "/" in cache_key or "\\" in cache_key or ".." in cache_key:
+        raise ValueError(f"Invalid cache_key: {cache_key!r}")
     if cache_key in _vod_dl_cache:
         entry = _vod_dl_cache[cache_key]
         task = entry.get("task")

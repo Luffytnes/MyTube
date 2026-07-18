@@ -423,6 +423,40 @@ class TestPodcastAudioProxySSRF:
         self._assert_blocked("file:///etc/passwd")
 
 
+class TestVodParamsWhitelist:
+    """_check_vod_params rejects path-traversal ext/media/stream_id values."""
+
+    @pytest.fixture(autouse=True)
+    def _import(self):
+        from api.iptv import _check_vod_params
+        self.fn = _check_vod_params
+
+    def _assert_400(self, **kwargs):
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as exc:
+            self.fn(**kwargs)
+        assert exc.value.status_code == 400
+
+    def test_traversal_ext_blocked(self):
+        self._assert_400(ext="mp4/../../etc/x", media="movie", stream_id="123")
+
+    def test_unknown_media_blocked(self):
+        self._assert_400(ext="mp4", media="admin", stream_id="123")
+
+    def test_traversal_stream_id_blocked(self):
+        self._assert_400(ext="mp4", media="movie", stream_id="../x")
+
+    def test_valid_params_pass(self):
+        self.fn(ext="mp4", media="movie", stream_id="123")
+        self.fn(ext="mkv", media="series", stream_id="abc-123")
+
+    def test_ensure_vod_download_rejects_traversal_key(self):
+        import asyncio
+        from services.ffmpeg import _ensure_vod_download
+        with pytest.raises(ValueError):
+            asyncio.run(_ensure_vod_download("../../etc/passwd", "http://example.com/x.mp4"))
+
+
 class TestRadioStreamProxySSRF:
     """Blocked URLs must return 400."""
 
