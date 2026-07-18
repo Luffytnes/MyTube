@@ -20,6 +20,7 @@ frontend/out/
 frontend/node_modules/
 frontend/.env.local
 frontend/.env.*.local
+*.tsbuildinfo
 
 # ─── Auth ────────────────────────────────────────────────────────────────────
 nginx/.htpasswd
