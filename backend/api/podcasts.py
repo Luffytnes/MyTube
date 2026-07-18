@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 
 from services.innertube import httpx_client
+from core.security import validate_proxy_url
 
 router = APIRouter()
 
@@ -120,6 +121,11 @@ async def podcast_image_proxy(url: str):
         return Response(content=_EMPTY_GIF, media_type="image/gif",
                         headers={"Cache-Control": "public, max-age=3600"})
     try:
+        await asyncio.to_thread(validate_proxy_url, url)
+    except HTTPException:
+        return Response(content=_EMPTY_GIF, media_type="image/gif",
+                        headers={"Cache-Control": "public, max-age=3600"})
+    try:
         async with httpx_client(timeout=8.0) as client:
             resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"}, follow_redirects=True)
             if resp.status_code >= 400:
@@ -223,6 +229,7 @@ async def podcast_detail(podcast_id: str):
 @router.get("/api/podcasts/audio/proxy")
 async def podcast_audio_proxy(url: str, request: Request):
     """Proxy podcast episode audio to avoid CORS issues."""
+    await asyncio.to_thread(validate_proxy_url, url)
     range_header = request.headers.get("range")
     req_headers: Dict[str, str] = {"User-Agent": "MyTube/1.0"}
     if range_header:

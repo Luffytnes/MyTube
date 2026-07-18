@@ -11,6 +11,7 @@ from ytmusicapi import YTMusic as _YTMusic
 from services.innertube import httpx_client
 from services.vpn import _get_proxy_url, _ytm_cache
 from api.podcasts import _proxy_podcast_thumb
+from core.security import validate_proxy_url
 
 router = APIRouter()
 
@@ -369,6 +370,7 @@ async def radio_stations(
 @router.get("/api/radio/stream/proxy")
 async def radio_stream_proxy(url: str, request: Request):
     """Proxy radio stream through backend to preserve privacy."""
+    await asyncio.to_thread(validate_proxy_url, url)
     range_header = request.headers.get("range")
     req_headers: Dict[str, str] = {"User-Agent": "MyTube/1.0", "Icy-MetaData": "0"}
     if range_header:

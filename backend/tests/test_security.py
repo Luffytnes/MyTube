@@ -317,3 +317,98 @@ class TestTmdbKeyEndpoint:
             assert response.json()["configured"] is False
         finally:
             tmdb_svc._TMDB_API_KEY = original
+
+
+# ---------------------------------------------------------------------------
+# SSRF validation on podcast image / audio proxies and radio stream proxy
+# ---------------------------------------------------------------------------
+
+def _gif_client():
+    """Minimal FastAPI app with just the podcasts router."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from api.podcasts import router
+    app = FastAPI()
+    app.include_router(router)
+    return TestClient(app)
+
+
+def _audio_client():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from api.podcasts import router
+    app = FastAPI()
+    app.include_router(router)
+    return TestClient(app)
+
+
+def _radio_client():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from api.music import router as music_router
+    app = FastAPI()
+    app.include_router(music_router)
+    return TestClient(app)
+
+
+class TestPodcastImageProxySSRF:
+    """Blocked URLs must return the 1×1 GIF fallback (not an error)."""
+
+    def _get(self, url: str):
+        return _gif_client().get("/api/podcasts/image/proxy", params={"url": url})
+
+    def _assert_gif(self, resp):
+        assert resp.status_code == 200
+        assert "gif" in resp.headers.get("content-type", "")
+
+    def test_loopback_returns_gif(self):
+        self._assert_gif(self._get("http://127.0.0.1/image.jpg"))
+
+    def test_private_10_returns_gif(self):
+        self._assert_gif(self._get("http://10.0.0.1/image.jpg"))
+
+    def test_link_local_returns_gif(self):
+        self._assert_gif(self._get("http://169.254.169.254/latest/meta-data/"))
+
+    def test_file_scheme_returns_gif(self):
+        self._assert_gif(self._get("file:///etc/passwd"))
+
+
+class TestPodcastAudioProxySSRF:
+    """Blocked URLs must return 400."""
+
+    def _assert_blocked(self, url: str):
+        resp = _audio_client().get("/api/podcasts/audio/proxy", params={"url": url})
+        assert resp.status_code == 400
+
+    def test_loopback_blocked(self):
+        self._assert_blocked("http://127.0.0.1/audio.mp3")
+
+    def test_private_10_blocked(self):
+        self._assert_blocked("http://10.0.0.1/audio.mp3")
+
+    def test_link_local_blocked(self):
+        self._assert_blocked("http://169.254.169.254/latest/")
+
+    def test_file_scheme_blocked(self):
+        self._assert_blocked("file:///etc/passwd")
+
+
+class TestRadioStreamProxySSRF:
+    """Blocked URLs must return 400."""
+
+    def _assert_blocked(self, url: str):
+        resp = _radio_client().get("/api/radio/stream/proxy", params={"url": url})
+        assert resp.status_code == 400
+
+    def test_loopback_blocked(self):
+        self._assert_blocked("http://127.0.0.1/stream.mp3")
+
+    def test_private_10_blocked(self):
+        self._assert_blocked("http://10.0.0.1/stream.mp3")
+
+    def test_link_local_blocked(self):
+        self._assert_blocked("http://169.254.169.254/latest/")
+
+    def test_file_scheme_blocked(self):
+        self._assert_blocked("file:///etc/passwd")
