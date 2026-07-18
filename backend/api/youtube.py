@@ -7,6 +7,7 @@ import re
 import shutil
 from datetime import datetime
 from pathlib import Path
+from time import time as _time
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
@@ -643,7 +644,10 @@ async def hls_playlist(video_id: str, itag: str, start: int = 0):
                 shutil.rmtree(session["dir"], ignore_errors=True)
 
         session_key = await _start_hls_session(video_id, itag, start)
-        session = _hls_sessions[session_key]
+        session = _hls_sessions.get(session_key)
+        if session is None:
+            raise HTTPException(status_code=503, detail="Session interrupted, please retry")
+        session["last_access"] = _time()
         tmpdir = session["dir"]
         playlist_path = Path(tmpdir) / "stream.m3u8"
 
@@ -697,6 +701,7 @@ async def hls_segment(video_id: str, itag: str, start: int, segment: str):
     session = _hls_sessions.get(session_key)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    session["last_access"] = _time()
 
     seg_path = Path(session["dir"]) / segment
 
@@ -747,6 +752,7 @@ async def iptv_vod_hls2_playlist(
         session = await _start_iptv_vod_hls_session(stream_id, ext, media, audio_idx, start)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    session["last_access"] = _time()
 
     playlist_path = Path(session["dir"]) / "playlist.m3u8"
 
@@ -802,6 +808,7 @@ async def iptv_vod_hls2_segment(
     session = _iptv_vod_hls_sessions.get(session_key)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found or expired")
+    session["last_access"] = _time()
 
     seg_path = Path(session["dir"]) / segment
 

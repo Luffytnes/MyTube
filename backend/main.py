@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from services.vpn import _vpn_watchdog
-from services.ffmpeg import _vod_cache_cleanup_loop
+from services.ffmpeg import _vod_cache_cleanup_loop, _hls_idle_cleanup_loop
 
 from api.health import router as health_router
 from api.youtube import router as youtube_router
@@ -26,9 +26,15 @@ from api.podcasts import router as podcasts_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    asyncio.create_task(_vpn_watchdog())
-    asyncio.create_task(_vod_cache_cleanup_loop())
+    tasks = [
+        asyncio.create_task(_vpn_watchdog()),
+        asyncio.create_task(_vod_cache_cleanup_loop()),
+        asyncio.create_task(_hls_idle_cleanup_loop()),
+    ]
     yield
+    for t in tasks:
+        t.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 
 app = FastAPI(title="MyTube API", version="1.0.0", lifespan=lifespan)

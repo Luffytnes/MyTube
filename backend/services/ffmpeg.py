@@ -4,6 +4,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
+from time import time as _time
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -190,7 +191,7 @@ async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
         )
         asyncio.ensure_future(_log_stderr(process.stderr))
 
-        _hls_sessions[session_key] = {"dir": tmpdir, "process": process, "start": start}
+        _hls_sessions[session_key] = {"dir": tmpdir, "process": process, "start": start, "last_access": _time()}
         return session_key
 
 
@@ -359,9 +360,36 @@ async def _start_iptv_vod_hls_session(
             pipe_task = asyncio.ensure_future(_pipe_from_vod_cache(vod_entry, proc.stdin, 0))
             pipe_task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
 
-        session = {"dir": tmpdir, "process": proc, "pipe_task": pipe_task, "start": start, "key": session_key}
+        session = {"dir": tmpdir, "process": proc, "pipe_task": pipe_task, "start": start, "key": session_key, "last_access": _time()}
         _iptv_vod_hls_sessions[session_key] = session
         return session
+
+
+HLS_IDLE_TTL = 120  # seconds before an untouched HLS session is killed
+
+
+async def _hls_idle_cleanup_loop() -> None:
+    """Kill HLS sessions that have not served a request in HLS_IDLE_TTL seconds."""
+    while True:
+        await asyncio.sleep(60)
+        now = _time()
+
+        async with _hls_lock:
+            stale = [k for k, s in _hls_sessions.items()
+                     if now - s.get("last_access", 0) > HLS_IDLE_TTL]
+            for k in stale:
+                sess = _hls_sessions.pop(k)
+                try:
+                    sess["process"].kill()
+                except Exception:
+                    pass
+                shutil.rmtree(sess["dir"], ignore_errors=True)
+
+        async with _iptv_vod_hls_lock:
+            stale = [k for k, s in _iptv_vod_hls_sessions.items()
+                     if now - s.get("last_access", 0) > HLS_IDLE_TTL]
+            for k in stale:
+                _kill_vod_session(_iptv_vod_hls_sessions.pop(k))
 
 
 async def _log_stderr(stderr: asyncio.StreamReader) -> None:
