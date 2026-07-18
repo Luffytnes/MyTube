@@ -320,6 +320,35 @@ class TestTmdbKeyEndpoint:
 
 
 # ---------------------------------------------------------------------------
+# _redact_url — Xtream credential masking in logs
+# ---------------------------------------------------------------------------
+
+class TestRedactUrl:
+    @pytest.fixture(autouse=True)
+    def _import(self):
+        from services.ffmpeg import _redact_url
+        self.fn = _redact_url
+
+    def test_hides_intermediate_segments(self):
+        result = self.fn("http://srv.com/movie/user/s3cret/123.mkv")
+        assert "user" not in result
+        assert "s3cret" not in result
+        assert "123.mkv" in result
+
+    def test_keeps_scheme_and_host(self):
+        result = self.fn("http://srv.com/movie/user/s3cret/123.mkv")
+        assert result.startswith("http://srv.com/")
+
+    def test_empty_path(self):
+        result = self.fn("http://srv.com/")
+        assert "srv.com" in result
+
+    def test_invalid_url_does_not_raise(self):
+        result = self.fn("not a url at all")
+        assert result  # returns something non-empty
+
+
+# ---------------------------------------------------------------------------
 # SSRF validation on podcast image / audio proxies and radio stream proxy
 # ---------------------------------------------------------------------------
 

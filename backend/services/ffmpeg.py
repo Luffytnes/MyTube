@@ -22,6 +22,18 @@ import yt_dlp
 
 _PROXYCHAINS_CONF = "/tmp/mytube_proxychains.conf"
 
+
+def _redact_url(url: str) -> str:
+    """Return scheme://host/…/{last segment} — hides intermediate path components
+    such as Xtream username/password from log output."""
+    from urllib.parse import urlparse
+    try:
+        p = urlparse(url)
+        last = p.path.rstrip("/").rsplit("/", 1)[-1] or "…"
+        return f"{p.scheme}://{p.netloc}/…/{last}"
+    except Exception:
+        return "[url redacted]"
+
 # Active HLS transcoding sessions: key = f"{video_id}:{itag}"
 _hls_sessions: Dict[str, Dict[str, Any]] = {}
 _hls_lock = asyncio.Lock()
@@ -526,7 +538,7 @@ async def _download_reconnecting(url: str, stdin: asyncio.StreamWriter, initial_
 
 
 async def _download_reconnecting_inner(url: str, stdin: asyncio.StreamWriter, initial_offset: int = 0) -> None:
-    print(f"[downloader] start url={url[-40:]} initial_offset={initial_offset}", flush=True)
+    print(f"[downloader] start url={_redact_url(url)} initial_offset={initial_offset}", flush=True)
     offset = initial_offset
     for attempt in range(300):
         headers: dict[str, str] = {}
