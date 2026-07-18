@@ -344,6 +344,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
       let restartQueued = false
       let sessionErrors = 0
       let playStarted = false
+      let aligned = false
       let autoplayFallback: ReturnType<typeof setTimeout> | null = null
       const hls = new Hls({ enableWorker: false, maxBufferLength: 30, manifestLoadingMaxRetry: 3, manifestLoadingRetryDelay: 1000 })
       hdHlsRef.current = hls
@@ -359,28 +360,33 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
         }
       })
       hls.on(Hls.Events.BUFFER_APPENDED, (_, data: any) => {
-        if (!autoplay || playStarted) return
-        // Wait until both audio AND video buffers have data before starting playback.
-        // This lets us detect the A/V offset caused by ffmpeg fast-seeking video to the
-        // nearest keyframe (e.g. 297 s) while audio seeks precisely to the resume point
-        // (300 s). HLS.js appends them into separate SourceBuffers; timeRanges exposes
-        // the start of each. We skip the video forward to match the audio start.
         const audioRanges: TimeRanges | undefined = data.timeRanges?.audio
         const videoRanges: TimeRanges | undefined = data.timeRanges?.video
         if (!audioRanges || audioRanges.length === 0) return
         if (!videoRanges || videoRanges.length === 0) return
+        // Align A/V once regardless of autoplay: ffmpeg video fast-seeks to the nearest
+        // keyframe while audio seeks precisely; correcting currentTime here fixes desync
+        // on resume even when playback is paused (autoplay=false).
+        if (!aligned) {
+          aligned = true
+          try {
+            const audioStart = audioRanges.start(0)
+            const videoStart = videoRanges.start(0)
+            if (audioStart - videoStart > 0.2) {
+              if (autoplay && !playStarted) {
+                playStarted = true
+                if (autoplayFallback) { clearTimeout(autoplayFallback); autoplayFallback = null }
+                const onSeeked = () => { video.removeEventListener('seeked', onSeeked); safePlay(video) }
+                video.addEventListener('seeked', onSeeked)
+              }
+              video.currentTime = audioStart
+              return
+            }
+          } catch { /* ignore */ }
+        }
+        if (!autoplay || playStarted) return
         playStarted = true
         if (autoplayFallback) { clearTimeout(autoplayFallback); autoplayFallback = null }
-        try {
-          const audioStart = audioRanges.start(0)
-          const videoStart = videoRanges.start(0)
-          if (audioStart - videoStart > 0.2) {
-            const onSeeked = () => { video.removeEventListener('seeked', onSeeked); safePlay(video) }
-            video.addEventListener('seeked', onSeeked)
-            video.currentTime = audioStart
-            return
-          }
-        } catch { /* ignore — fall through to safePlay */ }
         safePlay(video)
       })
       hls.on(Hls.Events.ERROR, (_: unknown, data: { fatal: boolean; type: string; details: string }) => {
