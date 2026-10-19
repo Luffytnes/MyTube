@@ -206,7 +206,14 @@ async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
             "-hls_time", "1",
             "-hls_list_size", "0",
             "-hls_flags", "append_list",
-            "-hls_segment_filename", str(Path(tmpdir) / "seg%05d.ts"),
+            # fMP4 rather than MPEG-TS: TS cannot carry VP9/AV1, the only codecs
+            # YouTube offers above 1080p, so 1440p/2160p played as a black screen.
+            "-hls_segment_type", "fmp4",
+            # Without edit lists the muxer keeps the audio/video offset in the
+            # fragment timestamps (hls.js ignores edit lists), so tracks stay in sync
+            "-hls_segment_options", "use_editlist=0",
+            "-hls_fmp4_init_filename", "init.mp4",
+            "-hls_segment_filename", str(Path(tmpdir) / "seg%05d.m4s"),
             str(Path(tmpdir) / "stream.m3u8"),
         ]
 
@@ -217,8 +224,52 @@ async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
         )
         asyncio.ensure_future(_log_stderr(process.stderr))
 
-        _hls_sessions[session_key] = {"dir": tmpdir, "process": process, "start": start, "last_access": _time()}
+        keyframe_task = (
+            asyncio.ensure_future(_probe_seek_keyframe(video_url, start, cmd_prefix, ua))
+            if start > 0 else None
+        )
+        _hls_sessions[session_key] = {
+            "dir": tmpdir, "process": process, "start": start, "last_access": _time(),
+            "keyframe_task": keyframe_task,
+        }
         return session_key
+
+
+async def _probe_seek_keyframe(video_url: str, start: int, cmd_prefix: List[str], ua: str) -> Optional[float]:
+    """Timestamp of the keyframe a stream-copy seek to `start` really begins at.
+
+    Copying video can only start on a keyframe (YouTube fragments are ~5 s), so
+    the session begins up to a few seconds before `start`; the playlist announces
+    the gap with EXT-X-START so the player still starts at the requested time."""
+    cmd = [
+        *cmd_prefix, _FFPROBE, "-v", "error", *_FFMPEG_HTTP_CHUNK_ARGS,
+        "-headers", f"User-Agent: {ua}\r\nReferer: https://www.youtube.com/\r\n",
+        "-select_streams", "v:0", "-show_entries", "packet=pts_time",
+        "-read_intervals", f"{start}%+#1", "-of", "csv=p=0", video_url,
+    ]
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+        return float(out.decode().split()[0])
+    except Exception:
+        return None
+
+
+async def hls_session_lead(session: Dict[str, Any]) -> float:
+    """Seconds between the session's first frame and the requested start."""
+    task = session.get("keyframe_task")
+    if task is None:
+        return 0.0
+    try:
+        keyframe = await asyncio.wait_for(asyncio.shield(task), timeout=5)
+    except Exception:
+        return 0.0
+    if keyframe is None:
+        return 0.0
+    lead = session["start"] - keyframe
+    return lead if 0.05 < lead < 30 else 0.0
 
 
 def _kill_hls_sessions_for(video_id: str, itag: str):

@@ -1,15 +1,35 @@
 FROM python:3.11-slim
 
-# System dependencies: ffmpeg, curl (for yt-dlp), wget (for wireproxy)
+# System dependencies: curl (healthcheck), wget + xz (downloads below)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
     curl \
     wget \
+    xz-utils \
     ca-certificates \
     proxychains4 \
     && rm -rf /var/lib/apt/lists/*
 
-# yt-dlp (pinned via requirements.txt — installed below)
+# FFmpeg 9.0 (BtbN shared build) instead of Debian's 7.1: the HTTP
+# -request_size option (FFmpeg 8.1+) is what keeps googlevideo from throttling
+# long reads. A dynamically linked build is required so proxychains (LD_PRELOAD)
+# can route it through the VPN — static binaries would bypass it.
+RUN ARCH=$(dpkg --print-architecture) \
+    && case "$ARCH" in \
+        amd64) FF_ARCH="linux64" ;; \
+        arm64) FF_ARCH="linuxarm64" ;; \
+        *) echo "Unsupported arch: $ARCH" && exit 1 ;; \
+    esac \
+    && wget -qO /tmp/ffmpeg.tar.xz \
+        "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-${FF_ARCH}-gpl-shared-9.0.tar.xz" \
+    && mkdir -p /opt/ffmpeg \
+    && tar -xJf /tmp/ffmpeg.tar.xz -C /opt/ffmpeg --strip-components=1 \
+    && ln -s /opt/ffmpeg/bin/ffmpeg /usr/local/bin/ffmpeg \
+    && ln -s /opt/ffmpeg/bin/ffprobe /usr/local/bin/ffprobe \
+    && rm -rf /tmp/ffmpeg.tar.xz /opt/ffmpeg/doc /opt/ffmpeg/include /opt/ffmpeg/lib/pkgconfig \
+    && ffmpeg -hide_banner -h protocol=http | grep -q -- "-request_size"
+
+# yt-dlp (pinned via requirements.txt — installed below, with Deno and the EJS
+# challenge solver: without them YouTube throttles stream URLs and hides formats)
 # wireproxy (WireGuard userspace)
 RUN ARCH=$(dpkg --print-architecture) \
     && case "$ARCH" in \

@@ -221,3 +221,58 @@ class TestVpnUploadLimit:
         payload = b"[Interface]\n" + b"#" * (MAX_CONF_BYTES + 10)
         resp = TestClient(app).post("/api/vpn/upload", files={"file": ("big.conf", payload)})
         assert resp.status_code == 413
+
+
+# ---------------------------------------------------------------------------
+# HLS: keyframe lead announced via EXT-X-START, fMP4 segment names
+# ---------------------------------------------------------------------------
+
+class TestHlsSessionLead:
+    def _run(self, session):
+        import asyncio
+        from services.ffmpeg import hls_session_lead
+        return asyncio.run(hls_session_lead(session))
+
+    def test_no_seek_has_no_lead(self):
+        assert self._run({"start": 0, "keyframe_task": None}) == 0.0
+
+    def test_lead_is_gap_to_previous_keyframe(self):
+        from services.ffmpeg import hls_session_lead
+        import asyncio
+
+        async def scenario():
+            task = asyncio.ensure_future(asyncio.sleep(0, result=101.92))
+            return await hls_session_lead({"start": 106, "keyframe_task": task})
+        assert abs(asyncio.run(scenario()) - 4.08) < 1e-6
+
+    def test_failed_probe_means_no_lead(self):
+        import asyncio
+        from services.ffmpeg import hls_session_lead
+
+        async def scenario():
+            task = asyncio.ensure_future(asyncio.sleep(0, result=None))
+            return await hls_session_lead({"start": 106, "keyframe_task": task})
+        assert asyncio.run(scenario()) == 0.0
+
+    def test_implausible_gap_ignored(self):
+        import asyncio
+        from services.ffmpeg import hls_session_lead
+
+        async def scenario():
+            task = asyncio.ensure_future(asyncio.sleep(0, result=10.0))
+            return await hls_session_lead({"start": 106, "keyframe_task": task})
+        assert asyncio.run(scenario()) == 0.0
+
+
+class TestHlsSegmentNames:
+    @pytest.mark.parametrize("name", ["seg00001.m4s", "seg00001.ts", "init.mp4"])
+    def test_valid_names_reach_session_lookup(self, name):
+        resp = _youtube_client().get(f"/api/hls/dQw4w9WgXcQ/137/0/{name}")
+        assert resp.status_code == 404  # passed validation, no such session
+
+    @pytest.mark.parametrize("name", ["stream.m3u8", "init.mp4.bak", "..%2Fsecret", "seg1.mp4"])
+    def test_other_names_rejected(self, name):
+        resp = _youtube_client().get(f"/api/hls/dQw4w9WgXcQ/137/0/{name}")
+        assert resp.status_code in (400, 404)
+        if name != "..%2Fsecret":
+            assert resp.status_code == 400

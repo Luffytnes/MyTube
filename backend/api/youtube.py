@@ -57,6 +57,7 @@ from services.ffmpeg import (
     _hls_lock,
     _start_hls_session,
     _kill_hls_sessions_for,
+    hls_session_lead,
     _iptv_vod_hls_sessions,
     _iptv_vod_hls_lock,
     _kill_vod_session,
@@ -719,13 +720,19 @@ async def hls_playlist(video_id: VideoId, itag: FormatId, start: int = 0):
         # Declare EVENT so hls.js starts from the first segment, not the live edge
         if "#EXT-X-PLAYLIST-TYPE" not in content:
             content = content.replace("#EXTM3U", "#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT", 1)
-        # Rewrite segment filenames to include start offset in URL
+        # The copy starts at the keyframe before `start`: begin playback at `start`
+        lead = await hls_session_lead(session)
+        if lead and "#EXT-X-START" not in content:
+            content = content.replace("#EXTM3U", f"#EXTM3U\n#EXT-X-START:TIME-OFFSET={lead:.3f},PRECISE=YES", 1)
+        # Rewrite segment and init-segment filenames to include the start offset
+        segment_base = f"/api/hls/{video_id}/{itag}/{start}"
         content = re.sub(
-            r'^(seg\d+\.ts)$',
-            lambda m: f"/api/hls/{video_id}/{itag}/{start}/{m.group(1)}",
+            r'^(seg\d+\.(?:m4s|ts))$',
+            lambda m: f"{segment_base}/{m.group(1)}",
             content,
             flags=re.MULTILINE,
         )
+        content = content.replace('URI="init.mp4"', f'URI="{segment_base}/init.mp4"')
 
         return Response(
             content=content,
@@ -740,8 +747,8 @@ async def hls_playlist(video_id: VideoId, itag: FormatId, start: int = 0):
 
 @router.get("/api/hls/{video_id}/{itag}/{start}/{segment}")
 async def hls_segment(video_id: VideoId, itag: FormatId, start: int, segment: str):
-    """Serve an HLS segment from the correct session temp dir."""
-    if not re.match(r'^seg\d+\.ts$', segment):
+    """Serve an HLS segment (or the fMP4 init segment) from the session temp dir."""
+    if not re.fullmatch(r'seg\d+\.(?:m4s|ts)|init\.mp4', segment):
         raise HTTPException(status_code=400, detail="Invalid segment name")
 
     session_key = f"{video_id}:{itag}:{start}"
@@ -754,7 +761,8 @@ async def hls_segment(video_id: VideoId, itag: FormatId, start: int, segment: st
 
     for _ in range(50):
         if seg_path.exists() and seg_path.stat().st_size > 0:
-            return FileResponse(seg_path, media_type="video/mp2t",
+            media_type = "video/mp2t" if segment.endswith(".ts") else "video/mp4"
+            return FileResponse(seg_path, media_type=media_type,
                                 headers={"Cache-Control": "no-cache"})
         await asyncio.sleep(0.1)
 

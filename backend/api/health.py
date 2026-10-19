@@ -1,13 +1,18 @@
 """Health check endpoint."""
+import asyncio
+import os
 import shutil
 import subprocess
 import sys
+import sysconfig
 from time import time as _time
+from typing import Optional
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from core import cache as _cache_module
+from core.config import _FFMPEG_HTTP_CHUNK_ARGS
 from services.vpn import is_wireproxy_active as _vpn_active
 from services import vpn as _vpn
 
@@ -32,10 +37,20 @@ def _wireproxy_ok() -> bool:
     return _vpn_active()
 
 
+def _js_runtime() -> Optional[str]:
+    """Deno binary yt-dlp uses for YouTube's JS challenges (same lookup order).
+
+    Without it, stream URLs are throttled and some formats are hidden."""
+    candidate = os.path.join(sysconfig.get_path("scripts"), "deno")
+    if os.access(candidate, os.X_OK):
+        return candidate
+    return shutil.which("deno")
+
+
 @router.get("/api/health")
 async def health():
     uptime = int(_time() - _START_TIME)
-    ffmpeg = shutil.which("ffmpeg") is not None and _ffmpeg_ok()
+    ffmpeg = shutil.which("ffmpeg") is not None and await asyncio.to_thread(_ffmpeg_ok)
     vpn_active = _wireproxy_ok()
 
     cache_entries = (
@@ -47,6 +62,8 @@ async def health():
     status = "ok"
     checks = {
         "ffmpeg": "ok" if ffmpeg else "unavailable",
+        "ffmpeg_http_chunking": bool(_FFMPEG_HTTP_CHUNK_ARGS),
+        "yt_challenge_solver": "deno" if _js_runtime() else "missing",
         "vpn": "active" if vpn_active else "off",
         "vpn_conf": _vpn._wireproxy_conf_name or None,
         "vpn_mode": "external" if _vpn.WIREPROXY_HOST else "subprocess",

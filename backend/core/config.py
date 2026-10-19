@@ -7,6 +7,11 @@ from typing import Any, Dict
 
 import httpx
 
+# Deno (yt-dlp's JS challenge runtime) refuses to start when SSLKEYLOGFILE is
+# set but empty, which some editors do in their integrated terminals.
+if os.environ.get("SSLKEYLOGFILE") == "":
+    del os.environ["SSLKEYLOGFILE"]
+
 
 def write_secret_file(path: str, content: str) -> None:
     """Write *content* to *path* atomically with 0o600 permissions.
