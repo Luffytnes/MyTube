@@ -1,4 +1,5 @@
 import { Innertube } from 'youtubei.js'
+import { ytThumbnail } from '@/lib/thumbnails'
 
 const _instances = new Map<string, Innertube>()
 const _promises = new Map<string, Promise<Innertube>>()
@@ -70,7 +71,7 @@ export function parseVideoItem(v: any): VideoCard | null {
     return {
       id,
       title,
-      thumbnail: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+      thumbnail: ytThumbnail(id),
       duration: v?.duration?.text ?? fmtDuration(v?.duration?.seconds),
       views: v?.short_view_count_text?.text ?? v?.short_view_count?.text ?? v?.view_count?.text ?? v?.view_count?.simple_text ?? '',
       published: v?.published?.text ?? '',
@@ -95,7 +96,7 @@ export function parseCompactVideo(v: any): VideoCard | null {
     return {
       id,
       title,
-      thumbnail: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+      thumbnail: ytThumbnail(id),
       duration: v?.duration?.text ?? v?.length_text?.text ?? '',
       views: v?.view_count?.text ?? v?.short_view_count?.text ?? '',
       published: v?.published?.text ?? '',
@@ -121,7 +122,7 @@ export function parseLockupView(lv: any): VideoCard | null {
     return {
       id,
       title,
-      thumbnail: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+      thumbnail: ytThumbnail(id),
       duration: '',
       views: getText(1),
       published: getText(2),
@@ -142,7 +143,7 @@ export function parseShortsLockup(s: any): VideoCard | null {
     return {
       id: videoId,
       title,
-      thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+      thumbnail: ytThumbnail(videoId),
       duration: '',
       views,
       published: '',

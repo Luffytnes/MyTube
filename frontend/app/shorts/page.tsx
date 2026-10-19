@@ -7,6 +7,7 @@ import type { VideoCard, VideoDetail } from '@/lib/api'
 import { ChevronUp, ChevronDown, Volume2, VolumeX, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 import type { Translations } from '@/lib/translations'
+import { ytThumbnail } from '@/lib/thumbnails'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -94,7 +95,7 @@ function ShortPlayer({ short, detail, loadingDetail, muted, onToggleMute }: Shor
     <div className="relative w-full h-full bg-black overflow-hidden">
       {/* Blurred background */}
       <img
-        src={`https://i.ytimg.com/vi/${short.id}/hqdefault.jpg`}
+        src={ytThumbnail(short.id)}
         alt=""
         className="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-30 pointer-events-none"
         aria-hidden
@@ -103,7 +104,7 @@ function ShortPlayer({ short, detail, loadingDetail, muted, onToggleMute }: Shor
       {/* Thumbnail placeholder while loading */}
       {(loadingDetail || !videoUrl) && (
         <img
-          src={`https://i.ytimg.com/vi/${short.id}/hqdefault.jpg`}
+          src={ytThumbnail(short.id)}
           alt={short.title}
           className="absolute inset-0 w-full h-full object-contain z-10"
         />

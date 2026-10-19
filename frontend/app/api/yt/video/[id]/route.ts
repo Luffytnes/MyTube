@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getInnertube, fmtDuration, fmtViews, parseAnyVideo } from '@/lib/innertube'
+import { ytThumbnail } from '@/lib/thumbnails'
 
 export async function GET(
   _req: NextRequest,
@@ -80,7 +81,7 @@ export async function GET(
       description: basic.short_description ?? (basic as any).description ?? '',
       channel: basic.channel?.name ?? '',
       channelId: basic.channel?.id ?? '',
-      thumbnail: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+      thumbnail: ytThumbnail(id),
       duration: fmtDuration(basic.duration),
       views: fmtViews(viewCount),
       viewCount,

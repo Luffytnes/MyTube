@@ -33,6 +33,7 @@ import { isInWatchLater, toggleWatchLater } from '@/lib/watchLater'
 import { isLiked, toggleLike, removeLike } from '@/lib/likes'
 import { useSubscriptions } from '@/lib/subscriptionsContext'
 import { BellOff, Copy, Check, ExternalLink } from 'lucide-react'
+import { ytThumbnail } from '@/lib/thumbnails'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -392,7 +393,7 @@ function WatchContent({ params }: WatchPageProps) {
                 <div className="flex items-center gap-3 bg-yt-secondary border border-yt-border rounded-xl p-3 max-w-xs w-full mx-4">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={`https://i.ytimg.com/vi/${nextVideoId}/mqdefault.jpg`}
+                    src={ytThumbnail(nextVideoId, 'mq')}
                     alt=""
                     className="w-20 h-12 object-cover rounded-lg flex-shrink-0"
                   />
@@ -504,7 +505,7 @@ function WatchContent({ params }: WatchPageProps) {
                     addToQueue({
                       id: video.id,
                       title: video.title,
-                      thumbnail: `https://i.ytimg.com/vi/${video.id}/mqdefault.jpg`,
+                      thumbnail: ytThumbnail(video.id, 'mq'),
                       duration: video.duration,
                       channel: video.channel.name,
                       channelId: video.channel.id,

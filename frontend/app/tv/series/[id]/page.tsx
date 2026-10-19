@@ -10,6 +10,7 @@ import { toggleTvFavorite, isTvFavorite } from '@/lib/tvFavorites'
 import { getContinueWatching, type ContinueItem } from '@/lib/tvContinueWatching'
 import TrailerModal from '@/components/tv/TrailerModal'
 import ActorModal from '@/components/tv/ActorModal'
+import { ytThumbnail } from '@/lib/thumbnails'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -155,7 +156,7 @@ function TrailerRow({ videos }: { videos: { key: string; name: string; type: str
               >
                 <div className="relative rounded-xl overflow-hidden aspect-video bg-yt-secondary mb-1.5">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`https://img.youtube.com/vi/${v.key}/mqdefault.jpg`} alt={v.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <img src={ytThumbnail(v.key, 'mq')} alt={v.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center group-hover:bg-yt-red transition-colors">
                       <Play className="w-4 h-4 text-white fill-white ml-0.5" />

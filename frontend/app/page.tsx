@@ -11,6 +11,7 @@ import { useSubscriptions } from '@/lib/subscriptionsContext'
 import { getSearchHistory } from '@/lib/searchHistory'
 import { getHistory } from '@/lib/history'
 import { getResumeVideoIds, getPosition } from '@/lib/resumePosition'
+import { ytThumbnail } from '@/lib/thumbnails'
 
 interface ResumeVideo {
   id: string
@@ -132,7 +133,7 @@ export default function HomePage() {
                 <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-yt-secondary mb-2">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={`https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`}
+                    src={ytThumbnail(v.id, 'mq')}
                     alt={v.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />

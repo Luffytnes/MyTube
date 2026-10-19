@@ -7,6 +7,7 @@ import { VideoCard as VideoCardType } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { isInWatchLater, toggleWatchLater } from '@/lib/watchLater'
 import { isInQueue, addToQueue, removeFromQueue } from '@/lib/queue'
+import { ytThumbnail } from '@/lib/thumbnails'
 
 interface VideoCardProps {
   video: VideoCardType
@@ -99,7 +100,7 @@ export default function VideoCard({ video, layout = 'grid' }: VideoCardProps) {
       addToQueue({
         id: video.id,
         title: video.title,
-        thumbnail: `https://i.ytimg.com/vi/${video.id}/mqdefault.jpg`,
+        thumbnail: ytThumbnail(video.id, 'mq'),
         duration: video.duration,
         channel: video.channel.name,
         channelId: video.channel.id,
@@ -116,7 +117,7 @@ export default function VideoCard({ video, layout = 'grid' }: VideoCardProps) {
           <div className="relative w-[168px] h-[94px] rounded-xl overflow-hidden bg-yt-secondary thumbnail-wrapper">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={`${API_BASE}/api/thumbnail/${video.id}`}
+              src={ytThumbnail(video.id, 'mq')}
               alt={video.title}
               className="w-full h-full object-cover"
               loading="lazy"
@@ -163,7 +164,7 @@ export default function VideoCard({ video, layout = 'grid' }: VideoCardProps) {
         <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-yt-secondary thumbnail-wrapper">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={`https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`}
+            src={ytThumbnail(video.id)}
             alt={video.title}
             className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
             loading="lazy"

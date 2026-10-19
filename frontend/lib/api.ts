@@ -1,3 +1,5 @@
+import { ytThumbnail } from '@/lib/thumbnails'
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 // YouTube.js routes are same-origin Next.js API routes
 const YT_API = '/api/yt'
@@ -112,7 +114,7 @@ export interface ChannelVideosResult {
 
 function buildThumbnailUrl(videoId: string): string {
   // Use YouTube's CDN directly — faster than proxying through our backend
-  return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+  return ytThumbnail(videoId)
 }
 
 function normalizeThumbnail(video: VideoCard): VideoCard {
