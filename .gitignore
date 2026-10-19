@@ -36,3 +36,6 @@ nginx/.htpasswd
 
 # ─── Agents ──────────────────────────────────────────────────────────────────
 .claude/worktrees/
+
+# ─── Local tooling (caches, temporary test tools) ─────────────────────────────
+runtime/
