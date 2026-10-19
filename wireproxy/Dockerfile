@@ -1,7 +1,7 @@
 ARG WIREPROXY_VERSION=1.1.2
 
 # ── Stage 1: Download and verify ─────────────────────────────────────────────
-FROM alpine:3.21 AS downloader
+FROM alpine:3.24 AS downloader
 
 ARG WIREPROXY_VERSION
 RUN apk add --no-cache wget ca-certificates
@@ -21,7 +21,7 @@ RUN set -eu \
     && chmod +x /tmp/wireproxy
 
 # ── Stage 2: Runtime ─────────────────────────────────────────────────────────
-FROM alpine:3.21
+FROM alpine:3.24
 
 RUN adduser -D -H -s /sbin/nologin wireproxy
 
