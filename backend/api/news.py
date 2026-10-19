@@ -63,7 +63,7 @@ def _parse_rss(xml_text: str) -> list:
     try:
         items = re.findall(r'<item>(.*?)</item>', xml_text, re.DOTALL)
         for raw in items:
-            title = re.sub(r"<[^>]+>", "", _extract_raw_tag(raw, "title")).strip()
+            title = html_lib.unescape(re.sub(r"<[^>]+>", "", _extract_raw_tag(raw, "title"))).strip()
             if not title:
                 continue
 
@@ -92,6 +92,9 @@ def _parse_rss(xml_text: str) -> list:
 
             # Strip HTML tags from description, collapse whitespace
             clean_desc = re.sub(r"<[^>]+>", " ", desc_html)
+            # Google News double-encodes entities: "&amp;nbsp;" survives the
+            # first unescape as a literal "&nbsp;"
+            clean_desc = html_lib.unescape(clean_desc)
             clean_desc = clean_desc.replace("\xa0", " ")  # non-breaking spaces
             clean_desc = re.sub(r"\s{2,}", " ", clean_desc).strip()
             if len(clean_desc) > 220:

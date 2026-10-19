@@ -276,3 +276,20 @@ class TestHlsSegmentNames:
         assert resp.status_code in (400, 404)
         if name != "..%2Fsecret":
             assert resp.status_code == 400
+
+
+class TestNewsEntities:
+    def test_double_encoded_entities_are_decoded(self):
+        from api.news import _parse_rss
+        xml = (
+            "<rss><channel><item>"
+            "<title>Tom &amp;amp; Jerry</title>"
+            "<link>https://news.example/a</link>"
+            "<description>&lt;a href=&quot;x&quot;&gt;Story&lt;/a&gt;&amp;nbsp;&amp;nbsp;Source</description>"
+            "<source url=\"https://news.example\">Example</source>"
+            "</item></channel></rss>"
+        )
+        article = _parse_rss(xml)[0]
+        assert "&nbsp;" not in article["description"]
+        assert article["description"] == "Story Source"
+        assert article["title"] == "Tom & Jerry"
