@@ -9,6 +9,7 @@ import {
   getMusicPlaylist, removeTrackFromPlaylist, type MusicPlaylist,
 } from '@/lib/musicPlaylists'
 import { useRegion } from '@/lib/regionContext'
+import { imageSrc } from '@/lib/thumbnails'
 
 export default function MusicPlaylistPage() {
   const { id } = useParams<{ id: string }>()
@@ -41,7 +42,7 @@ export default function MusicPlaylistPage() {
         <div className="w-48 h-48 rounded-2xl overflow-hidden bg-yt-secondary flex-shrink-0 shadow-2xl self-center sm:self-start">
           {playlist.tracks[0]?.thumbnail ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={playlist.tracks[0].thumbnail} alt="" className="w-full h-full object-cover" />
+            <img src={imageSrc(playlist.tracks[0].thumbnail)} alt="" className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
               <ListMusic className="w-16 h-16 text-yt-text-muted" />

@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { Music } from 'lucide-react'
+import { imageSrc } from '@/lib/thumbnails'
 
 interface AlbumCardProps {
   browseId: string
@@ -25,7 +26,7 @@ export default function AlbumCard({ browseId, title, artists, year, thumbnail, t
         {thumbnail ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={thumbnail}
+            src={imageSrc(thumbnail)}
             alt={title}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />

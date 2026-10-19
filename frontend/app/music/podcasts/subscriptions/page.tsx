@@ -9,6 +9,7 @@ import {
   getPodcastSubscriptions, unsubscribePodcast, type PodcastSubscription,
 } from '@/lib/podcastSubscriptions'
 import { useRegion } from '@/lib/regionContext'
+import { imageSrc } from '@/lib/thumbnails'
 
 export default function PodcastSubscriptionsPage() {
   const { t } = useRegion()
@@ -48,7 +49,7 @@ export default function PodcastSubscriptionsPage() {
                 <div className="w-14 h-14 rounded-xl overflow-hidden bg-yt-hover flex-shrink-0">
                   {p.thumbnail ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.thumbnail.startsWith('/') ? `${API_BASE}${p.thumbnail}` : p.thumbnail} alt={p.title} className="w-full h-full object-cover" />
+                    <img src={imageSrc(p.thumbnail)} alt={p.title} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <Mic2 className="w-6 h-6 text-yt-text-muted" />

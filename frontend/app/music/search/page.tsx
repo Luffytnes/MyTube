@@ -14,6 +14,7 @@ import { useRegion } from '@/lib/regionContext'
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 import type { Translations } from '@/lib/translations'
+import { imageSrc } from '@/lib/thumbnails'
 
 type FilterType = 'songs' | 'albums' | 'artists' | 'playlists' | 'podcasts' | 'radio'
 
@@ -184,7 +185,7 @@ function MusicSearchContent() {
                   <div className="w-full aspect-square rounded-full overflow-hidden bg-yt-secondary shadow-lg">
                     {r.thumbnail ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={r.thumbnail} alt={r.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      <img src={imageSrc(r.thumbnail)} alt={r.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <User className="w-10 h-10 text-yt-text-muted" />
@@ -209,7 +210,7 @@ function MusicSearchContent() {
                     <div className="aspect-square rounded-xl overflow-hidden bg-yt-secondary shadow">
                       {r.thumbnail ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={r.thumbnail.startsWith('/') ? `${API_BASE}${r.thumbnail}` : r.thumbnail} alt={r.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <img src={imageSrc(r.thumbnail)} alt={r.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <Mic2 className="w-10 h-10 text-yt-text-muted" />
@@ -292,7 +293,7 @@ function MusicSearchContent() {
                   <div className="aspect-square rounded-xl overflow-hidden bg-yt-secondary shadow">
                     {r.thumbnail ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={r.thumbnail} alt={r.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      <img src={imageSrc(r.thumbnail)} alt={r.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <ListMusic className="w-10 h-10 text-yt-text-muted" />

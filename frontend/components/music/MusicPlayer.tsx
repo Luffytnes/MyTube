@@ -10,6 +10,7 @@ import { useMusic } from '@/lib/musicContext'
 import { cn } from '@/lib/utils'
 import VolumeSlider from '@/components/ui/VolumeSlider'
 import { getMusicPlaylists, addTrackToPlaylist, type MusicPlaylist } from '@/lib/musicPlaylists'
+import { imageSrc } from '@/lib/thumbnails'
 
 function formatTime(s: number): string {
   if (!isFinite(s)) return '0:00'
@@ -93,7 +94,7 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
               {currentTrack.thumbnail ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={currentTrack.thumbnail}
+                  src={imageSrc(currentTrack.thumbnail)}
                   alt={currentTrack.title}
                   className="w-full h-full object-cover"
                 />
@@ -215,7 +216,7 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
                     >
                       {track.thumbnail ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={track.thumbnail} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
+                        <img src={imageSrc(track.thumbnail)} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
                       ) : (
                         <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
                           <ListMusic className="w-4 h-4 text-white/40" />
@@ -252,7 +253,7 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
                 >
                   {track.thumbnail ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={track.thumbnail} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
+                    <img src={imageSrc(track.thumbnail)} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
                   ) : (
                     <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
                       <ListMusic className="w-4 h-4 text-white/40" />
@@ -290,7 +291,7 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
                 >
                   {track.thumbnail ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={track.thumbnail} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                    <img src={imageSrc(track.thumbnail)} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
                   ) : (
                     <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
                       <ListMusic className="w-4 h-4 text-white/40" />
@@ -328,7 +329,7 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
                     <div className="w-10 h-10 rounded-lg bg-white/10 flex-shrink-0 overflow-hidden flex items-center justify-center">
                       {pl.tracks[0]?.thumbnail ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={pl.tracks[0].thumbnail} alt="" className="w-full h-full object-cover" />
+                        <img src={imageSrc(pl.tracks[0].thumbnail)} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <ListMusic className="w-5 h-5 text-white/40" />
                       )}
@@ -390,7 +391,7 @@ export default function MusicPlayer() {
             {currentTrack.thumbnail ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={currentTrack.thumbnail}
+                src={imageSrc(currentTrack.thumbnail)}
                 alt={currentTrack.title}
                 className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg object-cover flex-shrink-0 group-hover:scale-105 transition-transform"
               />

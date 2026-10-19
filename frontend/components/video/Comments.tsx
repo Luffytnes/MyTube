@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { MessageSquare, Heart, ThumbsUp, Pin, ArrowUpDown } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
+import { imageSrc } from '@/lib/thumbnails'
 
 interface CommentAuthor {
   name: string
@@ -39,7 +40,7 @@ function Avatar({ name, src, isOwner }: { name: string; src: string | null; isOw
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={src}
+        src={imageSrc(src)}
         alt={name}
         className={`w-8 h-8 rounded-full object-cover flex-shrink-0 ${isOwner ? 'ring-2 ring-yt-red' : ''}`}
         onError={() => setFailed(true)}

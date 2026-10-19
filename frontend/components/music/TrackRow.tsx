@@ -5,6 +5,7 @@ import { Play, Plus, ListMusic, Check } from 'lucide-react'
 import { useMusic, type MusicTrack } from '@/lib/musicContext'
 import { getMusicPlaylists, addTrackToPlaylist, createMusicPlaylist } from '@/lib/musicPlaylists'
 import { cn } from '@/lib/utils'
+import { imageSrc } from '@/lib/thumbnails'
 
 interface TrackRowProps {
   track: MusicTrack
@@ -87,7 +88,7 @@ export default function TrackRow({ track, queue, index, showThumbnail = false, s
         <div className="w-10 h-10 rounded-lg overflow-hidden bg-yt-secondary flex-shrink-0">
           {track.thumbnail ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={track.thumbnail} alt={track.title} className="w-full h-full object-cover" />
+            <img src={imageSrc(track.thumbnail)} alt={track.title} className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full bg-yt-secondary" />
           )}

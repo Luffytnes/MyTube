@@ -6,6 +6,7 @@ import { UserCheck, UserPlus } from 'lucide-react'
 import type { ChannelSearchResult } from '@/lib/api'
 import { useRegion } from '@/lib/regionContext'
 import { useSubscriptions } from '@/lib/subscriptionsContext'
+import { imageSrc } from '@/lib/thumbnails'
 
 interface Props {
   channel: ChannelSearchResult
@@ -33,7 +34,7 @@ export default function ChannelCard({ channel }: Props) {
         {channel.thumbnail ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={channel.thumbnail}
+            src={imageSrc(channel.thumbnail)}
             alt={channel.name}
             className="w-24 h-24 rounded-full object-cover bg-yt-bg"
             onError={(e) => {

@@ -8,6 +8,7 @@ import {
   renameMusicPlaylist, type MusicPlaylist,
 } from '@/lib/musicPlaylists'
 import { useRegion } from '@/lib/regionContext'
+import { imageSrc } from '@/lib/thumbnails'
 
 export default function MusicPlaylistsPage() {
   const [playlists, setPlaylists] = useState<MusicPlaylist[]>([])
@@ -97,7 +98,7 @@ export default function MusicPlaylistsPage() {
                 <div className="w-14 h-14 rounded-xl bg-yt-hover flex items-center justify-center">
                   {p.tracks[0]?.thumbnail ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.tracks[0].thumbnail} alt="" className="w-full h-full object-cover rounded-xl" />
+                    <img src={imageSrc(p.tracks[0].thumbnail)} alt="" className="w-full h-full object-cover rounded-xl" />
                   ) : (
                     <ListMusic className="w-6 h-6 text-yt-text-muted" />
                   )}

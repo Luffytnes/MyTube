@@ -12,6 +12,7 @@ import { getPodcastSubscriptions } from '@/lib/podcastSubscriptions'
 import { useRegion } from '@/lib/regionContext'
 import { useMusic } from '@/lib/musicContext'
 import { cn } from '@/lib/utils'
+import { imageSrc } from '@/lib/thumbnails'
 
 interface ArtistSuggestion {
   browseId: string
@@ -42,6 +43,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 interface HomeData {
   topSongs: MusicTrack[]
   trending: MusicTrack[]
+  artists?: ArtistSuggestion[]
 }
 
 interface SearchResult {
@@ -73,14 +75,18 @@ export default function MusicHomePage() {
   const [suggestedRadio, setSuggestedRadio] = useState<RadioStation[]>([])
   const [playlists, setPlaylists] = useState<MusicPlaylist[]>([])
 
-  // Load home charts
+  // Load home charts for the selected region (falls back to global server-side)
   useEffect(() => {
-    fetch(`${API_BASE}/api/music/home`)
+    setLoading(true)
+    fetch(`${API_BASE}/api/music/home?country=${region.code.toUpperCase()}`)
       .then((r) => r.json())
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [region.code])
+
+  // Personal suggestions first; otherwise the region's top artists
+  const artistsToShow = suggestedArtists.length > 0 ? suggestedArtists : (data?.artists ?? [])
 
   // Load playlists
   useEffect(() => {
@@ -234,7 +240,7 @@ export default function MusicHomePage() {
                   <div className="w-12 h-12 rounded-lg flex-shrink-0 overflow-hidden bg-yt-hover">
                     {p.tracks[0]?.thumbnail ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.tracks[0].thumbnail} alt="" className="w-full h-full object-cover" />
+                      <img src={imageSrc(p.tracks[0].thumbnail)} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <ListMusic className="w-5 h-5 text-yt-text-muted" />
@@ -311,20 +317,20 @@ export default function MusicHomePage() {
         )}
 
         {/* Suggested Artists */}
-        {suggestedArtists.length > 0 && !forYouLoading && (
+        {artistsToShow.length > 0 && !forYouLoading && (
           <section>
             <div className="flex items-center gap-2 mb-3">
               <User className="w-5 h-5 text-yt-red" />
               <h2 className="text-yt-text text-lg font-semibold">{t('music_suggested_artists')}</h2>
-              <span className="text-yt-text-muted text-xs">{t('music_based_on_searches')}</span>
+              {suggestedArtists.length > 0 && <span className="text-yt-text-muted text-xs">{t('music_based_on_searches')}</span>}
             </div>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
-              {suggestedArtists.map((a) => (
+              {artistsToShow.map((a) => (
                 <Link key={a.browseId} href={`/music/artist/${a.browseId}`} className="flex flex-col items-center gap-2 group">
                   <div className="w-full aspect-square rounded-full overflow-hidden bg-yt-secondary">
                     {a.thumbnail ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={a.thumbnail} alt={a.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      <img src={imageSrc(a.thumbnail)} alt={a.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <User className="w-8 h-8 text-yt-text-muted" />
@@ -355,7 +361,7 @@ export default function MusicHomePage() {
                     <div className="aspect-square rounded-xl overflow-hidden bg-yt-secondary shadow">
                       {p.thumbnail ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={p.thumbnail.startsWith('/') ? `${API_BASE}${p.thumbnail}` : p.thumbnail} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <img src={imageSrc(p.thumbnail)} alt={p.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <Mic2 className="w-8 h-8 text-yt-text-muted" />

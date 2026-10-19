@@ -5,6 +5,7 @@ import {
   useEffect, useCallback, type ReactNode,
 } from 'react'
 import { savePosition, getPosition } from '@/lib/resumePosition'
+import { imageSrc } from '@/lib/thumbnails'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -130,7 +131,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       title: track.title,
       artist: track.artists.map((a) => a.name).join(', '),
       album: track.album ?? '',
-      artwork: track.thumbnail ? [{ src: track.thumbnail, sizes: '512x512', type: 'image/jpeg' }] : [],
+      artwork: track.thumbnail ? [{ src: imageSrc(track.thumbnail)!, sizes: '512x512', type: 'image/jpeg' }] : [],
     })
   }, [currentIndex, queue])
 
