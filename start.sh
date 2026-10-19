@@ -30,10 +30,42 @@ lsof -ti:8000 | xargs kill -9 2>/dev/null || true
 lsof -ti:3000 | xargs kill -9 2>/dev/null || true
 sleep 1
 
+# Backend dependencies live in a project-local virtualenv (nothing installed
+# system-wide); reinstalled whenever requirements.txt changes (e.g. git pull)
+VENV="$BACKEND/.venv"
+STAMP="$VENV/.requirements-installed"
+if [ ! -x "$VENV/bin/python" ]; then
+  PY=""
+  for candidate in python3.13 python3.12 python3.11 python3; do
+    if command -v "$candidate" > /dev/null 2>&1 \
+      && "$candidate" -c 'import sys; sys.exit(sys.version_info < (3, 11))'; then
+      PY="$candidate"
+      break
+    fi
+  done
+  if [ -z "$PY" ]; then
+    echo "Python 3.11+ is required for the backend." >&2
+    exit 1
+  fi
+  echo -e "${YELLOW}Creating backend virtualenv with $PY...${NC}"
+  "$PY" -m venv "$VENV"
+fi
+if [ ! -f "$STAMP" ] || [ "$BACKEND/requirements.txt" -nt "$STAMP" ]; then
+  echo -e "${YELLOW}Installing backend dependencies...${NC}"
+  "$VENV/bin/pip" install --no-cache-dir --disable-pip-version-check -q -r "$BACKEND/requirements.txt"
+  touch "$STAMP"
+fi
+
+# Frontend dependencies, refreshed when the lockfile changes
+if [ ! -d "$FRONTEND/node_modules" ] || [ "$FRONTEND/package-lock.json" -nt "$FRONTEND/node_modules/.package-lock.json" ]; then
+  echo -e "${YELLOW}Installing frontend dependencies...${NC}"
+  (cd "$FRONTEND" && npm install --no-fund --no-audit)
+fi
+
 # Start backend
 echo -e "${GREEN}Starting backend (FastAPI + yt-dlp) on port 8000...${NC}"
 cd "$BACKEND"
-python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload &
+"$VENV/bin/python" -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload &
 BACKEND_PID=$!
 
 # Wait for backend to be ready

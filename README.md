@@ -276,15 +276,18 @@ chmod +x start.sh
 ./start.sh
 ```
 
-Open **http://localhost:3000** 🎉
+Open **http://localhost:3000** 🎉 — `Ctrl+C` stops everything.
+
+The first run creates `backend/.venv` and installs the dependencies there (nothing system-wide); later runs reinstall them only when `requirements.txt` or `package-lock.json` changed, e.g. after a `git pull`.
 
 #### Manual setup
 
 **Backend**
 ```bash
 cd backend
-pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 **Frontend**
