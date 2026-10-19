@@ -5,6 +5,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   ChangeEvent,
 } from 'react'
 import {
@@ -29,8 +30,16 @@ import VolumeSlider from '@/components/ui/VolumeSlider'
 import { useRegion } from '@/lib/regionContext'
 import { getPlaybackSettings, setPlaybackSettings } from '@/lib/playbackSettings'
 import { savePosition, getPosition } from '@/lib/resumePosition'
+import { adaptiveFallback, pickInitialFormat, rankedVideoFormats } from '@/lib/videoFormats'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+
+/** Kill server-side HLS sessions for this video+format. Callers that start a new
+ *  session must wait for it: a DELETE landing after the new playlist request
+ *  (e.g. delayed by a CORS preflight) would kill the fresh session. */
+function stopHlsSession(videoId: string, itag: string): Promise<void> {
+  return fetch(`${API_BASE}/api/hls/${videoId}/${itag}`, { method: 'DELETE' }).then(() => {}, () => {})
+}
 
 export interface Chapter {
   time: number
@@ -50,36 +59,6 @@ interface VideoPlayerProps {
   hasPrev?: boolean
   chapters?: Chapter[]
   seekToRef?: React.MutableRefObject<((t: number) => void) | null>
-}
-
-function getBestFormat(formats: VideoFormat[]): VideoFormat | null {
-  if (!formats || formats.length === 0) return null
-  const { defaultQuality } = getPlaybackSettings()
-
-  if (defaultQuality !== 'auto') {
-    const targetHeight = parseInt(defaultQuality.replace('p', ''), 10)
-    const getHeight = (f: VideoFormat) =>
-      f.height ?? parseInt(f.quality?.replace('p', '') ?? '0', 10)
-
-    const videoFormats = formats.filter((f) => f.hasVideo)
-    if (videoFormats.length > 0) {
-      const sorted = [...videoFormats].sort((a, b) => {
-        const da = Math.abs(getHeight(a) - targetHeight)
-        const db = Math.abs(getHeight(b) - targetHeight)
-        if (da !== db) return da - db
-        if (a.hasAudio && !b.hasAudio) return -1
-        if (!a.hasAudio && b.hasAudio) return 1
-        return 0
-      })
-      return sorted[0]
-    }
-  }
-
-  const combined = formats.filter((f) => f.hasVideo && f.hasAudio)
-  if (combined.length > 0) return combined[0]
-  const videoOnly = formats.filter((f) => f.hasVideo)
-  if (videoOnly.length > 0) return videoOnly[0]
-  return formats[0]
 }
 
 // Panel wrapper — Vidking-style dark floating card
@@ -167,19 +146,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   const [subCues, setSubCues] = useState<Array<{ start: number; end: number; lines: string[] }>>([])
   const [activeCue, setActiveCue] = useState<string[] | null>(null)
 
-  const allVideoFormats = (() => {
-    const getHeight = (f: VideoFormat) =>
-      f.height ?? parseInt(f.quality?.replace('p', '') ?? '0', 10) ?? 0
-    const byHeight = new Map<number, VideoFormat>()
-    for (const f of formats) {
-      if (!f.hasVideo) continue
-      const h = getHeight(f)
-      if (h < 240) continue
-      const existing = byHeight.get(h)
-      if (!existing || (!existing.hasAudio && f.hasAudio)) byHeight.set(h, f)
-    }
-    return Array.from(byHeight.entries()).sort((a, b) => b[0] - a[0]).map(([, f]) => f)
-  })()
+  const allVideoFormats = useMemo(() => rankedVideoFormats(formats), [formats])
 
   useEffect(() => {
     if (duration > 0) effectiveDurationRef.current = duration
@@ -247,7 +214,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
 
   useEffect(() => {
     const settings = getPlaybackSettings()
-    setSelectedFormat(getBestFormat(allVideoFormats))
+    setSelectedFormat(pickInitialFormat(allVideoFormats, settings.defaultQuality))
     setError(null)
     setLoading(true)
     setPlaying(false)
@@ -350,6 +317,16 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
       let autoplayFallback: ReturnType<typeof setTimeout> | null = null
       const hls = new Hls({ enableWorker: false, maxBufferLength: 30, manifestLoadingMaxRetry: 3, manifestLoadingRetryDelay: 1000 })
       hdHlsRef.current = hls
+      // The backend cuts both tracks at the keyframe before the requested time
+      // and announces the gap with EXT-X-START (hls.js starts playback there):
+      // re-anchor once so displayed and saved positions stay absolute.
+      let anchored = false
+      hls.on(Hls.Events.LEVEL_LOADED, (_: unknown, data: { details: { startTimeOffset: number | null } }) => {
+        if (anchored) return
+        anchored = true
+        const lead = data.details.startTimeOffset
+        if (lead && lead > 0) hlsStartOffsetRef.current = Math.floor(startOffset) - lead
+      })
       hls.loadSource(hlsUrl); hls.attachMedia(video)
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setLoading(false)
@@ -420,8 +397,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
           hls.destroy()
           hdHlsRef.current = null
           const currentPos = hlsStartOffsetRef.current + (videoRef.current?.currentTime ?? 0)
-          fetch(`${API_BASE}/api/hls/${videoId}/${itag}`, { method: 'DELETE' }).catch(() => {})
-          startHdHlsRef.current?.(currentPos, autoplay, true)
+          stopHlsSession(videoId, itag).then(() => startHdHlsRef.current?.(currentPos, autoplay, true))
         } else {
           setError(`Erreur HD : ${data.details}`)
         }
@@ -435,13 +411,14 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
     if (hdHlsRef.current) { hdHlsRef.current.destroy(); hdHlsRef.current = null }
     if (!isVideoOnly || !selectedFormat) return
     const itag = String(selectedFormat.itag)
-    fetch(`${API_BASE}/api/hls/${videoId}/${itag}`, { method: 'DELETE' }).catch(() => {})
     const settings = getPlaybackSettings()
     const resumePos = settings.resumePlayback ? (getPosition(videoId) ?? 0) : 0
-    startHdHls(resumePos, settings.autoplay)
+    let cancelled = false
+    stopHlsSession(videoId, itag).then(() => { if (!cancelled) startHdHls(resumePos, settings.autoplay) })
     return () => {
+      cancelled = true
       if (hdHlsRef.current) { hdHlsRef.current.destroy(); hdHlsRef.current = null }
-      fetch(`${API_BASE}/api/hls/${videoId}/${itag}`, { method: 'DELETE' }).catch(() => {})
+      stopHlsSession(videoId, itag)
     }
   }, [isVideoOnly, selectedFormat?.itag, videoId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -606,6 +583,17 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   function handleVideoError() {
     const video = videoRef.current
     if (video?.error?.code === 1) return
+    // A pre-muxed format listed by YouTube.js may be gone server-side:
+    // switch to the matching adaptive (HLS) stream before giving up.
+    if (selectedFormat?.hasAudio) {
+      const fallback = adaptiveFallback(formats, selectedFormat)
+      if (fallback) {
+        setSelectedFormat(fallback)
+        setError(null)
+        setLoading(true)
+        return
+      }
+    }
     setError('Failed to load video. Try a different quality.')
     setLoading(false)
   }
@@ -692,7 +680,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
 
       <video
         ref={videoRef}
-        src={isLive || isVideoOnly ? undefined : streamUrl}
+        src={isLive || isVideoOnly || !selectedFormat ? undefined : streamUrl}
         className="w-full h-full object-contain"
         title={title}
         autoPlay={getPlaybackSettings().autoplay}
