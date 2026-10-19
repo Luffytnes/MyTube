@@ -33,3 +33,6 @@ nginx/.htpasswd
 .vscode/
 *.swp
 *.swo
+
+# ─── Agents ──────────────────────────────────────────────────────────────────
+.claude/worktrees/
