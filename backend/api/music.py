@@ -4,7 +4,8 @@ import urllib.parse
 from typing import Annotated, Dict, Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException, Path, Request
+from cachetools import TTLCache
+from fastapi import APIRouter, HTTPException, Path, Query, Request
 from fastapi.responses import StreamingResponse
 from ytmusicapi import YTMusic as _YTMusic
 
@@ -48,40 +49,73 @@ def _fmt_duration(ms: Optional[int]) -> str:
     return f"{m}:{s:02d}"
 
 
+_charts_cache: TTLCache = TTLCache(maxsize=32, ttl=1800)
+CountryCode = Annotated[str, Query(pattern=r"^[A-Za-z]{2}$")]
+
+
+def _track_dict(item: dict) -> dict:
+    return {
+        "videoId": item.get("videoId"),
+        "title": item.get("title"),
+        "artists": [{"id": a.get("id"), "name": a.get("name")} for a in item.get("artists") or []],
+        "album": (item.get("album") or {}).get("name"),
+        "thumbnail": _thumb_url(item.get("thumbnails", [])),
+        "duration": item.get("duration"),
+        "durationMs": (item.get("duration_seconds") or 0) * 1000,
+    }
+
+
+def _load_charts(country: str) -> dict:
+    """Chart tracks + top artists for a country (cached 30 min).
+
+    YouTube Music dropped its song/trending charts in 2026: get_charts now
+    returns playlists ("Daily Top Music Videos", "Trending 20 <country>",
+    "Top 100 …") whose tracks are expanded here."""
+    key = country.upper()
+    if (cached := _charts_cache.get(key)) is not None:
+        return cached
+    ytm = get_ytm()
+    charts = ytm.get_charts(country=key)
+    playlists = charts.get("videos") or []
+
+    def pick(prefix: str) -> Optional[dict]:
+        return next((p for p in playlists if (p.get("title") or "").startswith(prefix)), None)
+
+    def tracks(playlist: Optional[dict], limit: int) -> list:
+        if not playlist or not playlist.get("playlistId"):
+            return []
+        data = ytm.get_playlist(playlist["playlistId"], limit=limit)
+        return [_track_dict(t) for t in data.get("tracks", []) if t.get("videoId")][:limit]
+
+    songs = tracks(pick("Daily Top") or (playlists[0] if playlists else None), 30)
+    for rank, song in enumerate(songs, 1):
+        song["rank"] = rank
+    seen = {s["videoId"] for s in songs}
+    trending = [t for t in tracks(pick("Trending") or pick("Top 100"), 50) if t["videoId"] not in seen][:20]
+    artists = [
+        {
+            "browseId": a.get("browseId"),
+            "name": a.get("title"),
+            "thumbnail": _thumb_url(a.get("thumbnails", [])),
+            "subscribers": a.get("subscribers"),
+            "rank": a.get("rank"),
+            "trend": a.get("trend"),
+        }
+        for a in (charts.get("artists") or [])[:20]
+        if a.get("browseId")
+    ]
+    result = {"songs": songs, "trending": trending, "artists": artists}
+    _charts_cache[key] = result
+    return result
+
+
 @router.get("/api/music/charts")
-async def music_charts(country: str = "ZZ"):
-    """Top charts from YouTube Music."""
-    loop = asyncio.get_event_loop()
+async def music_charts(country: CountryCode = "ZZ"):
+    """Top charts from YouTube Music (ZZ = global)."""
     try:
-        def _get():
-            ytm = get_ytm()
-            data = ytm.get_charts(country=country)
-            songs = []
-            for item in data.get("songs", {}).get("items", [])[:30]:
-                songs.append({
-                    "videoId": item.get("videoId"),
-                    "title": item.get("title"),
-                    "artists": [{"id": a.get("id"), "name": a.get("name")} for a in item.get("artists", [])],
-                    "album": item.get("album", {}).get("name") if item.get("album") else None,
-                    "thumbnail": _thumb_url(item.get("thumbnails", [])),
-                    "duration": item.get("duration"),
-                    "durationMs": item.get("duration_seconds", 0) * 1000 if item.get("duration_seconds") else 0,
-                    "rank": item.get("rank"),
-                })
-            trending = []
-            for item in data.get("trending", {}).get("items", [])[:20]:
-                trending.append({
-                    "videoId": item.get("videoId"),
-                    "title": item.get("title"),
-                    "artists": [{"id": a.get("id"), "name": a.get("name")} for a in item.get("artists", [])],
-                    "thumbnail": _thumb_url(item.get("thumbnails", [])),
-                    "duration": item.get("duration"),
-                })
-            return {"songs": songs, "trending": trending}
-        result = await loop.run_in_executor(None, _get)
-        return result
+        return await asyncio.to_thread(_load_charts, country)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Charts error: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"Charts error: {e}")
 
 
 @router.get("/api/music/search")
@@ -311,7 +345,12 @@ async def music_song(video_id: VideoId):
         raise HTTPException(status_code=500, detail=f"Song error: {str(e)}")
 
 
-RADIO_BROWSER_BASE = "https://de1.api.radio-browser.info/json"
+# Individual Radio Browser servers go down from time to time: try mirrors in order
+RADIO_BROWSER_MIRRORS = (
+    "https://de1.api.radio-browser.info/json",
+    "https://de2.api.radio-browser.info/json",
+    "https://all.api.radio-browser.info/json",
+)
 
 
 @router.get("/api/radio/stations")
@@ -336,17 +375,19 @@ async def radio_stations(
         params["tag"] = tag
     if q:
         params["name"] = q
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            r = await client.get(
-                f"{RADIO_BROWSER_BASE}/stations/search",
-                params=params,
-                headers={"User-Agent": "MyTube/1.0"},
-            )
-            r.raise_for_status()
-            stations = r.json()
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Radio Browser error: {str(e)}")
+    stations = None
+    last_error: Exception | None = None
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        for base in RADIO_BROWSER_MIRRORS:
+            try:
+                r = await client.get(f"{base}/stations/search", params=params, headers={"User-Agent": "MyTube/1.0"})
+                r.raise_for_status()
+                stations = r.json()
+                break
+            except Exception as e:
+                last_error = e
+    if stations is None:
+        raise HTTPException(status_code=502, detail=f"Radio Browser error: {last_error}")
 
     result = []
     for s in stations:
@@ -427,38 +468,13 @@ async def radio_stream_proxy(url: str, request: Request):
 
 
 @router.get("/api/music/home")
-async def music_home():
-    """YouTube Music home — mix of charts + new releases."""
-    loop = asyncio.get_event_loop()
+async def music_home(country: CountryCode = "ZZ"):
+    """YouTube Music home: chart tracks and top artists for a country."""
     try:
-        def _get():
-            ytm = get_ytm()
-            try:
-                charts = ytm.get_charts(country="ZZ")
-                songs = []
-                for item in charts.get("songs", {}).get("items", [])[:20]:
-                    songs.append({
-                        "videoId": item.get("videoId"),
-                        "title": item.get("title"),
-                        "artists": [{"id": a.get("id"), "name": a.get("name")} for a in item.get("artists", [])],
-                        "album": item.get("album", {}).get("name") if item.get("album") else None,
-                        "thumbnail": _thumb_url(item.get("thumbnails", [])),
-                        "duration": item.get("duration"),
-                        "durationMs": item.get("duration_seconds", 0) * 1000 if item.get("duration_seconds") else 0,
-                    })
-                trending = []
-                for item in charts.get("trending", {}).get("items", [])[:20]:
-                    trending.append({
-                        "videoId": item.get("videoId"),
-                        "title": item.get("title"),
-                        "artists": [{"id": a.get("id"), "name": a.get("name")} for a in item.get("artists", [])],
-                        "thumbnail": _thumb_url(item.get("thumbnails", [])),
-                        "duration": item.get("duration"),
-                    })
-                return {"topSongs": songs, "trending": trending}
-            except Exception:
-                return {"topSongs": [], "trending": []}
-        result = await loop.run_in_executor(None, _get)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Music home error: {str(e)}")
+        charts = await asyncio.to_thread(_load_charts, country)
+    except Exception:
+        if country.upper() == "ZZ":
+            return {"topSongs": [], "trending": [], "artists": []}
+        # Some countries have no charts: fall back to the global ones
+        return await music_home("ZZ")
+    return {"topSongs": charts["songs"][:20], "trending": charts["trending"], "artists": charts["artists"][:12]}
