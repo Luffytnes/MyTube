@@ -45,10 +45,10 @@ async def tmdb_poster(name: str = "", type: str = "movie"):
     try:
         async with httpx_client(timeout=10.0) as client:
             img = await client.get(f"{_TMDB_IMG}/w500{poster_path}")
-        if img.status_code != 200:
+        ct = img.headers.get("content-type", "image/jpeg")
+        if img.status_code != 200 or not ct.startswith("image/"):
             raise HTTPException(status_code=404, detail="Image not found")
-        return Response(content=img.content, media_type=img.headers.get("content-type", "image/jpeg"),
-                        headers={"Cache-Control": "public, max-age=86400"})
+        return Response(content=img.content, media_type=ct, headers={"Cache-Control": "public, max-age=86400"})
     except HTTPException:
         raise
     except Exception:
@@ -79,10 +79,10 @@ async def tmdb_image(path: str = ""):
     try:
         async with httpx_client(timeout=10.0) as client:
             img = await client.get(f"{_TMDB_IMG}{path}")
-        if img.status_code != 200:
+        ct = img.headers.get("content-type", "image/jpeg")
+        if img.status_code != 200 or not ct.startswith("image/"):
             raise HTTPException(status_code=404, detail="Image not found")
-        return Response(content=img.content, media_type=img.headers.get("content-type", "image/jpeg"),
-                        headers={"Cache-Control": "public, max-age=86400"})
+        return Response(content=img.content, media_type=ct, headers={"Cache-Control": "public, max-age=86400"})
     except HTTPException:
         raise
     except Exception:

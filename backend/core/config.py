@@ -2,6 +2,7 @@
 import json
 import os
 import shutil
+import subprocess
 from typing import Any, Dict
 
 import httpx
@@ -45,7 +46,6 @@ INVIDIOUS_TYPES = {"music", "gaming", "news", "movies"}
 YDL_OPTS_BASE: Dict[str, Any] = {
     "quiet": True,
     "no_warnings": True,
-    "nocheckcertificate": True,
 }
 
 # --- HTTP headers ------------------------------------------------------------
@@ -71,6 +71,28 @@ _YT_VIDEOS_TAB_PARAMS = "EgZ2aWRlb3PyBgQKAjoA"
 _FFMPEG = shutil.which("ffmpeg") or "/opt/homebrew/bin/ffmpeg"
 _FFPROBE = shutil.which("ffprobe") or "/opt/homebrew/bin/ffprobe"
 _PROXYCHAINS4 = shutil.which("proxychains4")
+
+
+def _ffmpeg_http_help() -> str:
+    try:
+        return subprocess.run(
+            [_FFMPEG, "-hide_banner", "-h", "protocol=http"],
+            capture_output=True, text=True, timeout=10,
+        ).stdout
+    except Exception:
+        return ""
+
+
+def _http_chunk_args(http_help: str) -> list:
+    # Smaller HTTP range requests keep googlevideo from throttling long reads.
+    # These options only exist since FFmpeg 8.1, and older builds (Debian's 7.1
+    # in the Docker image) abort on unknown options, so add them only if listed.
+    if "-request_size " in http_help and "-initial_request_size " in http_help:
+        return ["-request_size", "1048576", "-initial_request_size", "1048576"]
+    return []
+
+
+_FFMPEG_HTTP_CHUNK_ARGS: list = _http_chunk_args(_ffmpeg_http_help())
 
 _OUTPUT_ARGS = [
     # Disable subtitle/data streams (fMP4 can't mux most subtitle codecs)

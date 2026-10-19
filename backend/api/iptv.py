@@ -44,9 +44,12 @@ async def iptv_status():
 
 @router.post("/api/iptv/credentials")
 async def iptv_save_credentials(body: dict = Body(...)):
-    server = body.get("server", "").rstrip("/")
-    if not server.startswith("http"):
+    server = str(body.get("server", "")).strip().rstrip("/")
+    if not server.startswith(("http://", "https://")):
         server = "http://" + server
+    parsed = urlparse(server)
+    if not parsed.hostname or parsed.query or parsed.fragment:
+        raise HTTPException(status_code=400, detail="Invalid server URL")
     config._xtream_cfg = {"server": server, "username": body.get("username",""), "password": body.get("password","")}
     config._xtream_save()
     return {"ok": True}
@@ -137,9 +140,8 @@ async def iptv_hls_stream(stream_id: str, request: Request):
             resp = await client.get(m3u8_url)
         if resp.status_code != 200:
             raise HTTPException(status_code=502, detail=f"Stream returned HTTP {resp.status_code}")
-        base = str(request.base_url).rstrip("/")
-        proxy_base = f"{base}/api/iptv/proxy"
-        rewritten = rewrite_hls_manifest(resp.text, str(resp.url), proxy_base)
+        # Root-relative: resolved by the player against the manifest URL
+        rewritten = rewrite_hls_manifest(resp.text, str(resp.url), "/api/iptv/proxy")
         return Response(
             content=rewritten,
             media_type="application/vnd.apple.mpegurl",
@@ -164,9 +166,7 @@ async def iptv_hls_proxy(url: str, request: Request):
             resp = await client.get(decoded_url)
         ct = resp.headers.get("content-type", "")
         if "mpegurl" in ct or decoded_url.split("?")[0].endswith(".m3u8"):
-            base = str(request.base_url).rstrip("/")
-            proxy_base = f"{base}/api/iptv/proxy"
-            rewritten = rewrite_hls_manifest(resp.text, decoded_url, proxy_base)
+            rewritten = rewrite_hls_manifest(resp.text, decoded_url, "/api/iptv/proxy")
             return Response(
                 content=rewritten,
                 media_type="application/vnd.apple.mpegurl",
@@ -195,10 +195,10 @@ async def iptv_icon_proxy(url: str):
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Referer": referer,
             })
-        if resp.status_code != 200:
-            raise HTTPException(status_code=404, detail="Icon not found")
         ct = resp.headers.get("content-type", "image/png")
-        return Response(content=resp.content, media_type=ct)
+        if resp.status_code != 200 or not ct.startswith("image/"):
+            raise HTTPException(status_code=404, detail="Icon not found")
+        return Response(content=resp.content, media_type=ct, headers={"Cache-Control": "public, max-age=86400"})
     except HTTPException:
         raise
     except Exception:
@@ -489,8 +489,7 @@ async def iptv_vod_hls(stream_id: str, request: Request, media: str = "movie"):
         resp = await client.get(m3u8_url)
     if resp.status_code != 200 or "#EXTM3U" not in resp.text:
         raise HTTPException(status_code=502, detail="VOD HLS not available")
-    base = str(request.base_url).rstrip("/")
-    rewritten = rewrite_hls_manifest(resp.text, str(resp.url), f"{base}/api/iptv/proxy")
+    rewritten = rewrite_hls_manifest(resp.text, str(resp.url), "/api/iptv/proxy")
     return Response(
         content=rewritten,
         media_type="application/vnd.apple.mpegurl",

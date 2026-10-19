@@ -18,9 +18,9 @@ def cache_set(key: str, data: Any) -> None:
     _cache[key] = data
 
 
-# In-memory thumbnail cache (1 hour TTL) — bounded to 500 entries (~image bytes)
+# In-memory thumbnail cache (1 hour TTL) — bounded to 2000 entries (~30 KB each)
 THUMB_CACHE_TTL = 3600
-_thumb_cache: TTLCache = TTLCache(maxsize=500, ttl=THUMB_CACHE_TTL)
+_thumb_cache: TTLCache = TTLCache(maxsize=2000, ttl=THUMB_CACHE_TTL)
 
 
 def thumb_cache_get(key: str):

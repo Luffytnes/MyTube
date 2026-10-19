@@ -79,9 +79,14 @@ async def vpn_list_configs():
     return {"configs": names, "active": vpn_svc._wireproxy_conf_name}
 
 
+MAX_CONF_BYTES = 64 * 1024  # real WireGuard configs are well under 2 KB
+
+
 @router.post("/api/vpn/upload")
 async def vpn_upload_conf(file: UploadFile = File(...)):
-    content = await file.read()
+    content = await file.read(MAX_CONF_BYTES + 1)
+    if len(content) > MAX_CONF_BYTES:
+        raise HTTPException(status_code=413, detail="Config file too large")
     try:
         raw = content.decode("utf-8")
     except Exception:

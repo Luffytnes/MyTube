@@ -11,7 +11,7 @@ import httpx
 from fastapi import HTTPException
 
 from core import config
-from core.config import _FFMPEG, _FFPROBE, _PROXYCHAINS4
+from core.config import _FFMPEG, _FFMPEG_HTTP_CHUNK_ARGS, _FFPROBE, _PROXYCHAINS4
 from core.cache import (
     stream_url_cache_get,
     stream_url_cache_set,
@@ -149,6 +149,21 @@ async def _get_video_and_audio_urls(video_id: str, itag: str) -> tuple:
     return v_url, a_url
 
 
+MAX_HLS_SESSIONS = 6
+
+
+def _evict_hls_sessions_over_limit() -> None:
+    """Kill least-recently-used sessions so a new one fits (call inside lock)."""
+    while len(_hls_sessions) >= MAX_HLS_SESSIONS:
+        oldest = min(_hls_sessions, key=lambda k: _hls_sessions[k].get("last_access", 0))
+        session = _hls_sessions.pop(oldest)
+        try:
+            session["process"].kill()
+        except Exception:
+            pass
+        shutil.rmtree(session["dir"], ignore_errors=True)
+
+
 async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
     """Start ffmpeg transcoding from `start` seconds. Returns the session key."""
     session_key = f"{video_id}:{itag}:{start}"
@@ -157,9 +172,16 @@ async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
         if session_key in _hls_sessions:
             return session_key
 
-        video_url, audio_url = await _get_video_and_audio_urls(video_id, itag)
-        if not video_url or not audio_url:
-            raise HTTPException(status_code=404, detail="Stream URLs not found")
+    # yt-dlp extraction takes seconds: resolving outside the lock keeps other
+    # videos' playlists and segments responsive in the meantime.
+    video_url, audio_url = await _get_video_and_audio_urls(video_id, itag)
+    if not video_url or not audio_url:
+        raise HTTPException(status_code=404, detail="Stream URLs not found")
+
+    async with _hls_lock:
+        if session_key in _hls_sessions:
+            return session_key
+        _evict_hls_sessions_over_limit()
 
         tmpdir = tempfile.mkdtemp(prefix="mytube_hls_")
         ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -171,9 +193,11 @@ async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
         cmd = [
             *cmd_prefix, _FFMPEG, "-loglevel", "warning", "-y",
             *seek,
+            *_FFMPEG_HTTP_CHUNK_ARGS,
             "-headers", f"User-Agent: {ua}\r\nReferer: https://www.youtube.com/\r\n",
             "-i", video_url,
             *seek,
+            *_FFMPEG_HTTP_CHUNK_ARGS,
             "-headers", f"User-Agent: {ua}\r\nReferer: https://www.youtube.com/\r\n",
             "-i", audio_url,
             "-map", "0:v:0", "-map", "1:a:0",

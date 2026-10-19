@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from core.security import SecurityMiddleware
 from services.vpn import _vpn_watchdog
 from services.ffmpeg import _vod_cache_cleanup_loop, _hls_idle_cleanup_loop
 
@@ -47,6 +48,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Added last so it runs first: cross-site writes are rejected before routing.
+app.add_middleware(SecurityMiddleware)
 
 app.include_router(health_router)
 app.include_router(youtube_router)

@@ -8,13 +8,21 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 from time import time as _time
-from typing import Any, Dict, List, Optional
-from urllib.parse import urlparse
+from typing import Annotated, Any, Dict, List, Optional
+from urllib.parse import quote, urlparse
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Path as PathParam, Query, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 import httpx
-from core.security import validate_proxy_url_async
+from starlette.background import BackgroundTask
+from core.security import (
+    CHANNEL_ID_PATTERN,
+    FORMAT_ID_PATTERN,
+    LANG_PATTERN,
+    PLAYLIST_ID_PATTERN,
+    VIDEO_ID_PATTERN,
+    validate_proxy_url_async,
+)
 from core.cache import (
     cache_get,
     cache_set,
@@ -27,7 +35,7 @@ from core.cache import (
     stream_url_cache_set,
     stream_url_cache_invalidate,
 )
-from core.config import YOUTUBE_HEADERS, _FFMPEG
+from core.config import YOUTUBE_HEADERS, _FFMPEG, _FFMPEG_HTTP_CHUNK_ARGS
 from services import innertube
 from services.innertube import (
     get_ydl_opts,
@@ -52,9 +60,84 @@ from services.ffmpeg import (
     _iptv_vod_hls_sessions,
     _iptv_vod_hls_lock,
     _kill_vod_session,
+    _proxychains_prefix,
+    _start_ffmpeg,
     _start_iptv_vod_hls_session,
 )
+from services.vpn import _get_proxy_url, record_youtube_error
 router = APIRouter()
+
+VideoId = Annotated[str, PathParam(pattern=VIDEO_ID_PATTERN)]
+ChannelId = Annotated[str, PathParam(pattern=CHANNEL_ID_PATTERN)]
+PlaylistId = Annotated[str, PathParam(pattern=PLAYLIST_ID_PATTERN)]
+FormatId = Annotated[str, PathParam(pattern=FORMAT_ID_PATTERN)]
+LangCode = Annotated[str, PathParam(pattern=LANG_PATTERN)]
+OptionalFormatId = Annotated[Optional[str], Query(pattern=FORMAT_ID_PATTERN)]
+
+_MEDIA_UPSTREAM_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Referer": "https://www.youtube.com/",
+}
+
+
+async def _proxy_media(url: str, request: Request, content_type: str, video_id: str) -> Response:
+    """Relay a googlevideo URL with a single upstream request, forwarding the
+    client's Range header and the upstream status and length headers."""
+    headers = dict(_MEDIA_UPSTREAM_HEADERS)
+    if range_header := request.headers.get("range"):
+        headers["Range"] = range_header
+
+    client = httpx_client(
+        timeout=httpx.Timeout(connect=10.0, read=60.0, write=None, pool=10.0),
+        follow_redirects=True,
+    )
+    try:
+        upstream = await client.send(client.build_request("GET", url, headers=headers), stream=True)
+    except Exception:
+        await client.aclose()
+        raise HTTPException(status_code=502, detail="Upstream unreachable")
+
+    if upstream.status_code == 416:
+        content_range = upstream.headers.get("content-range")
+        await upstream.aclose()
+        await client.aclose()
+        return Response(status_code=416, headers={"Content-Range": content_range} if content_range else None)
+
+    if upstream.status_code >= 400:
+        await upstream.aclose()
+        await client.aclose()
+        # Expired or IP-bound URL: drop it so the player's retry re-extracts
+        # instead of being fed YouTube's error page as media bytes.
+        stream_url_cache_invalidate(video_id)
+        record_youtube_error(upstream.status_code)
+        raise HTTPException(status_code=502, detail=f"YouTube returned {upstream.status_code}")
+
+    response_headers = {"Accept-Ranges": "bytes", "Cache-Control": "no-cache"}
+    for name in ("content-length", "content-range"):
+        if value := upstream.headers.get(name):
+            response_headers[name] = value
+
+    async def body():
+        try:
+            async for chunk in upstream.aiter_bytes(65536):
+                yield chunk
+        finally:
+            await upstream.aclose()
+
+    return StreamingResponse(
+        body(),
+        status_code=upstream.status_code,
+        headers=response_headers,
+        media_type=content_type,
+        # Runs even when the client disconnects before the body is consumed
+        background=BackgroundTask(client.aclose),
+    )
+
+
+def _attachment_disposition(stem: str, ext: str) -> str:
+    """Content-Disposition safe for non-Latin titles (headers must be latin-1)."""
+    ascii_stem = stem.encode("ascii", "ignore").decode().strip("-_ ") or "video"
+    return f"attachment; filename=\"{ascii_stem}.{ext}\"; filename*=UTF-8''{quote(f'{stem}.{ext}')}"
 
 # Per-category, per-language search queries — year injected at startup
 _Y = str(datetime.now().year)
@@ -311,7 +394,7 @@ async def search_videos(q: str = Query(..., min_length=1), page: int = Query(1, 
 
 
 @router.get("/api/video/{video_id}")
-async def get_video(video_id: str):
+async def get_video(video_id: VideoId):
     try:
         opts = get_ydl_opts(**{"format": "bestvideo+bestaudio/best"})
         info = await ydl_extract(f"https://www.youtube.com/watch?v={video_id}", opts)
@@ -461,13 +544,13 @@ async def get_video(video_id: str):
 
 
 @router.get("/api/live/{video_id}")
-async def get_live_stream(video_id: str):
+async def get_live_stream(video_id: VideoId):
     """Returns our proxied HLS URL — avoids CORS/auth issues with YouTube CDN."""
     return {"url": f"/api/live/{video_id}/hls", "type": "m3u8"}
 
 
 @router.get("/api/live/{video_id}/hls")
-async def live_hls_master(video_id: str, request: Request):
+async def live_hls_master(video_id: VideoId, request: Request):
     """Fetch the YouTube live HLS master playlist and rewrite URLs through our proxy."""
     try:
         # Use cached URL if still fresh, otherwise fetch via yt-dlp
@@ -492,9 +575,9 @@ async def live_hls_master(video_id: str, request: Request):
                 raise HTTPException(status_code=404, detail="No HLS stream found for this video")
             live_url_cache_set(video_id, hls_url)
 
-        # Determine the proxy base URL (same host as this request)
-        base = str(request.base_url).rstrip("/")
-        proxy_base = f"{base}/api/hls-proxy"
+        # Root-relative URLs resolve against the manifest URL, so they survive
+        # reverse proxies that rewrite Host or drop the external port.
+        proxy_base = "/api/hls-proxy"
 
         async with httpx_client(timeout=15.0, follow_redirects=True) as client:
             resp = await client.get(hls_url, headers=YOUTUBE_HEADERS)
@@ -525,8 +608,7 @@ async def hls_proxy(url: str, request: Request):
     await validate_proxy_url_async(decoded_url)
 
     try:
-        base = str(request.base_url).rstrip("/")
-        proxy_base = f"{base}/api/hls-proxy"
+        proxy_base = "/api/hls-proxy"
 
         async with httpx_client(timeout=15.0, follow_redirects=True) as client:
             resp = await client.get(decoded_url, headers=YOUTUBE_HEADERS)
@@ -554,7 +636,7 @@ async def hls_proxy(url: str, request: Request):
 
 
 @router.get("/api/stream/{video_id}/audio")
-async def stream_audio(video_id: str, request: Request, itag: Optional[str] = None):
+async def stream_audio(video_id: VideoId, request: Request, itag: OptionalFormatId = None):
     """Stream the best audio-only track (for dual video+audio playback in the browser)."""
     try:
         cache_key = f"stream:{video_id}:{itag or 'bestaudio'}"
@@ -584,40 +666,8 @@ async def stream_audio(video_id: str, request: Request, itag: Optional[str] = No
         if not direct_url:
             raise HTTPException(status_code=404, detail="Audio stream not found")
 
-        range_header = request.headers.get("range")
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Referer": "https://www.youtube.com/",
-        }
-        if range_header:
-            headers["Range"] = range_header
-
         content_type = "audio/mp4" if ext in ("m4a", "mp4") else f"audio/{ext}"
-
-        async def stream_generator():
-            async with httpx_client(timeout=None, follow_redirects=True) as client:
-                async with client.stream("GET", direct_url, headers=headers) as response:
-                    async for chunk in response.aiter_bytes(chunk_size=65536):
-                        yield chunk
-
-        async with httpx_client(timeout=10.0, follow_redirects=True) as client:
-            head_resp = await client.head(direct_url, headers=headers)
-        response_headers = {
-            "Content-Type": content_type,
-            "Accept-Ranges": "bytes",
-            "Cache-Control": "no-cache",
-        }
-        if cl := head_resp.headers.get("content-length"):
-            response_headers["Content-Length"] = cl
-        if cr := head_resp.headers.get("content-range"):
-            response_headers["Content-Range"] = cr
-
-        return StreamingResponse(
-            stream_generator(),
-            status_code=206 if range_header else 200,
-            headers=response_headers,
-            media_type=content_type,
-        )
+        return await _proxy_media(direct_url, request, content_type, video_id)
     except HTTPException:
         raise
     except Exception as e:
@@ -625,7 +675,7 @@ async def stream_audio(video_id: str, request: Request, itag: Optional[str] = No
 
 
 @router.get("/api/hls/{video_id}/{itag}/stream.m3u8")
-async def hls_playlist(video_id: str, itag: str, start: int = 0):
+async def hls_playlist(video_id: VideoId, itag: FormatId, start: int = 0):
     """Start (or reuse) an ffmpeg HLS session from `start` seconds."""
     try:
         async with _hls_lock:
@@ -689,7 +739,7 @@ async def hls_playlist(video_id: str, itag: str, start: int = 0):
 
 
 @router.get("/api/hls/{video_id}/{itag}/{start}/{segment}")
-async def hls_segment(video_id: str, itag: str, start: int, segment: str):
+async def hls_segment(video_id: VideoId, itag: FormatId, start: int, segment: str):
     """Serve an HLS segment from the correct session temp dir."""
     if not re.match(r'^seg\d+\.ts$', segment):
         raise HTTPException(status_code=400, detail="Invalid segment name")
@@ -712,7 +762,7 @@ async def hls_segment(video_id: str, itag: str, start: int, segment: str):
 
 
 @router.delete("/api/hls/{video_id}/{itag}")
-async def hls_stop(video_id: str, itag: str):
+async def hls_stop(video_id: VideoId, itag: FormatId):
     """Kill all ffmpeg sessions for this video+itag and clean up."""
     async with _hls_lock:
         _kill_hls_sessions_for(video_id, itag)
@@ -773,8 +823,7 @@ async def iptv_vod_hls2_playlist(
     # Declare EVENT so Shaka starts from the first segment, not the live edge
     if "#EXT-X-PLAYLIST-TYPE" not in content:
         content = content.replace("#EXTM3U", "#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT", 1)
-    base = str(request.base_url).rstrip("/")
-    seg_base = f"{base}/api/iptv/vod_hls2/{stream_id}/{start}"
+    seg_base = f"/api/iptv/vod_hls2/{stream_id}/{start}"
     qs = f"ext={ext}&media={media}&audio_idx={audio_idx}"
 
     content = re.sub(
@@ -823,7 +872,7 @@ async def iptv_vod_hls2_segment(
 
 
 @router.get("/api/stream/{video_id}")
-async def stream_video(video_id: str, request: Request, itag: Optional[str] = None):
+async def stream_video(video_id: VideoId, request: Request, itag: OptionalFormatId = None):
     try:
         cache_key = f"stream:{video_id}:{itag or 'best'}"
         cached = stream_url_cache_get(cache_key)
@@ -855,45 +904,8 @@ async def stream_video(video_id: str, request: Request, itag: Optional[str] = No
         if not direct_url:
             raise HTTPException(status_code=404, detail="Stream URL not found")
 
-        range_header = request.headers.get("range")
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Referer": "https://www.youtube.com/",
-        }
-        if range_header:
-            headers["Range"] = range_header
-
         content_type = "video/mp4" if ext in ("mp4", "m4v") else f"video/{ext}"
-
-        async def stream_generator():
-            async with httpx_client(timeout=None, follow_redirects=True) as client:
-                async with client.stream("GET", direct_url, headers=headers) as response:
-                    async for chunk in response.aiter_bytes(chunk_size=65536):
-                        yield chunk
-
-        # Make a head request to get content length and determine status
-        async with httpx_client(timeout=10.0, follow_redirects=True) as client:
-            head_resp = await client.head(direct_url, headers=headers)
-            response_headers = {
-                "Content-Type": content_type,
-                "Accept-Ranges": "bytes",
-                "Cache-Control": "no-cache",
-            }
-            content_length = head_resp.headers.get("content-length")
-            content_range = head_resp.headers.get("content-range")
-            if content_length:
-                response_headers["Content-Length"] = content_length
-            if content_range:
-                response_headers["Content-Range"] = content_range
-
-            status_code = 206 if range_header else 200
-
-        return StreamingResponse(
-            stream_generator(),
-            status_code=status_code,
-            headers=response_headers,
-            media_type=content_type,
-        )
+        return await _proxy_media(direct_url, request, content_type, video_id)
 
     except HTTPException:
         raise
@@ -901,12 +913,60 @@ async def stream_video(video_id: str, request: Request, itag: Optional[str] = No
         raise HTTPException(status_code=500, detail=f"Streaming failed: {str(e)}")
 
 
-@router.get("/api/trailer/{video_id}")
-async def stream_trailer(video_id: str, request: Request):
-    """Stream a YouTube video as a combined audio+video stream (optimised for trailers).
+def _pick_trailer_streams(formats: List[Dict[str, Any]]) -> Optional[tuple]:
+    """Best ≤720p video-only (H.264 first, for Safari) and best audio-only URLs."""
+    videos = [f for f in formats if f.get("url")
+              and f.get("vcodec") not in (None, "none") and f.get("acodec") in (None, "none")]
+    audios = [f for f in formats if f.get("url")
+              and f.get("acodec") not in (None, "none") and f.get("vcodec") in (None, "none")]
+    small = [f for f in videos if (f.get("height") or 0) <= 720]
+    video_pool = [f for f in small if (f.get("vcodec") or "").startswith("avc1")] or small or videos
+    audio_pool = [f for f in audios if f.get("ext") == "m4a"] or audios
+    if not video_pool or not audio_pool:
+        return None
+    video = max(video_pool, key=lambda f: (f.get("height") or 0, f.get("tbr") or 0))
+    audio = max(audio_pool, key=lambda f: f.get("abr") or 0)
+    return video["url"], audio["url"]
 
-    Uses best[height<=720][ext=mp4] which YouTube always provides as a single
-    merged stream (no DASH splitting), so no FFmpeg merging is required.
+
+async def _remux_trailer(video_url: str, audio_url: str) -> StreamingResponse:
+    upstream_headers = "".join(f"{k}: {v}\r\n" for k, v in _MEDIA_UPSTREAM_HEADERS.items())
+    cmd = [
+        *_proxychains_prefix(_get_proxy_url()), _FFMPEG, "-loglevel", "error",
+        *_FFMPEG_HTTP_CHUNK_ARGS, "-headers", upstream_headers, "-i", video_url,
+        *_FFMPEG_HTTP_CHUNK_ARGS, "-headers", upstream_headers, "-i", audio_url,
+        "-map", "0:v:0", "-map", "1:a:0", "-c", "copy",
+        "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+        "-f", "mp4", "pipe:1",
+    ]
+    try:
+        proc, first_chunk = await _start_ffmpeg(cmd)
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=f"Trailer remux failed: {e}")
+
+    async def body():
+        try:
+            yield first_chunk
+            while chunk := await proc.stdout.read(65536):
+                yield chunk
+        finally:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+
+    # A live remux cannot honour byte ranges: tell the player not to try.
+    return StreamingResponse(body(), media_type="video/mp4",
+                             headers={"Accept-Ranges": "none", "Cache-Control": "no-cache"})
+
+
+@router.get("/api/trailer/{video_id}")
+async def stream_trailer(video_id: VideoId, request: Request):
+    """Stream a YouTube video as a single audio+video file (optimised for trailers).
+
+    Prefers a pre-merged format (relayed with Range support). YouTube no longer
+    offers those for most videos, so otherwise ffmpeg remuxes the best ≤720p
+    video-only and audio-only streams into fragmented MP4 on the fly.
     """
     try:
         cache_key = f"stream:{video_id}:trailer"
@@ -941,6 +1001,9 @@ async def stream_trailer(video_id: str, request: Request):
                     direct_url = chosen["url"]
                     ext = chosen.get("ext", "mp4")
                 else:
+                    pair = _pick_trailer_streams(_formats)
+                    if pair:
+                        return await _remux_trailer(*pair)
                     direct_url, ext = None, None
             if direct_url:
                 stream_url_cache_set(cache_key, direct_url, ext or "mp4")
@@ -948,42 +1011,8 @@ async def stream_trailer(video_id: str, request: Request):
         if not direct_url:
             raise HTTPException(status_code=404, detail="Trailer not available")
 
-        range_header = request.headers.get("range")
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Referer": "https://www.youtube.com/",
-        }
-        if range_header:
-            headers["Range"] = range_header
-
         content_type = "video/mp4" if ext in ("mp4", "m4v") else f"video/{ext}"
-
-        async def stream_generator():
-            async with httpx_client(timeout=None, follow_redirects=True) as client:
-                async with client.stream("GET", direct_url, headers=headers) as response:
-                    async for chunk in response.aiter_bytes(chunk_size=65536):
-                        yield chunk
-
-        async with httpx_client(timeout=10.0, follow_redirects=True) as client:
-            head_resp = await client.head(direct_url, headers=headers)
-            response_headers = {
-                "Content-Type": content_type,
-                "Accept-Ranges": "bytes",
-                "Cache-Control": "no-cache",
-            }
-            content_length = head_resp.headers.get("content-length")
-            content_range = head_resp.headers.get("content-range")
-            if content_length:
-                response_headers["Content-Length"] = content_length
-            if content_range:
-                response_headers["Content-Range"] = content_range
-
-        return StreamingResponse(
-            stream_generator(),
-            status_code=206 if range_header else 200,
-            headers=response_headers,
-            media_type=content_type,
-        )
+        return await _proxy_media(direct_url, request, content_type, video_id)
 
     except HTTPException:
         raise
@@ -992,18 +1021,14 @@ async def stream_trailer(video_id: str, request: Request):
 
 
 @router.get("/api/dash/{video_id}.mpd")
-async def get_dash_mpd(video_id: str, request: Request):
+async def get_dash_mpd(video_id: VideoId, request: Request):
     """Generate a DASH MPD manifest for the given video.
 
     All video/audio representations point back to our proxy endpoints,
     which use the stream URL cache to avoid repeated yt-dlp calls.
     """
     try:
-        opts = get_ydl_opts(**{
-            "quiet": True,
-            "no_warnings": True,
-            "nocheckcertificate": True,
-        })
+        opts = get_ydl_opts()
         info = await ydl_extract(f"https://www.youtube.com/watch?v={video_id}", opts)
         if not info:
             raise HTTPException(status_code=404, detail="Video not found")
@@ -1065,14 +1090,12 @@ async def get_dash_mpd(video_id: str, request: Request):
         video_reprs.sort(key=lambda r: -r["height"])
         audio_reprs.sort(key=lambda r: -r["bandwidth"])
 
-        # Build base URL prefix
-        base_req = str(request.base_url).rstrip("/")
 
         def _xml_url(path: str) -> str:
             return html_lib.escape(path, quote=False)
 
         def _video_repr(r: dict) -> str:
-            url = _xml_url(f"{base_req}/api/stream/{video_id}?itag={r['itag']}")
+            url = _xml_url(f"/api/stream/{video_id}?itag={r['itag']}")
             return (
                 f'      <Representation id="{r["itag"]}" mimeType="{r["mime"]}" '
                 f'codecs="{r["codecs"]}" bandwidth="{r["bandwidth"]}" '
@@ -1085,7 +1108,7 @@ async def get_dash_mpd(video_id: str, request: Request):
             )
 
         def _audio_repr(r: dict) -> str:
-            url = _xml_url(f"{base_req}/api/stream/{video_id}/audio?itag={r['itag']}")
+            url = _xml_url(f"/api/stream/{video_id}/audio?itag={r['itag']}")
             return (
                 f'      <Representation id="{r["itag"]}" mimeType="{r["mime"]}" '
                 f'codecs="{r["codecs"]}" bandwidth="{r["bandwidth"]}">\n'
@@ -1133,7 +1156,7 @@ async def get_dash_mpd(video_id: str, request: Request):
 
 
 @router.get("/api/playlist/{playlist_id}")
-async def get_playlist(playlist_id: str):
+async def get_playlist(playlist_id: PlaylistId):
     """Fetch video list for a YouTube playlist."""
     cached = cache_get(f"playlist:{playlist_id}")
     if cached:
@@ -1178,7 +1201,7 @@ async def get_playlist(playlist_id: str):
 
 
 @router.get("/api/subtitles/{video_id}")
-async def list_subtitles(video_id: str):
+async def list_subtitles(video_id: VideoId):
     """Return list of available subtitle/caption tracks for a video."""
     try:
         opts = get_ydl_opts(**{
@@ -1216,7 +1239,7 @@ async def list_subtitles(video_id: str):
 
 
 @router.get("/api/subtitles/{video_id}/{lang}")
-async def get_subtitle_vtt(video_id: str, lang: str, auto: bool = False):
+async def get_subtitle_vtt(video_id: VideoId, lang: LangCode, auto: bool = False):
     """Proxy a subtitle VTT file for a given language."""
     try:
         opts = get_ydl_opts(**{"skip_download": True})
@@ -1254,37 +1277,31 @@ async def get_subtitle_vtt(video_id: str, lang: str, auto: bool = False):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+_THUMB_FILES = {"maxres": "maxresdefault", "hq": "hqdefault", "mq": "mqdefault"}
+_THUMB_CACHE_CONTROL = {"Cache-Control": "public, max-age=86400"}
+
+
 @router.get("/api/thumbnail/{video_id}")
-async def get_thumbnail(video_id: str):
-    cached = thumb_cache_get(video_id)
+async def get_thumbnail(video_id: VideoId, q: str = Query("hq", pattern="^(maxres|hq|mq)$")):
+    """Proxy a video thumbnail so the browser never contacts i.ytimg.com."""
+    cache_key = f"{video_id}:{q}"
+    cached = thumb_cache_get(cache_key)
     if cached:
         data, ct = cached
-        return Response(content=data, media_type=ct, headers={"Cache-Control": "public, max-age=3600"})
+        return Response(content=data, media_type=ct, headers=_THUMB_CACHE_CONTROL)
 
+    preferred = _THUMB_FILES[q]
+    candidates = [preferred] + [f for f in ("hqdefault", "mqdefault", "default") if f != preferred]
     async with httpx_client(timeout=10.0, follow_redirects=True) as client:
-        for quality in ["hqdefault", "mqdefault", "default"]:
+        for quality in candidates:
             try:
-                url = f"https://i.ytimg.com/vi/{video_id}/{quality}.jpg"
-                resp = await client.get(url)
+                resp = await client.get(f"https://i.ytimg.com/vi/{video_id}/{quality}.jpg")
                 if resp.status_code == 200:
-                    thumb_cache_set(video_id, resp.content, "image/jpeg")
-                    return Response(
-                        content=resp.content,
-                        media_type="image/jpeg",
-                        headers={"Cache-Control": "public, max-age=3600"},
-                    )
+                    thumb_cache_set(cache_key, resp.content, "image/jpeg")
+                    return Response(content=resp.content, media_type="image/jpeg", headers=_THUMB_CACHE_CONTROL)
             except Exception:
                 continue
     raise HTTPException(status_code=404, detail="Thumbnail not found")
-
-
-@router.get("/api/debug/channel_thumbnails/{channel_id}")
-async def debug_channel_thumbnails(channel_id: str):
-    opts = get_ydl_opts(**{"extract_flat": True, "playlistend": 1})
-    info = await ydl_extract(f"https://www.youtube.com/channel/{channel_id}", opts)
-    if not info:
-        return {"error": "not found"}
-    return {"thumbnails": info.get("thumbnails", [])}
 
 
 async def _get_avatar_url_via_youtubei(channel_id: str) -> Optional[str]:
@@ -1333,7 +1350,7 @@ async def _get_avatar_url_via_youtubei(channel_id: str) -> Optional[str]:
 
 
 @router.get("/api/channel_thumbnail/{channel_id}")
-async def get_channel_thumbnail(channel_id: str):
+async def get_channel_thumbnail(channel_id: ChannelId):
     cached = thumb_cache_get(f"avatar:{channel_id}")
     if cached:
         data, ct = cached
@@ -1392,8 +1409,8 @@ async def get_channel_thumbnail(channel_id: str):
 
 @router.get("/api/download/{video_id}")
 async def download_video(
-    video_id: str,
-    itag: Optional[str] = None,
+    video_id: VideoId,
+    itag: OptionalFormatId = None,
     format: str = "mp4",
     quality: str = "best",
 ):
@@ -1444,8 +1461,8 @@ async def download_video(
 
         # Sanitize filename
         safe_title = re.sub(r'[^\w\s-]', '', title or video_id).strip()
-        safe_title = re.sub(r'[-\s]+', '-', safe_title)[:100]
-        filename = f"{safe_title}.{ext}"
+        safe_title = re.sub(r'[-\s]+', '-', safe_title)[:100] or video_id
+        disposition = _attachment_disposition(safe_title, ext)
 
         yt_headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -1455,8 +1472,9 @@ async def download_video(
         if needs_merge and audio_url:
             # Use ffmpeg to merge video-only + audio-only streams on the fly
             async def ffmpeg_merge_generator():
+                # Same VPN routing as HLS sessions, so downloads do not leak the real IP
                 cmd = [
-                    _FFMPEG, "-y",
+                    *_proxychains_prefix(_get_proxy_url()), _FFMPEG, "-y",
                     "-headers", "".join(f"{k}: {v}\r\n" for k, v in yt_headers.items()),
                     "-i", video_url,
                     "-headers", "".join(f"{k}: {v}\r\n" for k, v in yt_headers.items()),
@@ -1488,7 +1506,7 @@ async def download_video(
                 ffmpeg_merge_generator(),
                 media_type="application/octet-stream",
                 headers={
-                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "Content-Disposition": disposition,
                     "Cache-Control": "no-cache",
                 },
             )
@@ -1503,7 +1521,7 @@ async def download_video(
                 download_generator(),
                 media_type="application/octet-stream",
                 headers={
-                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "Content-Disposition": disposition,
                     "Cache-Control": "no-cache",
                 },
             )
@@ -1572,7 +1590,7 @@ async def _get_banner_url_via_youtubei(channel_id: str) -> Optional[str]:
 
 
 @router.get("/api/channel_banner/{channel_id}")
-async def get_channel_banner(channel_id: str):
+async def get_channel_banner(channel_id: ChannelId):
     cached = thumb_cache_get(f"banner:{channel_id}")
     if cached:
         data, ct = cached
@@ -1644,7 +1662,7 @@ async def get_channel_banner(channel_id: str):
 
 
 @router.get("/api/channel/{channel_id}")
-async def get_channel(channel_id: str):
+async def get_channel(channel_id: ChannelId):
     try:
         opts = get_ydl_opts(**{"extract_flat": True, "playlistend": 1})
         info = await ydl_extract(f"https://www.youtube.com/channel/{channel_id}", opts)
@@ -1673,7 +1691,7 @@ async def get_channel(channel_id: str):
 
 
 @router.get("/api/channel/{channel_id}/videos")
-async def get_channel_videos(channel_id: str, page: int = Query(1, ge=1)):
+async def get_channel_videos(channel_id: ChannelId, page: int = Query(1, ge=1)):
     # Attempt 1: YouTube internal API with pagination
     videos = await youtubei_channel_videos(channel_id, page)
     if videos:

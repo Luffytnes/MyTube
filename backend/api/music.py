@@ -1,17 +1,20 @@
 """YouTube Music and internet radio API routes."""
 import asyncio
 import urllib.parse
-from typing import Dict, Optional
+from typing import Annotated, Dict, Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Path, Request
 from fastapi.responses import StreamingResponse
 from ytmusicapi import YTMusic as _YTMusic
 
 from services.innertube import httpx_client
 from services.vpn import _get_proxy_url, _ytm_cache
 from api.podcasts import _proxy_podcast_thumb
-from core.security import validate_proxy_url
+from core.security import PLAYLIST_ID_PATTERN, VIDEO_ID_PATTERN, validate_proxy_url
+
+BrowseId = Annotated[str, Path(pattern=PLAYLIST_ID_PATTERN)]
+VideoId = Annotated[str, Path(pattern=VIDEO_ID_PATTERN)]
 
 router = APIRouter()
 
@@ -141,7 +144,7 @@ async def music_search(q: str, filter: str = "songs"):
 
 
 @router.get("/api/music/artist/{browse_id}")
-async def music_artist(browse_id: str):
+async def music_artist(browse_id: BrowseId):
     """Artist page from YouTube Music."""
     loop = asyncio.get_event_loop()
     try:
@@ -202,7 +205,7 @@ async def music_artist(browse_id: str):
 
 
 @router.get("/api/music/album/{browse_id}")
-async def music_album(browse_id: str):
+async def music_album(browse_id: BrowseId):
     """Album page from YouTube Music."""
     loop = asyncio.get_event_loop()
     try:
@@ -241,7 +244,7 @@ async def music_album(browse_id: str):
 
 
 @router.get("/api/music/playlist/{playlist_id}")
-async def music_playlist(playlist_id: str):
+async def music_playlist(playlist_id: BrowseId):
     """Playlist from YouTube Music."""
     loop = asyncio.get_event_loop()
     try:
@@ -277,7 +280,7 @@ async def music_playlist(playlist_id: str):
 
 
 @router.get("/api/music/song/{video_id}")
-async def music_song(video_id: str):
+async def music_song(video_id: VideoId):
     """Get song metadata from YouTube Music."""
     loop = asyncio.get_event_loop()
     try:

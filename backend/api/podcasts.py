@@ -127,10 +127,10 @@ async def podcast_image_proxy(url: str):
     try:
         async with httpx_client(timeout=8.0) as client:
             resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"}, follow_redirects=True)
-            if resp.status_code >= 400:
+            ct = resp.headers.get("content-type", "image/jpeg")
+            if resp.status_code >= 400 or not ct.startswith("image/"):
                 return Response(content=_EMPTY_GIF, media_type="image/gif",
                                 headers={"Cache-Control": "public, max-age=3600"})
-            ct = resp.headers.get("content-type", "image/jpeg")
             return Response(
                 content=resp.content,
                 media_type=ct,
