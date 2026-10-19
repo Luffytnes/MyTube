@@ -12,10 +12,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: "pip"
@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: ShellCheck
         run: shellcheck start.sh setup-auth.sh backup.sh restore.sh wireproxy/entrypoint.sh
@@ -56,10 +56,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "20"
           cache: "npm"
@@ -94,7 +94,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -132,7 +132,7 @@ jobs:
     needs: [backend, frontend, docker]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -181,6 +181,25 @@ jobs:
         run: |
           STATUS=$(curl -so /dev/null -w '%{http_code}' http://localhost:54321/_health)
           [ "$STATUS" = "200" ] || { echo "Expected 200 on /_health, got $STATUS"; exit 1; }
+
+      - name: Check that /api/yt/* reaches the Next.js route handlers
+        # YouTube may block CI runners, so only assert the route exists:
+        # FastAPI would answer 404 {"detail":"Not Found"} for these paths.
+        run: |
+          BODY=$(curl -s -u testuser:testpass -w '\n%{http_code}' --max-time 60 \
+            "http://localhost:54321/api/yt/search?q=test")
+          STATUS=$(echo "$BODY" | tail -n1)
+          echo "status=$STATUS"
+          [ "$STATUS" != "404" ] || { echo "/api/yt/search was routed to the wrong service"; exit 1; }
+
+      - name: Check API security headers and CSRF guard
+        run: |
+          HEADERS=$(curl -s -D - -o /dev/null -u testuser:testpass http://localhost:54321/api/health)
+          echo "$HEADERS" | grep -qi "content-security-policy: .*sandbox" \
+            || { echo "Missing sandbox CSP on /api/ responses"; exit 1; }
+          STATUS=$(curl -so /dev/null -w '%{http_code}' -u testuser:testpass \
+            -X POST -H "Sec-Fetch-Site: cross-site" http://localhost:54321/api/vpn/stop)
+          [ "$STATUS" = "403" ] || { echo "Expected cross-site POST to be blocked, got $STATUS"; exit 1; }
 
       - name: Show container logs on failure
         if: failure()
