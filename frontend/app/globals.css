@@ -2,160 +2,282 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Dark theme (default) ── */
+/* ════════════════════════════════════════════════════════════════════════════
+   Cinéma sombre — design tokens
+   Triplets (R G B) so Tailwind opacity modifiers work: bg-yt-red/20, etc.
+   ════════════════════════════════════════════════════════════════════════════ */
+
 :root {
-  --yt-bg:             15 15 15;
-  --yt-secondary:      33 33 33;
-  --yt-hover:          39 39 39;
-  --yt-text:           241 241 241;
-  --yt-text-secondary: 170 170 170;
-  --yt-text-muted:     113 113 113;
-  --yt-red:            255 0 0;
-  --yt-red-hover:      204 0 0;
-  --yt-border:         63 63 63;
+  --yt-bg:             8 10 15;
+  --surface:           14 17 24;
+  --yt-secondary:      22 26 35;
+  --yt-hover:          31 36 48;
+  --yt-border:         42 48 62;
+  --yt-text:           240 242 247;
+  --yt-text-secondary: 168 175 192;
+  --yt-text-muted:     114 122 141;
+  --yt-red:            255 71 87;
+  --yt-red-hover:      255 107 92;
+  --accent-2:          255 143 92;
+  --glass-edge:        255 255 255;
+  --ambient-strength:  1;
+  color-scheme: dark;
 }
 
-/* ── Light theme ── */
 :root[data-theme="light"] {
-  --yt-bg:             255 255 255;
-  --yt-secondary:      242 242 242;
-  --yt-hover:          229 229 229;
-  --yt-text:           15 15 15;
-  --yt-text-secondary: 96 96 96;
-  --yt-text-muted:     144 144 144;
-  --yt-red:            255 0 0;
-  --yt-red-hover:      204 0 0;
-  --yt-border:         211 211 211;
+  --yt-bg:             246 246 249;
+  --surface:           255 255 255;
+  --yt-secondary:      235 236 241;
+  --yt-hover:          225 227 234;
+  --yt-border:         216 219 228;
+  --yt-text:           14 16 22;
+  --yt-text-secondary: 78 84 99;
+  --yt-text-muted:     122 128 143;
+  --yt-red:            232 44 66;
+  --yt-red-hover:      212 36 56;
+  --accent-2:          245 112 66;
+  --glass-edge:        0 0 0;
+  --ambient-strength:  0.45;
+  color-scheme: light;
 }
+
+/* ── Base ────────────────────────────────────────────────────────────────── */
 
 html {
   background: rgb(var(--yt-bg));
   scroll-behavior: smooth;
   overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   background: rgb(var(--yt-bg));
   color: rgb(var(--yt-text));
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  font-family: theme('fontFamily.sans');
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  transition: background-color 0.25s ease, color 0.25s ease;
   overflow-x: hidden;
   max-width: 100vw;
 }
 
-/* Hide scrollbar utility */
+/* Ambient light + film grain, painted behind all content (z-index -1 keeps it
+   off the video frame). */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(1100px 620px at 78% -12%, rgb(var(--yt-red) / calc(0.13 * var(--ambient-strength))), transparent 62%),
+    radial-gradient(900px 560px at -8% 8%, rgb(var(--accent-2) / calc(0.07 * var(--ambient-strength))), transparent 60%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.045 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+h1, h2, h3, .font-display {
+  font-family: theme('fontFamily.display');
+  letter-spacing: -0.02em;
+}
+
+/* Small UI text stays in Inter even inside headings-styled components */
+h3.text-sm, h3.text-xs, h2.text-sm, h2.text-xs {
+  font-family: theme('fontFamily.sans');
+  letter-spacing: normal;
+}
+
+::selection {
+  background: rgb(var(--yt-red) / 0.35);
+  color: rgb(var(--yt-text));
+}
+
+:focus-visible {
+  outline: 2px solid rgb(var(--yt-red));
+  outline-offset: 2px;
+}
+input:focus-visible, textarea:focus-visible { outline: none; }
+
+/* ── Scrollbars ──────────────────────────────────────────────────────────── */
+
 .scrollbar-none::-webkit-scrollbar { display: none; }
 .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Custom scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: rgb(var(--yt-bg)); }
-::-webkit-scrollbar-thumb { background: rgb(var(--yt-border)); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgb(var(--yt-text-muted)); }
-* { scrollbar-width: thin; scrollbar-color: rgb(var(--yt-border)) rgb(var(--yt-bg)); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--yt-border));
+  border-radius: 10px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background-color: rgb(var(--yt-text-muted)); }
+* { scrollbar-width: thin; scrollbar-color: rgb(var(--yt-border)) transparent; }
 
-/* Video player custom controls */
+/* ── Media ───────────────────────────────────────────────────────────────── */
+
 video::-webkit-media-controls { display: none !important; }
 video::-webkit-media-controls-enclosure { display: none !important; }
 video::-moz-media-controls { display: none; }
 
-/* Progress bar range input */
 input[type='range'] {
   -webkit-appearance: none;
   appearance: none;
   background: transparent;
   cursor: pointer;
 }
-
 input[type='range']::-webkit-slider-runnable-track {
   background: rgb(var(--yt-border));
-  height: 3px;
-  border-radius: 3px;
+  height: 4px;
+  border-radius: 4px;
 }
-
 input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   margin-top: -5px;
-  background-color: #ff0000;
-  height: 13px;
-  width: 13px;
+  background: linear-gradient(135deg, rgb(var(--yt-red)), rgb(var(--accent-2)));
+  height: 14px;
+  width: 14px;
   border-radius: 50%;
+  box-shadow: 0 0 0 4px rgb(var(--yt-red) / 0.18);
 }
-
-input[type='range']:focus::-webkit-slider-runnable-track {
-  background: rgb(var(--yt-text-muted));
-}
-
+input[type='range']:focus::-webkit-slider-runnable-track { background: rgb(var(--yt-text-muted)); }
 input[type='range']::-moz-range-track {
   background: rgb(var(--yt-border));
-  height: 3px;
-  border-radius: 3px;
+  height: 4px;
+  border-radius: 4px;
 }
-
 input[type='range']::-moz-range-thumb {
-  background-color: #ff0000;
-  height: 13px;
-  width: 13px;
+  background: linear-gradient(135deg, rgb(var(--yt-red)), rgb(var(--accent-2)));
+  height: 14px;
+  width: 14px;
   border-radius: 50%;
   border: none;
 }
 
-/* Volume slider */
 .volume-slider::-webkit-slider-runnable-track {
-  background: rgb(var(--yt-border));
-  height: 3px;
-  border-radius: 3px;
+  background: rgb(255 255 255 / 0.25);
+  height: 4px;
+  border-radius: 4px;
 }
-
 .volume-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   margin-top: -5px;
-  background-color: rgb(var(--yt-text));
-  height: 13px;
-  width: 13px;
+  background-color: #fff;
+  height: 14px;
+  width: 14px;
   border-radius: 50%;
 }
 
-/* Line clamp utilities */
-.line-clamp-1 {
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
+/* ── Components ──────────────────────────────────────────────────────────── */
+
+@layer components {
+  /* Frosted panel used by the header, menus and floating controls */
+  .glass {
+    background-color: rgb(var(--surface) / 0.68);
+    -webkit-backdrop-filter: saturate(170%) blur(22px);
+    backdrop-filter: saturate(170%) blur(22px);
+    border: 1px solid rgb(var(--glass-edge) / 0.07);
+  }
+
+  /* Translucent chip over imagery (thumbnails, hero) */
+  .glass-chip {
+    background-color: rgb(8 10 15 / 0.55);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgb(255 255 255 / 0.12);
+    color: #fff;
+  }
+
+  .text-gradient {
+    background-image: linear-gradient(135deg, rgb(var(--yt-red)), rgb(var(--accent-2)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .btn-accent {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-accent-gradient px-5 h-10 text-sm font-semibold text-white shadow-glow transition-all duration-200 hover:brightness-110 active:scale-[0.97];
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-yt-border/70 bg-yt-secondary/70 px-4 h-10 text-sm font-medium text-yt-text transition-all duration-200 hover:bg-yt-hover hover:border-yt-border active:scale-[0.97];
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-yt-border/60 bg-yt-secondary/60 px-3.5 h-8 text-[13px] font-medium text-yt-text-secondary transition-all duration-200 hover:text-yt-text hover:border-yt-border;
+  }
+  .chip-active {
+    @apply border-transparent bg-yt-text text-yt-bg hover:text-yt-bg;
+  }
+
+  .section-title {
+    @apply font-display text-xl font-semibold tracking-tight text-yt-text;
+  }
 }
 
-.line-clamp-2 {
+/* Declared here too: Tailwind only emits keyframes for animation utilities
+   that appear in markup, and these are also used by plain CSS below. */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+
+/* Shimmering placeholder (replaces animate-pulse) */
+.skeleton {
+  position: relative;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  background-color: rgb(var(--yt-secondary));
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(var(--glass-edge) / 0.05), transparent);
+  animation: shimmer 1.6s infinite;
 }
 
-/* Channel avatar placeholder */
+/* Staggered entrance for grids and rails */
+.stagger > * { animation: fade-up 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 40ms; }
+.stagger > *:nth-child(3) { animation-delay: 80ms; }
+.stagger > *:nth-child(4) { animation-delay: 120ms; }
+.stagger > *:nth-child(5) { animation-delay: 160ms; }
+.stagger > *:nth-child(6) { animation-delay: 200ms; }
+.stagger > *:nth-child(7) { animation-delay: 240ms; }
+.stagger > *:nth-child(8) { animation-delay: 280ms; }
+.stagger > *:nth-child(n+9) { animation-delay: 320ms; }
+
+/* ── Legacy helpers still used across pages ─────────────────────────────── */
+
+.line-clamp-1 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; }
+.line-clamp-2 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+
 .avatar-placeholder {
   background: linear-gradient(135deg, rgb(var(--yt-border)) 0%, rgb(var(--yt-secondary)) 100%);
 }
 
-/* Transition for sidebar */
-.sidebar-transition {
-  transition: width 0.2s ease, transform 0.2s ease;
-}
+.sidebar-transition { transition: width 0.2s ease, transform 0.2s ease; }
 
-/* Search bar focus ring */
 .search-input:focus {
   outline: none;
-  border-color: #1c62b9;
-  box-shadow: inset 0 0 0 1px #1c62b9;
+  border-color: rgb(var(--yt-red) / 0.6);
+  box-shadow: 0 0 0 4px rgb(var(--yt-red) / 0.12);
 }
 
-/* Category chip active state */
-.category-chip {
-  transition: background-color 0.1s ease;
-}
+.category-chip { transition: background-color 0.15s ease, color 0.15s ease; }
 
-/* Thumbnail hover */
 .thumbnail-wrapper { overflow: hidden; }
-.thumbnail-wrapper img { transition: transform 0.2s ease; }
+.thumbnail-wrapper img { transition: transform 0.5s cubic-bezier(0.2, 0.7, 0.2, 1); }
 .thumbnail-wrapper:hover img { transform: scale(1.05); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

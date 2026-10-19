@@ -1,12 +1,16 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
+import { useRegion } from '@/lib/regionContext'
 import Header from './Header'
 import Sidebar from './Sidebar'
 
 export default function ClientLayoutWrapper({ children }: { children: ReactNode }) {
   const pathname = usePathname()
+  const { lang } = useRegion()
+  // Screen readers and hyphenation follow the UI language, not the static "en"
+  useEffect(() => { document.documentElement.lang = lang }, [lang])
   const isMusic = pathname.startsWith('/music')
   const isTv = pathname.startsWith('/tv')
 

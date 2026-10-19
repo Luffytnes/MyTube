@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback, FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Tv, Search, X, Shield } from 'lucide-react'
+import { Search, X, Shield } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
+import Logo from '@/components/layout/Logo'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -54,28 +55,20 @@ export default function TvHeader() {
   }
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 flex items-center h-14 px-4 bg-yt-bg border-b border-yt-border/40 gap-4">
-      {/* Logo */}
-      <Link href="/tv" className="flex items-center gap-2 flex-shrink-0 group">
-        <div className="flex items-center justify-center w-8 h-8 bg-yt-red rounded-full group-hover:bg-yt-red-hover transition-colors">
-          <Tv className="w-4 h-4 text-white" />
-        </div>
-        <div className="hidden sm:flex flex-col leading-none">
-          <span className="text-yt-text font-bold text-base tracking-tight">MyTube</span>
-          <span className="text-yt-red text-[10px] font-semibold tracking-widest uppercase">TV</span>
-        </div>
-      </Link>
+    <header className="fixed top-0 left-0 right-0 z-50 flex items-center h-14 px-3 sm:px-5 gap-3 bg-yt-bg/70 backdrop-blur-2xl backdrop-saturate-150 border-b border-yt-border/40">
+      <Logo href="/tv" suffix="TV" />
 
       {/* Search */}
-      <form onSubmit={handleSearch} className="flex-1 flex items-center max-w-lg mx-auto gap-2">
-        <div className="flex-1 flex items-center h-10 rounded-full border border-yt-border bg-yt-secondary px-4 gap-2 focus-within:border-yt-red transition-colors">
-          <Search className="w-4 h-4 text-yt-text-muted flex-shrink-0" />
+      <form onSubmit={handleSearch} role="search" className="flex-1 max-w-xl mx-auto">
+        <div className="group flex items-center h-10 rounded-full border border-yt-border/70 bg-yt-secondary/70 px-3.5 gap-2.5 transition-all duration-200 hover:border-yt-border focus-within:border-yt-red/50 focus-within:bg-yt-secondary focus-within:shadow-[0_0_0_4px_rgb(var(--yt-red)/0.12)]">
+          <Search className="w-[18px] h-[18px] text-yt-text-muted group-focus-within:text-yt-red transition-colors flex-shrink-0" />
           <input
-            type="text"
+            type="search"
+            enterKeyHint="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t('tv_search_placeholder')}
-            className="flex-1 bg-transparent text-sm text-yt-text placeholder-yt-text-muted focus:outline-none"
+            className="flex-1 min-w-0 bg-transparent text-sm text-yt-text placeholder-yt-text-muted focus:outline-none [&::-webkit-search-cancel-button]:hidden"
             style={{ fontSize: '16px', touchAction: 'manipulation' }}
           />
           {query && (
@@ -84,24 +77,25 @@ export default function TvHeader() {
             </button>
           )}
         </div>
-        <button type="submit" className="flex items-center justify-center w-10 h-10 rounded-full bg-yt-secondary hover:bg-yt-hover border border-yt-border text-yt-text-secondary hover:text-yt-text transition-colors flex-shrink-0">
-          <Search className="w-4 h-4" />
-        </button>
       </form>
 
       {/* Right */}
       <div className="flex items-center gap-2 flex-shrink-0">
         <div
-          className="flex items-center gap-1.5 px-3 h-8 rounded-full bg-yt-secondary border border-yt-border text-xs text-yt-text-secondary cursor-default"
+          className="flex items-center gap-2 pl-2.5 pr-3 h-9 rounded-full border border-yt-border/70 bg-yt-secondary/60 text-xs font-medium text-yt-text-secondary cursor-default"
           title={shieldTooltip || (vpnConnected ? 'VPN actif' : 'Sans VPN')}
         >
-          <Shield className={`w-3.5 h-3.5 ${vpnConnected ? 'text-green-400' : 'text-red-400'}`} />
+          <span className="relative flex w-2 h-2">
+            {vpnConnected && <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-60" />}
+            <span className={`relative w-2 h-2 rounded-full ${vpnConnected ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+          </span>
+          <Shield className={`w-3.5 h-3.5 ${vpnConnected ? 'text-emerald-400' : 'text-yt-text-muted'}`} />
           <span className="hidden md:block">{t('privacy_badge')}</span>
         </div>
 
         <Link
           href="/"
-          className="hidden sm:flex items-center gap-1.5 px-3 h-9 rounded-full bg-yt-secondary hover:bg-yt-hover border border-yt-border text-xs text-yt-text-secondary hover:text-yt-text transition-colors"
+          className="hidden sm:flex items-center gap-1.5 px-3.5 h-9 rounded-full border border-yt-border/70 bg-yt-secondary/60 hover:bg-yt-hover text-xs font-medium text-yt-text-secondary hover:text-yt-text transition-colors"
         >
           ← {t('tv_back')}
         </Link>

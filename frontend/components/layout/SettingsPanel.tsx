@@ -370,12 +370,12 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:px-4">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60" aria-hidden="true" />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" aria-hidden="true" />
 
       {/* Modal — bottom sheet on mobile, centered dialog on desktop */}
       <div
         ref={modalRef}
-        className="relative z-10 flex flex-col w-full sm:flex-row sm:max-w-2xl sm:h-[560px] bg-yt-bg border border-yt-border rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[92dvh]"
+        className="relative z-10 flex flex-col w-full sm:flex-row sm:max-w-3xl sm:h-[600px] bg-surface/95 backdrop-blur-2xl border border-yt-border/60 rounded-t-3xl sm:rounded-3xl shadow-elevated overflow-hidden max-h-[92dvh] animate-fade-up"
       >
         {/* ── Mobile: drag handle ── */}
         <div className="sm:hidden flex-shrink-0 flex flex-col">
@@ -397,7 +397,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 onClick={() => setTab(id)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium flex-shrink-0 transition-colors ${
                   tab === id
-                    ? 'bg-yt-red text-white'
+                    ? 'bg-accent-gradient text-white shadow-glow'
                     : 'bg-yt-secondary text-yt-text-secondary'
                 }`}
               >
@@ -410,8 +410,8 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         </div>
 
         {/* ── Desktop: left tab bar ── */}
-        <div className="hidden sm:flex w-44 flex-shrink-0 bg-yt-secondary border-r border-yt-border flex-col pt-4 pb-4">
-          <p className="px-4 pb-3 text-xs font-semibold text-yt-text-muted uppercase tracking-widest">
+        <div className="hidden sm:flex w-52 flex-shrink-0 bg-yt-secondary/40 border-r border-yt-border/50 flex-col pt-5 pb-4">
+          <p className="px-5 pb-3 font-display text-lg font-bold text-yt-text">
             {t('settings_title')}
           </p>
           <nav className="flex flex-col gap-0.5 px-2">
@@ -419,10 +419,10 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               <button
                 key={id}
                 onClick={() => setTab(id)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-left transition-colors ${
+                className={`relative flex items-center gap-3 px-3 h-10 rounded-xl text-[13.5px] font-medium text-left transition-all ${
                   tab === id
-                    ? 'bg-yt-hover text-yt-text'
-                    : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
+                    ? 'bg-yt-red/[0.12] text-yt-text'
+                    : 'text-yt-text-secondary hover:bg-yt-hover/70 hover:text-yt-text'
                 }`}
               >
                 <span className={tab === id ? 'text-yt-red' : 'text-yt-text-muted'}>{icon}</span>
@@ -437,7 +437,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Header — desktop only */}
           <div className="hidden sm:flex items-center justify-between px-6 py-4 border-b border-yt-border/50">
-            <h2 className="text-yt-text font-semibold text-base">
+            <h2 className="font-display text-yt-text font-semibold text-lg">
               {tab === 'general' ? 'Général' : tab === 'playback' ? t('settings_tab_playback') : tab === 'data' ? t('settings_data_tab') : tab === 'podcast' ? 'Podcast Index' : tab === 'iptv' ? t('iptv_settings') : 'Wireproxy'}
             </h2>
             <button

@@ -219,7 +219,7 @@ export default function ChannelPage({ params }: ChannelPageProps) {
             className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-colors ${
               subscribed
                 ? 'bg-yt-secondary hover:bg-yt-hover text-yt-text border border-yt-border'
-                : 'bg-yt-text text-yt-bg hover:bg-yt-text-secondary'
+                : 'bg-accent-gradient text-white shadow-glow hover:brightness-110'
             }`}
           >
             {subscribed ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}

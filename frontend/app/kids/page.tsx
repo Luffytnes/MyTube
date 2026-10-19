@@ -43,7 +43,7 @@ export default function KidsPage() {
   return (
     <div className="min-h-screen">
       {/* Colourful header for kids */}
-      <div className="sticky top-14 z-30 bg-yt-bg border-b border-yt-border/40 px-4 py-3 flex items-center gap-4">
+      <div className="sticky top-14 z-30 bg-yt-bg/75 backdrop-blur-xl border-b border-yt-border/40 px-4 py-3 flex items-center gap-4">
         <h1 className="text-yt-text font-bold text-lg flex-shrink-0 flex items-center gap-2">
           <span className="text-2xl">🎈</span>
           {t('nav_kids')}
@@ -53,10 +53,10 @@ export default function KidsPage() {
             <button
               key={key}
               onClick={() => { setActiveCategory(key); load(key) }}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+              className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-[13px] font-medium transition-all whitespace-nowrap border ${
                 activeCategory === key
-                  ? 'bg-yt-text text-yt-bg'
-                  : 'bg-yt-secondary text-yt-text hover:bg-yt-hover'
+                  ? 'bg-yt-text text-yt-bg border-transparent'
+                  : 'bg-yt-secondary/70 text-yt-text-secondary border-yt-border/50 hover:text-yt-text hover:bg-yt-hover'
               }`}
             >
               {t(labelKey)}

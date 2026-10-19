@@ -13,9 +13,9 @@ interface VideoGridProps {
 }
 
 const DENSITY_CLASSES = {
-  compact: 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-3 gap-y-5',
-  normal:  'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8',
-  comfortable: 'grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-10',
+  compact: 'stagger grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-x-3 gap-y-6',
+  normal:  'stagger grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-x-5 gap-y-9',
+  comfortable: 'stagger grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-x-7 gap-y-11',
 }
 
 export default function VideoGrid({
@@ -41,8 +41,8 @@ export default function VideoGrid({
 
   if (!videos || videos.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-center">
-        <p className="text-yt-text-muted text-lg">{emptyMessage}</p>
+      <div className="flex flex-col items-center justify-center py-24 text-center animate-fade-up">
+        <p className="font-display text-xl font-semibold text-yt-text">{emptyMessage}</p>
         <p className="text-yt-text-muted text-sm mt-2">Try a different search or check back later.</p>
       </div>
     )

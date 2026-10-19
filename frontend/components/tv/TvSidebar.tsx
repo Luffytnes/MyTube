@@ -57,7 +57,7 @@ export default function TvSidebar() {
   return (
     <>
       {/* ── Desktop sidebar ─────────────────────────────────── */}
-      <aside className="fixed left-0 top-14 bottom-0 z-40 hidden md:flex flex-col w-20 xl:w-56 bg-yt-bg border-r border-yt-border/40 pt-3 pb-4 overflow-y-auto overflow-x-hidden">
+      <aside className="fixed left-0 top-14 bottom-0 z-40 hidden md:flex flex-col w-20 xl:w-56 bg-yt-bg/60 backdrop-blur-xl border-r border-yt-border/30 pt-4 pb-4 overflow-y-auto overflow-x-hidden scrollbar-none">
         <nav className="flex flex-col gap-0.5 px-2">
           {NAV_KEYS.map(({ icon: Icon, labelKey, href, exact }) => {
             const active = isActive(href, exact)
@@ -68,18 +68,19 @@ export default function TvSidebar() {
                 href={href}
                 title={label}
                 className={cn(
-                  'flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors group',
-                  active ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
+                  'relative flex items-center justify-center xl:justify-start gap-3.5 px-3 h-10 rounded-xl text-[13.5px] font-medium transition-all duration-200 group',
+                  active ? 'bg-yt-red/[0.12] text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover/70 hover:text-yt-text'
                 )}
               >
-                <Icon className={cn('w-5 h-5 flex-shrink-0 transition-colors', active ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red')} />
+                {active && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-accent-gradient" />}
+                <Icon className={cn('w-[19px] h-[19px] flex-shrink-0 transition-all duration-200', active ? 'text-yt-red' : 'text-yt-text-muted group-hover:text-yt-text group-hover:scale-110')} />
                 <span className="hidden xl:block truncate">{label}</span>
               </Link>
             )
           })}
         </nav>
 
-        <div className="border-t border-yt-border/40 my-3 mx-3" />
+        <div className="my-3 mx-3 h-px bg-gradient-to-r from-transparent via-yt-border/70 to-transparent" />
         <nav className="px-2 flex flex-col gap-0.5">
           {([
             { icon: Home, label: 'MyTube', href: '/' },
@@ -101,7 +102,7 @@ export default function TvSidebar() {
         {/* Favorites section — films/séries seulement (pas les chaînes) */}
         {favorites.filter(f => f.type !== 'live').length > 0 && (
           <>
-            <div className="border-t border-yt-border/40 my-3 mx-3" />
+            <div className="my-3 mx-3 h-px bg-gradient-to-r from-transparent via-yt-border/70 to-transparent" />
             <div className="px-2">
               <p className="hidden xl:block px-3 pb-2 text-xs font-semibold text-yt-text-muted uppercase tracking-wider truncate">
                 {t('tv_favorites')}
@@ -120,7 +121,7 @@ export default function TvSidebar() {
                       title={fav.name}
                       className={cn(
                         'flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors group',
-                        active ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
+                        active ? 'bg-yt-red/[0.12] text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover/70 hover:text-yt-text'
                       )}
                     >
                       <div className="w-6 h-6 rounded flex-shrink-0 overflow-hidden bg-yt-secondary flex items-center justify-center">
@@ -157,7 +158,7 @@ export default function TvSidebar() {
 
       {/* ── Mobile bottom nav — floating pill ───────────────── */}
       <nav
-        className="fixed left-1/2 -translate-x-1/2 z-40 md:hidden flex items-center justify-around h-20 px-4 rounded-2xl bg-yt-bg/95 backdrop-blur-xl border border-yt-border/30 shadow-[0_8px_32px_rgba(0,0,0,0.45)] w-[360px] max-w-[calc(100vw-16px)]"
+        className="fixed left-1/2 -translate-x-1/2 z-40 md:hidden flex items-center justify-around h-20 px-4 rounded-[22px] glass shadow-elevated w-[360px] max-w-[calc(100vw-16px)]"
         style={{ bottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}
       >
         {NAV_KEYS.slice(0, 4).map(({ icon: Icon, labelKey, href, exact }) => {

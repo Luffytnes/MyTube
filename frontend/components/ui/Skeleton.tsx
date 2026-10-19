@@ -10,7 +10,7 @@ export function Skeleton({ className }: SkeletonProps) {
   return (
     <div
       className={cn(
-        'animate-pulse rounded bg-yt-secondary',
+        'skeleton rounded-lg',
         className
       )}
     />
@@ -21,8 +21,8 @@ export function VideoCardSkeleton() {
   return (
     <div className="flex flex-col gap-3">
       {/* Thumbnail */}
-      <Skeleton className="w-full aspect-video rounded-xl" />
-      <div className="flex gap-3 px-1">
+      <Skeleton className="w-full aspect-video rounded-2xl" />
+      <div className="flex gap-3">
         {/* Avatar */}
         <Skeleton className="w-9 h-9 rounded-full flex-shrink-0 mt-0.5" />
         <div className="flex flex-col gap-2 flex-1">
@@ -56,7 +56,7 @@ export function VideoCardListSkeleton() {
 
 export function VideoGridSkeleton({ count = 12 }: { count?: number }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-5 gap-y-9">
       {Array.from({ length: count }).map((_, i) => (
         <VideoCardSkeleton key={i} />
       ))}

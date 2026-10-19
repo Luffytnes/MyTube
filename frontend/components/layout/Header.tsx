@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback, FormEvent } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Search, Shield, Play, X, Clock, Trash2, Settings, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Search, Shield, X, Clock, Trash2, Settings, AlertTriangle, RefreshCw } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 import SettingsPanel from './SettingsPanel'
+import Logo from './Logo'
 import {
   saveSearchQuery,
   getSearchHistory,
@@ -79,6 +79,25 @@ export default function Header() {
     return () => clearInterval(interval)
   }, [fetchVpnStatus, fetchShieldTooltip])
 
+  // "/" or Cmd/Ctrl+K focuses search, unless the user is already typing somewhere
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null
+      const typing = target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
+      const isK = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'
+      if (isK || (e.key === '/' && !typing)) {
+        e.preventDefault()
+        inputRef.current?.focus()
+        inputRef.current?.select()
+      } else if (e.key === 'Escape' && document.activeElement === inputRef.current) {
+        inputRef.current?.blur()
+        setFocused(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   // Load history when dropdown opens
   useEffect(() => {
     if (focused) setHistory(getSearchHistory())
@@ -137,104 +156,107 @@ export default function Header() {
     <>
     {/* VPN all-failed toast */}
     {vpnAllFailed && (
-      <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm shadow-lg max-w-sm w-full mx-4">
+      <div role="alert" className="fixed top-[72px] left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-red-600/95 backdrop-blur-xl text-white text-sm shadow-elevated max-w-sm w-[calc(100%-2rem)] animate-fade-up">
         <AlertTriangle className="w-4 h-4 flex-shrink-0" />
         <span className="flex-1">{t('settings_vpn_all_failed')}</span>
-        <button onClick={() => setVpnAllFailed(false)} className="ml-1 hover:opacity-70 transition-opacity">
+        <button onClick={() => setVpnAllFailed(false)} className="ml-1 p-1 rounded-full hover:bg-white/15 transition-colors" aria-label="Close">
           <X className="w-4 h-4" />
         </button>
       </div>
     )}
     {/* VPN rotation toast — anchored top-right near the shield */}
     {vpnRotatedConf && (
-      <div className="fixed top-16 right-4 z-50 flex items-center gap-2 px-3 py-2 rounded-xl bg-yt-secondary border border-green-500/40 text-green-400 text-xs shadow-lg">
+      <div role="status" className="fixed top-[72px] right-4 z-50 flex items-center gap-2 px-3.5 py-2.5 rounded-2xl glass text-emerald-400 text-xs shadow-elevated animate-fade-up">
         <RefreshCw className="w-3.5 h-3.5 flex-shrink-0" />
-        <span>{t('settings_vpn_rotated')} <span className="font-medium text-yt-text">{vpnRotatedConf.replace(/\.conf$/, '')}</span></span>
+        <span>{t('settings_vpn_rotated')} <span className="font-semibold text-yt-text">{vpnRotatedConf.replace(/\.conf$/, '')}</span></span>
       </div>
     )}
-    <header className="fixed top-0 left-0 right-0 z-50 flex items-center h-14 px-4 bg-yt-bg border-b border-yt-border/40">
-      {/* Logo */}
-      <Link href="/" className="flex items-center gap-1.5 mr-4 flex-shrink-0 group" aria-label="MyTube Home">
-        <div className="flex items-center justify-center w-8 h-8 bg-yt-red rounded group-hover:bg-yt-red-hover transition-colors">
-          <Play className="w-4 h-4 text-white fill-white ml-0.5" />
-        </div>
-        <span className="text-yt-text font-bold text-xl tracking-tight hidden sm:block">MyTube</span>
-      </Link>
+    <header className="fixed top-0 left-0 right-0 z-50 flex items-center h-14 px-3 sm:px-5 gap-3 bg-yt-bg/70 backdrop-blur-2xl backdrop-saturate-150 border-b border-yt-border/40">
+      <Logo />
 
       {/* Search bar */}
-      <form onSubmit={handleSearch} className="flex-1 flex items-center justify-center max-w-lg mx-auto gap-2 relative">
-        <div className={`flex items-center flex-1 h-10 rounded-full border transition-colors ${
-          focused ? 'border-[#1c62b9] bg-yt-bg' : 'border-yt-border bg-yt-secondary'
+      <form onSubmit={handleSearch} role="search" className="relative flex-1 max-w-xl mx-auto">
+        <div className={`group flex items-center h-10 rounded-full border transition-all duration-200 ${
+          focused
+            ? 'border-yt-red/50 bg-yt-secondary shadow-[0_0_0_4px_rgb(var(--yt-red)/0.12)]'
+            : 'border-yt-border/70 bg-yt-secondary/70 hover:border-yt-border'
         }`}>
+          <Search className={`ml-3.5 w-[18px] h-[18px] flex-shrink-0 transition-colors ${focused ? 'text-yt-red' : 'text-yt-text-muted'}`} />
           <input
             ref={inputRef}
-            type="text"
+            type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => setFocused(true)}
             placeholder={t('search_placeholder')}
             aria-label={t('search_placeholder')}
-            className="flex-1 bg-transparent px-4 text-sm text-yt-text placeholder-yt-text-muted focus:outline-none"
+            enterKeyHint="search"
+            className="flex-1 min-w-0 bg-transparent px-3 text-sm text-yt-text placeholder-yt-text-muted focus:outline-none [&::-webkit-search-cancel-button]:hidden"
             style={{ fontSize: '16px', touchAction: 'manipulation' }}
           />
-          {query && (
-            <button type="button" onClick={clearSearch} className="mr-2 p-1 rounded-full hover:bg-yt-hover text-yt-text-secondary" aria-label="Clear">
+          {query ? (
+            <button type="button" onClick={clearSearch} className="mr-1.5 p-1.5 rounded-full hover:bg-yt-hover text-yt-text-secondary transition-colors" aria-label="Clear">
               <X className="w-4 h-4" />
             </button>
+          ) : (
+            <kbd className="hidden md:inline-flex mr-3 items-center rounded-md border border-yt-border/80 px-1.5 text-[11px] font-medium text-yt-text-muted">/</kbd>
           )}
         </div>
-        <button type="submit" aria-label={t('search_placeholder')} className="flex items-center justify-center w-10 h-10 rounded-full bg-yt-secondary hover:bg-yt-hover border border-yt-border text-yt-text-secondary hover:text-yt-text transition-colors flex-shrink-0">
-          <Search className="w-5 h-5" />
-        </button>
 
         {/* Search history dropdown */}
         {showDropdown && (
           <div
             ref={dropdownRef}
-            className="absolute top-full left-0 right-12 mt-1 bg-yt-secondary border border-yt-border rounded-xl shadow-2xl z-50 overflow-hidden"
+            className="absolute top-full left-0 right-0 mt-2 glass rounded-2xl shadow-elevated z-50 overflow-hidden animate-fade-in"
           >
-            <div className="flex items-center justify-between px-4 py-2 border-b border-yt-border/50">
-              <span className="text-xs font-semibold text-yt-text-muted uppercase tracking-wide">
+            <div className="flex items-center justify-between px-4 pt-3 pb-2">
+              <span className="text-[11px] font-semibold text-yt-text-muted uppercase tracking-[0.08em]">
                 {t('searchHistory_recent')}
               </span>
               <button
                 type="button"
                 onClick={handleClearAll}
-                className="text-xs text-yt-text-muted hover:text-yt-text transition-colors flex items-center gap-1"
+                className="text-xs text-yt-text-muted hover:text-yt-red transition-colors flex items-center gap-1"
               >
                 <Trash2 className="w-3 h-3" />
                 {t('searchHistory_clearAll')}
               </button>
             </div>
-            {filtered.slice(0, 8).map((entry) => (
-              <div
-                key={entry.query}
-                className="flex items-center gap-3 px-4 py-2.5 hover:bg-yt-hover cursor-pointer group"
-                onMouseDown={(e) => { e.preventDefault(); handleSearch(undefined, entry.query) }}
-              >
-                <Clock className="w-4 h-4 text-yt-text-muted flex-shrink-0" />
-                <span className="flex-1 text-sm text-yt-text truncate">{entry.query}</span>
-                <button
-                  type="button"
-                  onMouseDown={(e) => { e.preventDefault(); handleRemoveEntry(entry.query, e) }}
-                  className="opacity-0 group-hover:opacity-100 p-1 rounded-full hover:bg-yt-hover text-yt-text-muted transition-opacity"
-                  aria-label="Remove"
+            <div className="pb-2">
+              {filtered.slice(0, 8).map((entry) => (
+                <div
+                  key={entry.query}
+                  className="flex items-center gap-3 mx-2 px-3 py-2 rounded-xl hover:bg-yt-hover/80 cursor-pointer group"
+                  onMouseDown={(e) => { e.preventDefault(); handleSearch(undefined, entry.query) }}
                 >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            ))}
+                  <Clock className="w-4 h-4 text-yt-text-muted flex-shrink-0" />
+                  <span className="flex-1 text-sm text-yt-text truncate">{entry.query}</span>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); handleRemoveEntry(entry.query, e) }}
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded-full hover:bg-yt-secondary text-yt-text-muted transition-opacity"
+                    aria-label="Remove"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </form>
 
       {/* Right actions */}
-      <div className="flex items-center gap-2 ml-4 flex-shrink-0">
+      <div className="flex items-center gap-1.5 flex-shrink-0">
         <div
-          className="flex items-center gap-1.5 px-3 h-8 rounded-full bg-yt-secondary border border-yt-border text-xs text-yt-text-secondary cursor-default"
+          className="flex items-center gap-2 pl-2.5 pr-3 h-9 rounded-full border border-yt-border/70 bg-yt-secondary/60 text-xs font-medium text-yt-text-secondary cursor-default"
           title={shieldTooltip || (vpnConnected ? 'VPN actif' : 'Sans VPN — votre IP réelle est utilisée')}
         >
-          <Shield className={`w-3.5 h-3.5 ${vpnConnected ? 'text-green-400' : 'text-red-400'}`} />
+          <span className="relative flex w-2 h-2">
+            {vpnConnected && <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-60" />}
+            <span className={`relative w-2 h-2 rounded-full ${vpnConnected ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+          </span>
+          <Shield className={`w-3.5 h-3.5 ${vpnConnected ? 'text-emerald-400' : 'text-yt-text-muted'}`} />
           <span className="hidden md:block">{t('privacy_badge')}</span>
         </div>
 
@@ -242,14 +264,16 @@ export default function Header() {
           onClick={() => setShowSettings(true)}
           aria-label={t('settings_title')}
           title={t('settings_title')}
-          className="hidden md:flex items-center justify-center w-9 h-9 rounded-full hover:bg-yt-hover text-yt-text-secondary hover:text-yt-text transition-colors"
+          className="hidden md:flex items-center justify-center w-9 h-9 rounded-full hover:bg-yt-hover text-yt-text-secondary hover:text-yt-text transition-all hover:rotate-45 duration-300"
         >
-          <Settings className="w-4 h-4" />
+          <Settings className="w-[18px] h-[18px]" />
         </button>
       </div>
 
-      <SettingsPanel open={showSettings} onClose={() => { setShowSettings(false); fetchVpnStatus(); fetchShieldTooltip() }} />
     </header>
+    {/* Outside <header>: its backdrop-filter would become the containing block
+        of the panel's position:fixed and clip it to the header's box */}
+    <SettingsPanel open={showSettings} onClose={() => { setShowSettings(false); fetchVpnStatus(); fetchShieldTooltip() }} />
     </>
   )
 }

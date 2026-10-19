@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { cn } from '@/lib/utils'
 import VideoGrid from '@/components/video/VideoGrid'
 import { getTrending, searchVideos, getChannelVideos } from '@/lib/api'
+import HeroBanner, { HeroBannerSkeleton } from '@/components/home/HeroBanner'
+import { Compass } from 'lucide-react'
 import type { VideoCard } from '@/lib/api'
 import { useRegion } from '@/lib/regionContext'
 import { useSubscriptions } from '@/lib/subscriptionsContext'
@@ -64,9 +65,16 @@ export default function HomePage() {
     const hasSubs = subscriptions.length > 0
     setHasActivity(hasSearches || hasSubs)
 
-    // No activity → show empty state, don't fetch trending
+    // No activity yet → open on what is trending instead of an empty page
     if (!hasSearches && !hasSubs) {
-      setLoading(false)
+      try {
+        const trending = await getTrending(region.code, 'all', lang)
+        setVideos(trending.videos)
+      } catch {
+        setError(t('error_trending'))
+      } finally {
+        setLoading(false)
+      }
       return
     }
 
@@ -107,78 +115,82 @@ export default function HomePage() {
     load()
   }, [load])
 
+  const [featured, ...rest] = videos
+  const visibleResume = showAllResume ? resumeVideos : resumeVideos.slice(0, 8)
+
   return (
-    <div className="min-h-screen px-4 py-6">
-      {/* Continuer à regarder */}
+    <div className="min-h-screen px-4 sm:px-6 lg:px-8 py-5 sm:py-7 max-w-[1920px] mx-auto">
+      {loading ? <HeroBannerSkeleton /> : featured && !error ? <HeroBanner video={featured} /> : null}
+
+      {/* Continue watching */}
       {resumeVideos.length > 0 && (
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-yt-text text-lg font-semibold">{t('home_continue_watching')}</h2>
-            {(resumeVideos.length > 6 || resumeVideos.length > 2) && (
+        <section className="mt-10">
+          <div className="flex items-end justify-between mb-4">
+            <h2 className="section-title">{t('home_continue_watching')}</h2>
+            {resumeVideos.length > 4 && (
               <button
                 onClick={() => setShowAllResume((p) => !p)}
-                className="text-sm text-yt-text-muted hover:text-yt-text transition-colors"
+                className="text-sm font-medium text-yt-text-muted hover:text-yt-red transition-colors"
               >
                 {showAllResume ? t('home_show_less') : t('home_see_all')}
               </button>
             )}
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {(showAllResume ? resumeVideos : resumeVideos.slice(0, 6)).map((v, i) => (
-              <Link
-                key={v.id}
-                href={`/watch/${v.id}`}
-                className={cn('group', !showAllResume && i >= 2 ? 'hidden sm:block' : '')}
-              >
-                <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-yt-secondary mb-2">
+          <div className="stagger -mx-4 px-4 sm:mx-0 sm:px-0 flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-none pb-2">
+            {visibleResume.map((v) => (
+              <Link key={v.id} href={`/watch/${v.id}`} className="group snap-start flex-shrink-0 w-[240px] sm:w-[280px]">
+                <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-yt-secondary ring-1 ring-inset ring-white/5 transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-card">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={ytThumbnail(v.id, 'mq')}
-                    alt={v.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    alt=""
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.06]"
                   />
-                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
-                    <div className="h-full bg-yt-red" style={{ width: `${v.progress}%` }} />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                  <span className="absolute bottom-3 left-3 rounded-md glass-chip px-1.5 py-0.5 text-[11px] font-semibold tabular-nums">
+                    {Math.floor(v.position / 60)}:{String(Math.floor(v.position % 60)).padStart(2, '0')}
+                  </span>
+                  <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-white/20">
+                    <div className="h-full bg-accent-gradient" style={{ width: `${v.progress}%` }} />
                   </div>
                 </div>
-                <p className="text-yt-text text-xs font-medium line-clamp-2 leading-snug">{v.title}</p>
-                <p className="text-yt-text-muted text-xs mt-0.5 truncate">{v.channel}</p>
+                <p className="mt-2.5 text-yt-text text-sm font-semibold line-clamp-2 leading-snug">{v.title}</p>
+                <p className="text-yt-text-muted text-xs mt-1 truncate">{v.channel}</p>
               </Link>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-yt-text text-2xl font-semibold">{t('home_forYou')}</h1>
-        {hasActivity && (
-          <p className="text-yt-text-muted text-sm mt-1">{t('home_basedOn')}</p>
-        )}
-      </div>
-
-      {error ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <p className="text-yt-text-muted text-lg mb-4">{error}</p>
-          <button
-            onClick={load}
-            className="px-6 py-2.5 bg-yt-red hover:bg-yt-red-hover text-white rounded-full text-sm font-medium transition-colors"
-          >
-            {t('retry')}
-          </button>
+      {/* Feed */}
+      <section className="mt-10">
+        <div className="mb-5">
+          <h2 className="section-title text-2xl">{hasActivity ? t('home_forYou') : t('home_trending_now')}</h2>
+          {hasActivity && <p className="text-yt-text-muted text-sm mt-1">{t('home_basedOn')}</p>}
         </div>
-      ) : !loading && videos.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center max-w-sm mx-auto">
-          <div className="w-16 h-16 rounded-full bg-yt-secondary flex items-center justify-center mb-4">
-            <svg className="w-8 h-8 text-yt-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+
+        {!hasActivity && !loading && !error && (
+          <div className="mb-8 flex items-start gap-3 rounded-2xl border border-yt-border/50 bg-yt-secondary/40 px-4 py-3.5 text-sm text-yt-text-secondary animate-fade-up">
+            <Compass className="w-5 h-5 flex-shrink-0 text-yt-red mt-px" />
+            <p>{t('home_discover')}</p>
           </div>
-          <p className="text-yt-text-muted text-sm">{t('home_noActivity')}</p>
-        </div>
-      ) : (
-        <VideoGrid videos={videos} loading={loading} emptyMessage={t('home_noActivity')} />
-      )}
+        )}
+
+        {error ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <p className="text-yt-text-muted text-lg mb-5">{error}</p>
+            <button onClick={load} className="btn-accent">
+              {t('retry')}
+            </button>
+          </div>
+        ) : !loading && videos.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center max-w-sm mx-auto">
+            <p className="text-yt-text-muted text-sm">{t('home_noActivity')}</p>
+          </div>
+        ) : (
+          <VideoGrid videos={rest} loading={loading} emptyMessage={t('home_noActivity')} />
+        )}
+      </section>
     </div>
   )
 }

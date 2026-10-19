@@ -66,9 +66,9 @@ function Panel({
   title, icon, children,
 }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="w-64 bg-[#141010] border border-white/[0.07] rounded-xl overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+    <div className="w-64 bg-black/70 backdrop-blur-2xl border border-white/10 rounded-2xl overflow-hidden shadow-elevated animate-fade-up" onClick={e => e.stopPropagation()}>
       <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.07]">
-        <div className="w-7 h-7 bg-red-950/70 rounded-lg flex items-center justify-center text-red-500 shrink-0">
+        <div className="w-7 h-7 bg-accent-gradient rounded-lg flex items-center justify-center text-white shrink-0">
           {icon}
         </div>
         <span className="text-white text-sm font-semibold">{title}</span>
@@ -93,7 +93,7 @@ function PanelItem({
         {sublabel && <span className="text-[10px] text-white/35 ml-2">{sublabel}</span>}
       </div>
       {active && (
-        <div className="w-5 h-5 rounded-full bg-red-600 flex items-center justify-center shrink-0 ml-2">
+        <div className="w-5 h-5 rounded-full bg-accent-gradient flex items-center justify-center shrink-0 ml-2">
           <Check className="w-3 h-3 text-white" />
         </div>
       )}
@@ -658,7 +658,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   return (
     <div
       ref={containerRef}
-      className={`relative bg-black rounded-xl overflow-hidden select-none ${
+      className={`relative bg-black rounded-2xl overflow-hidden select-none ${
         fullscreen ? 'fixed inset-0 z-[100] rounded-none' : 'w-full aspect-video'
       }`}
       onMouseMove={resetHideTimer}
@@ -716,7 +716,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
       {/* Loading spinner */}
       {loading && !error && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+          <div className="w-12 h-12 border-[3px] border-white/15 border-t-red-500 rounded-full animate-spin" />
         </div>
       )}
 
@@ -727,7 +727,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
           <p className="text-sm text-white/60 mb-4">{error}</p>
           <button
             onClick={e => { e.stopPropagation(); setError(null); setLoading(true); videoRef.current?.load() }}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition-colors"
+            className="btn-accent h-9"
           >
             {t('retry')}
           </button>
@@ -737,7 +737,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
       {/* Subtitle overlay */}
       {activeCue && !error && (
         <div className="absolute bottom-20 left-0 right-0 flex justify-center pointer-events-none z-20 px-6">
-          <div className="bg-black/80 text-white text-sm sm:text-base px-4 py-2 rounded-lg text-center max-w-[85%] leading-snug">
+          <div className="bg-black/75 backdrop-blur-sm text-white text-sm sm:text-base px-4 py-2 rounded-xl text-center max-w-[85%] leading-snug">
             {activeCue.map((line, i) => <div key={i}>{line}</div>)}
           </div>
         </div>
@@ -828,7 +828,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                   </span>
                   <div
                     ref={seekBarRef}
-                    className="relative flex-1 h-1 cursor-pointer"
+                    className="group/seek relative flex-1 h-1 hover:h-1.5 transition-[height] duration-150 cursor-pointer"
                     style={{ touchAction: 'none' }}
                     onPointerDown={onSeekPointerDown}
                     onPointerMove={onSeekPointerMove}
@@ -843,7 +843,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                     {/* Buffer */}
                     <div className="absolute inset-y-0 left-0 bg-white/30 rounded-full" style={{ width: `${bufferedProgress}%` }} />
                     {/* Played */}
-                    <div className="absolute inset-y-0 left-0 bg-white/90 rounded-full" style={{ width: `${displayProgress}%` }} />
+                    <div className="absolute inset-y-0 left-0 bg-accent-gradient rounded-full shadow-[0_0_12px_rgb(var(--yt-red)/0.6)]" style={{ width: `${displayProgress}%` }} />
                     {/* Chapter markers */}
                     {chapters.map((ch, i) => (
                       <div
@@ -854,7 +854,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                     ))}
                     {/* Thumb */}
                     <div
-                      className="absolute w-3 h-3 bg-red-500 rounded-full top-1/2 -translate-y-1/2 shadow-lg"
+                      className="absolute w-3.5 h-3.5 bg-white rounded-full top-1/2 -translate-y-1/2 shadow-lg ring-4 ring-red-500/35 scale-0 group-hover/seek:scale-100 transition-transform"
                       style={{ left: `calc(${displayProgress}% - 6px)` }}
                     />
                     {/* Hover time tooltip */}
@@ -864,11 +864,11 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                         style={{ left: `${hoverRatio * 100}%` }}
                       >
                         {hoverChapter && (
-                          <div className="bg-black/80 text-white/70 text-[10px] px-2 py-0.5 rounded whitespace-nowrap max-w-[160px] truncate">
+                          <div className="bg-black/75 backdrop-blur-md text-white/80 text-[10px] px-2 py-0.5 rounded-md whitespace-nowrap max-w-[160px] truncate">
                             {hoverChapter.title}
                           </div>
                         )}
-                        <div className="bg-black/85 text-white text-xs px-2 py-1 rounded font-mono whitespace-nowrap">
+                        <div className="bg-black/75 backdrop-blur-md border border-white/10 text-white text-xs font-semibold px-2 py-1 rounded-lg tabular-nums whitespace-nowrap">
                           {formatDuration(hoverTimeVal)}
                         </div>
                       </div>
@@ -893,14 +893,14 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                     <button
                       onClick={e => { e.stopPropagation(); onPrev() }}
                       disabled={!hasPrev}
-                      className={`w-10 h-10 flex items-center justify-center transition-colors ${hasPrev ? 'text-white hover:text-white/70' : 'text-white/25 cursor-not-allowed'}`}
+                      className={`w-10 h-10 flex items-center justify-center rounded-full transition-all ${hasPrev ? 'text-white hover:bg-white/10 active:scale-90' : 'text-white/25 cursor-not-allowed'}`}
                     >
                       <SkipBack className="w-5 h-5 fill-current" />
                     </button>
                   )}
                   <button
                     onClick={e => { e.stopPropagation(); togglePlay() }}
-                    className="w-10 h-10 flex items-center justify-center text-white hover:text-white/70 transition-colors"
+                    className="w-10 h-10 flex items-center justify-center rounded-full text-white hover:bg-white/10 transition-all active:scale-90"
                   >
                     {playing
                       ? <Pause className="w-6 h-6 fill-current" />
@@ -910,7 +910,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                     <button
                       onClick={e => { e.stopPropagation(); onNext() }}
                       disabled={!hasNext}
-                      className={`w-10 h-10 flex items-center justify-center transition-colors ${hasNext ? 'text-white hover:text-white/70' : 'text-white/25 cursor-not-allowed'}`}
+                      className={`w-10 h-10 flex items-center justify-center rounded-full transition-all ${hasNext ? 'text-white hover:bg-white/10 active:scale-90' : 'text-white/25 cursor-not-allowed'}`}
                     >
                       <SkipForward className="w-5 h-5 fill-current" />
                     </button>
@@ -919,14 +919,14 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                     <>
                       <button
                         onClick={e => { e.stopPropagation(); const v = videoRef.current; if (v) v.currentTime = Math.max(0, v.currentTime - 10) }}
-                        className="w-10 h-10 flex items-center justify-center text-white hover:text-white/70 transition-colors"
+                        className="w-10 h-10 flex items-center justify-center rounded-full text-white hover:bg-white/10 transition-all active:scale-90"
                         title="Reculer 10s"
                       >
                         <RotateCcw className="w-5 h-5" />
                       </button>
                       <button
                         onClick={e => { e.stopPropagation(); const v = videoRef.current; if (v) v.currentTime = Math.min(v.duration || 0, v.currentTime + 10) }}
-                        className="w-10 h-10 flex items-center justify-center text-white hover:text-white/70 transition-colors"
+                        className="w-10 h-10 flex items-center justify-center rounded-full text-white hover:bg-white/10 transition-all active:scale-90"
                         title="Avancer 10s"
                       >
                         <RotateCw className="w-5 h-5" />
@@ -936,7 +936,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                   <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
                     <button
                       onClick={toggleMute}
-                      className="w-10 h-10 flex items-center justify-center text-white hover:text-white/70 transition-colors"
+                      className="w-10 h-10 flex items-center justify-center rounded-full text-white hover:bg-white/10 transition-all active:scale-90"
                     >
                       {muted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                     </button>
@@ -956,7 +956,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                   {!isLive && (!isMobile || fullscreen) && (
                     <button
                       onClick={e => { e.stopPropagation(); setShowSpeedMenu(v => !v); setShowQualityMenu(false); setShowSubtitleMenu(false) }}
-                      className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors text-xs font-bold ${showSpeedMenu ? 'bg-red-600 text-white' : 'text-white/80 hover:text-white'}`}
+                      className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors text-xs font-bold ${showSpeedMenu ? 'bg-accent-gradient text-white shadow-glow' : 'text-white/85 hover:text-white hover:bg-white/10'}`}
                       title="Vitesse"
                     >
                       {speed === 1 ? '1×' : `${speed}×`}
@@ -973,7 +973,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                         }
                         setShowSpeedMenu(false); setShowQualityMenu(false)
                       }}
-                      className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${showSubtitleMenu || selectedSubtitle !== 'off' ? 'bg-red-600 text-white' : 'text-white/80 hover:text-white'}`}
+                      className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${showSubtitleMenu || selectedSubtitle !== 'off' ? 'bg-accent-gradient text-white shadow-glow' : 'text-white/85 hover:text-white hover:bg-white/10'}`}
                       title="Sous-titres"
                     >
                       <span className="text-xs font-bold leading-none">CC</span>
@@ -982,7 +982,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                   {!isLive && allVideoFormats.length > 0 && (!isMobile || fullscreen) && (
                     <button
                       onClick={e => { e.stopPropagation(); setShowQualityMenu(v => !v); setShowSpeedMenu(false); setShowSubtitleMenu(false) }}
-                      className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${showQualityMenu ? 'bg-red-600 text-white' : 'text-white/80 hover:text-white'}`}
+                      className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${showQualityMenu ? 'bg-accent-gradient text-white shadow-glow' : 'text-white/85 hover:text-white hover:bg-white/10'}`}
                       title="Qualité"
                     >
                       <Settings className="w-5 h-5" />
@@ -990,7 +990,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                   )}
                   <button
                     onClick={e => { e.stopPropagation(); toggleFullscreen() }}
-                    className="w-10 h-10 flex items-center justify-center text-white/80 hover:text-white transition-colors"
+                    className="w-10 h-10 flex items-center justify-center rounded-full text-white/85 hover:text-white hover:bg-white/10 transition-all active:scale-90"
                   >
                     {fullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
                   </button>
@@ -1004,7 +1004,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
       {/* Big play overlay */}
       {!playing && showControls && !loading && !error && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-16 h-16 bg-black/60 rounded-full flex items-center justify-center">
+          <div className="w-20 h-20 glass-chip rounded-full flex items-center justify-center shadow-elevated">
             <Play className="w-8 h-8 text-white fill-white ml-1" />
           </div>
         </div>

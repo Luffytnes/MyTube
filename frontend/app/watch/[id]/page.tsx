@@ -33,7 +33,7 @@ import { isInWatchLater, toggleWatchLater } from '@/lib/watchLater'
 import { isLiked, toggleLike, removeLike } from '@/lib/likes'
 import { useSubscriptions } from '@/lib/subscriptionsContext'
 import { BellOff, Copy, Check, ExternalLink } from 'lucide-react'
-import { ytThumbnail } from '@/lib/thumbnails'
+import { imageSrc, ytThumbnail } from '@/lib/thumbnails'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -68,7 +68,7 @@ function ChannelAvatar({
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={`${API_BASE}${src.startsWith('/') ? src : '/' + src}`}
+        src={imageSrc(src)}
         alt={name}
         className={`rounded-full object-cover flex-shrink-0 ${sizeMap[size]}`}
         onError={(e) => {
@@ -135,12 +135,12 @@ function renderLine(line: string, li: number, onSeek?: (t: number) => void): Rea
     return (
       <span key={`ts-${li}`}>
         {prefix}
-        <button onClick={() => onSeek!(sec)} className="text-blue-400 hover:underline font-medium">
+        <button onClick={() => onSeek!(sec)} className="text-red-400 hover:underline font-medium">
           {timeStr}
         </button>
         {restParts.map((p, pi) =>
           /^#[\wÀ-ɏЀ-ӿ]+$/.test(p)
-            ? <Link key={pi} href={`/hashtag/${encodeURIComponent(p.slice(1))}`} className="text-blue-400 hover:underline">{p}</Link>
+            ? <Link key={pi} href={`/hashtag/${encodeURIComponent(p.slice(1))}`} className="text-red-400 hover:underline">{p}</Link>
             : p
         )}
       </span>
@@ -149,7 +149,7 @@ function renderLine(line: string, li: number, onSeek?: (t: number) => void): Rea
   const parts = line.split(/(#[\wÀ-ɏЀ-ӿ]+)/g)
   return parts.map((p, pi) =>
     /^#[\wÀ-ɏЀ-ӿ]+$/.test(p)
-      ? <Link key={`h-${li}-${pi}`} href={`/hashtag/${encodeURIComponent(p.slice(1))}`} className="text-blue-400 hover:underline">{p}</Link>
+      ? <Link key={`h-${li}-${pi}`} href={`/hashtag/${encodeURIComponent(p.slice(1))}`} className="text-red-400 hover:underline">{p}</Link>
       : p
   )
 }
@@ -356,7 +356,7 @@ function WatchContent({ params }: WatchPageProps) {
         </p>
         <button
           onClick={loadVideo}
-          className="px-6 py-2.5 bg-yt-red hover:bg-yt-red-hover text-white rounded-full text-sm font-medium transition-colors"
+          className="btn-accent"
         >
           {t('retry')}
         </button>
@@ -365,12 +365,23 @@ function WatchContent({ params }: WatchPageProps) {
   }
 
   return (
-    <div className="px-4 py-6">
-      <div className="flex gap-6 max-w-screen-2xl mx-auto flex-col lg:flex-row">
+    <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-6">
+      <div className="flex gap-8 max-w-[1800px] mx-auto flex-col lg:flex-row">
         {/* Main content */}
         <div className="flex-1 min-w-0">
-          {/* Video Player */}
+          {/* Video Player, with an "ambilight" glow from the blurred thumbnail */}
+          {/* No "isolate" here: the glow must sit in the page's stacking context,
+              behind the title and metadata it spills over */}
           <div className="relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={ytThumbnail(id, 'mq')}
+              alt=""
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 -z-10 w-full h-full object-cover scale-[1.12] blur-[80px] saturate-[1.8]"
+              style={{ opacity: 'calc(0.7 * var(--ambient-strength))' }}
+            />
+            <div className="rounded-2xl overflow-hidden ring-1 ring-white/[0.06] shadow-elevated">
             <VideoPlayer
               videoId={id}
               formats={video.formats}
@@ -385,12 +396,13 @@ function WatchContent({ params }: WatchPageProps) {
               chapters={video.chapters?.length ? video.chapters : (video.description ? parseChapters(video.description) : [])}
               seekToRef={seekToRef}
             />
+            </div>
 
             {/* Autoplay countdown overlay */}
             {autoplayCountdown !== null && nextVideoId && (
-              <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center rounded-xl z-20">
+              <div className="absolute inset-0 bg-black/70 backdrop-blur-md flex flex-col items-center justify-center rounded-2xl z-20 animate-fade-in">
                 <p className="text-white text-sm font-medium mb-3 opacity-80">{t('autoplay_next')}</p>
-                <div className="flex items-center gap-3 bg-yt-secondary border border-yt-border rounded-xl p-3 max-w-xs w-full mx-4">
+                <div className="flex items-center gap-3 glass rounded-2xl p-3 max-w-xs w-full mx-4">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={ytThumbnail(nextVideoId, 'mq')}
@@ -402,7 +414,7 @@ function WatchContent({ params }: WatchPageProps) {
                   </p>
                 </div>
                 <div className="flex items-center gap-3 mt-4">
-                  <span className="text-white text-3xl font-bold tabular-nums w-10 text-center">{autoplayCountdown}</span>
+                  <span className="flex items-center justify-center w-14 h-14 rounded-full bg-accent-gradient shadow-glow font-display text-white text-2xl font-bold tabular-nums">{autoplayCountdown}</span>
                 </div>
                 <button
                   onClick={cancelAutoplay}
@@ -417,25 +429,29 @@ function WatchContent({ params }: WatchPageProps) {
           {/* Back button */}
           <button
             onClick={() => router.back()}
-            className="flex items-center gap-1.5 mt-4 text-yt-text-muted hover:text-yt-text transition-colors text-sm"
+            className="flex items-center gap-1.5 mt-5 text-yt-text-muted hover:text-yt-text transition-colors text-[13px] font-medium"
           >
             <ArrowLeft className="w-4 h-4" />
             {t('nav_back')}
           </button>
 
           {/* Title */}
-          <h1 className="text-yt-text text-xl font-semibold mt-2 leading-snug">
+          <h1 className="font-display text-yt-text text-[22px] sm:text-[26px] font-bold mt-2 leading-tight [text-wrap:balance]">
             {video.title}
           </h1>
 
           {/* Action bar */}
-          <div className="mt-3 pb-4 border-b border-yt-border">
+          <div className="mt-3 pb-5 border-b border-yt-border/50">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-yt-text-muted text-sm">{video.views}</span>
-              <span className="text-yt-text-muted text-sm">•</span>
-              <span className="text-yt-text-muted text-sm">{video.published}</span>
+              {video.published && video.published !== 'Unknown date' && (
+                <>
+                  <span className="w-1 h-1 rounded-full bg-yt-text-muted/60" />
+                  <span className="text-yt-text-muted text-sm">{video.published}</span>
+                </>
+              )}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap">
               {/* Like */}
               <button
                 onClick={() => {
@@ -444,10 +460,10 @@ function WatchContent({ params }: WatchPageProps) {
                   setLiked(nowLiked)
                   if (nowLiked) setDisliked(false)
                 }}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium transition-all active:scale-[0.97] ${
                   liked
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-yt-secondary hover:bg-yt-hover text-yt-text border border-yt-border'
+                    ? 'bg-accent-gradient text-white shadow-glow'
+                    : 'bg-yt-secondary/70 hover:bg-yt-hover text-yt-text border border-yt-border/60'
                 }`}
               >
                 <ThumbsUp className={`w-4 h-4 ${liked ? 'fill-white' : ''}`} />
@@ -467,10 +483,10 @@ function WatchContent({ params }: WatchPageProps) {
                     return next
                   })
                 }}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium transition-all active:scale-[0.97] ${
                   disliked
                     ? 'bg-red-600 text-white'
-                    : 'bg-yt-secondary hover:bg-yt-hover text-yt-text border border-yt-border'
+                    : 'bg-yt-secondary/70 hover:bg-yt-hover text-yt-text border border-yt-border/60'
                 }`}
               >
                 <ThumbsDown className={`w-4 h-4 ${disliked ? 'fill-white' : ''}`} />
@@ -479,7 +495,7 @@ function WatchContent({ params }: WatchPageProps) {
               {/* Share */}
               <button
                 onClick={() => setShowShare(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-yt-secondary hover:bg-yt-hover text-yt-text border border-yt-border text-sm font-medium transition-colors"
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-yt-secondary/70 hover:bg-yt-hover text-yt-text border border-yt-border/60 text-sm font-medium transition-colors"
               >
                 <Share2 className="w-4 h-4" />
                 <span className="hidden lg:block">{t('share')}</span>
@@ -488,7 +504,7 @@ function WatchContent({ params }: WatchPageProps) {
               {/* Download */}
               <button
                 onClick={() => setShowDownload(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-yt-secondary hover:bg-yt-hover text-yt-text border border-yt-border text-sm font-medium transition-colors"
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-yt-secondary/70 hover:bg-yt-hover text-yt-text border border-yt-border/60 text-sm font-medium transition-colors"
               >
                 <Download className="w-4 h-4" />
                 <span className="hidden lg:block">{t('download')}</span>
@@ -513,10 +529,10 @@ function WatchContent({ params }: WatchPageProps) {
                     setInQueue(true)
                   }
                 }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all active:scale-[0.97] border ${
                   inQueue
-                    ? 'bg-yt-red border-yt-red text-white'
-                    : 'bg-yt-secondary hover:bg-yt-hover text-yt-text border-yt-border'
+                    ? 'bg-accent-gradient border-transparent text-white shadow-glow'
+                    : 'bg-yt-secondary/70 hover:bg-yt-hover text-yt-text border-yt-border/60'
                 }`}
               >
                 {inQueue ? <ListChecks className="w-4 h-4" /> : <ListPlus className="w-4 h-4" />}
@@ -530,10 +546,10 @@ function WatchContent({ params }: WatchPageProps) {
                   const isNowSaved = toggleWatchLater({ id: video.id, title: video.title, channel: video.channel.name, channelId: video.channel.id })
                   setSaved(isNowSaved)
                 }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all active:scale-[0.97] border ${
                   saved
-                    ? 'bg-blue-600 border-blue-600 text-white'
-                    : 'bg-yt-secondary hover:bg-yt-hover text-yt-text border-yt-border'
+                    ? 'bg-accent-gradient border-transparent text-white shadow-glow'
+                    : 'bg-yt-secondary/70 hover:bg-yt-hover text-yt-text border-yt-border/60'
                 }`}
               >
                 {saved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
@@ -543,7 +559,7 @@ function WatchContent({ params }: WatchPageProps) {
           </div>
 
           {/* Channel row */}
-          <div className="flex items-start gap-4 py-4 border-b border-yt-border">
+          <div className="flex items-center gap-4 py-5 border-b border-yt-border/50">
             <Link href={`/channel/${video.channel.id}`} className="flex-shrink-0">
               <ChannelAvatar
                 name={video.channel.name}
@@ -554,7 +570,7 @@ function WatchContent({ params }: WatchPageProps) {
             <div className="flex-1 min-w-0">
               <Link
                 href={`/channel/${video.channel.id}`}
-                className="text-yt-text font-semibold hover:text-white transition-colors truncate block"
+                className="text-yt-text font-semibold hover:text-yt-red transition-colors truncate block"
               >
                 {video.channel.name}
               </Link>
@@ -568,8 +584,8 @@ function WatchContent({ params }: WatchPageProps) {
               onClick={() => video?.channel.id && toggleSubscription({ id: video.channel.id, name: video.channel.name, thumbnail: video.channel.thumbnail ?? null })}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold transition-colors flex-shrink-0 ${
                 video?.channel.id && isSubscribed(video.channel.id)
-                  ? 'bg-yt-secondary hover:bg-yt-hover text-yt-text border border-yt-border'
-                  : 'bg-yt-text text-yt-bg hover:bg-yt-text-secondary'
+                  ? 'bg-yt-secondary/70 hover:bg-yt-hover text-yt-text border border-yt-border/60'
+                  : 'bg-accent-gradient text-white shadow-glow hover:brightness-110'
               }`}
             >
               {video?.channel.id && isSubscribed(video.channel.id)
@@ -582,7 +598,7 @@ function WatchContent({ params }: WatchPageProps) {
           {/* Description */}
           <div className="mt-4">
             <div
-              className={`bg-yt-secondary rounded-xl p-4 cursor-pointer hover:bg-yt-hover transition-colors`}
+              className="bg-yt-secondary/60 border border-yt-border/50 rounded-2xl p-5 cursor-pointer hover:bg-yt-secondary transition-colors"
               onClick={() => setDescExpanded((v) => !v)}
             >
               {/* Meta row */}
@@ -616,7 +632,7 @@ function WatchContent({ params }: WatchPageProps) {
               {/* Toggle button */}
               {video.description && video.description.length > 200 && (
                 <button
-                  className="mt-2 text-sm font-semibold text-yt-text flex items-center gap-1 hover:text-white transition-colors"
+                  className="mt-3 text-sm font-semibold text-yt-text flex items-center gap-1 hover:text-yt-red transition-colors"
                   onClick={(e) => {
                     e.stopPropagation()
                     setDescExpanded((v) => !v)
@@ -640,18 +656,11 @@ function WatchContent({ params }: WatchPageProps) {
         </div>
 
         {/* Right sidebar */}
-        <aside className="w-full lg:w-96 flex-shrink-0">
+        <aside className="w-full lg:w-[400px] flex-shrink-0">
           {/* Download buttons */}
           <button
             onClick={() => setShowDownload(true)}
-            className="lg:hidden w-full flex items-center justify-center gap-2 px-4 py-3 mb-4 bg-yt-red hover:bg-yt-red-hover text-white rounded-xl text-sm font-medium transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            {t('download')}
-          </button>
-          <button
-            onClick={() => setShowDownload(true)}
-            className="hidden lg:flex w-full items-center justify-center gap-2 px-4 py-3 mb-4 bg-yt-red hover:bg-yt-red-hover text-white rounded-xl text-sm font-medium transition-colors"
+            className="btn-accent w-full h-11 mb-6 rounded-2xl"
           >
             <Download className="w-4 h-4" />
             {t('download')}
@@ -659,7 +668,7 @@ function WatchContent({ params }: WatchPageProps) {
 
           {/* Playlist panel */}
           {listId && (
-            <div className="mb-4 bg-yt-secondary rounded-xl overflow-hidden border border-yt-border/60">
+            <div className="mb-6 bg-yt-secondary/60 rounded-2xl overflow-hidden border border-yt-border/50">
               <div className="px-4 py-3 border-b border-yt-border/40">
                 {playlistLoading ? (
                   <p className="text-yt-text-muted text-sm">Loading playlist...</p>
@@ -696,10 +705,10 @@ function WatchContent({ params }: WatchPageProps) {
             </div>
           )}
 
-          <h2 className="text-yt-text font-semibold mb-3">{t('upNext')}</h2>
+          <h2 className="section-title text-lg mb-4">{t('upNext')}</h2>
 
           {video.related.length > 0 ? (
-            <div className="flex flex-col gap-3">
+            <div className="stagger flex flex-col gap-2.5">
               {video.related.map((related) =>
                 (related as { type?: string }).type === 'channel' ? (
                   <RelatedChannelCard key={related.id} id={related.id} name={related.title} />
@@ -719,14 +728,14 @@ function WatchContent({ params }: WatchPageProps) {
       {/* Share Modal */}
       {showShare && (
         <div
-          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center px-4"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center px-4 animate-fade-in"
           onClick={() => setShowShare(false)}
         >
           <div
-            className="bg-yt-bg border border-yt-border rounded-2xl p-6 w-full max-w-md shadow-2xl"
+            className="glass rounded-3xl p-6 w-full max-w-md shadow-elevated animate-fade-up"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-yt-text font-semibold text-base mb-4">{t('share_modal_title')}</h3>
+            <h3 className="font-display text-yt-text font-semibold text-lg mb-4">{t('share_modal_title')}</h3>
             <div className="flex items-center gap-2 bg-yt-secondary rounded-xl px-3 py-2.5 mb-4">
               <span className="flex-1 text-sm text-yt-text-secondary truncate font-mono">
                 {`https://www.youtube.com/watch?v=${video.id}`}
@@ -747,7 +756,7 @@ function WatchContent({ params }: WatchPageProps) {
                 setCopied(true)
                 setTimeout(() => setCopied(false), 2000)
               }}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-yt-red hover:bg-yt-red-hover text-white text-sm font-medium transition-colors"
+              className="btn-accent w-full rounded-xl"
             >
               {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
               {copied ? t('share_copied') : t('share_copy')}

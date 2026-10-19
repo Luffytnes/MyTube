@@ -75,15 +75,15 @@ export default function DownloadModal({
       onClick={onClose}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/70" />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" />
 
       {/* Modal */}
       <div
-        className="relative bg-yt-secondary border border-yt-border rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col"
+        className="relative bg-surface/95 backdrop-blur-2xl border border-yt-border/60 rounded-3xl shadow-elevated w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col animate-fade-up"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-yt-border">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-yt-border/50">
           <div className="flex items-center gap-3">
             <Download className="w-5 h-5 text-yt-red" />
             <h2 className="text-yt-text font-semibold text-lg">{t('download_title')}</h2>

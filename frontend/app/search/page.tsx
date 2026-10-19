@@ -100,7 +100,7 @@ function SearchContent() {
       {query ? (
         <>
           {/* Filter bar */}
-          <div className="sticky top-14 z-30 bg-yt-bg border-b border-yt-border/40 px-4 py-3 flex items-center gap-4 overflow-x-auto">
+          <div className="sticky top-14 z-30 bg-yt-bg/75 backdrop-blur-xl border-b border-yt-border/40 px-4 py-3 flex items-center gap-4 overflow-x-auto">
             <div className="flex gap-2 flex-shrink-0">
               {FILTER_OPTIONS.map(({ key, labelKey }) => {
                 // Show badge count on filter pills
@@ -112,8 +112,8 @@ function SearchContent() {
                   <button
                     key={key}
                     onClick={() => setActiveFilter(key)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-                      activeFilter === key ? 'bg-yt-text text-yt-bg' : 'bg-yt-secondary text-yt-text hover:bg-yt-hover'
+                    className={`px-3.5 py-1.5 rounded-full text-[13px] font-medium transition-all whitespace-nowrap border flex items-center gap-1.5 ${
+                      activeFilter === key ? 'bg-yt-text text-yt-bg border-transparent' : 'bg-yt-secondary/70 text-yt-text-secondary border-yt-border/50 hover:text-yt-text hover:bg-yt-hover'
                     }`}
                   >
                     {t(labelKey)}

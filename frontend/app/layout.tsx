@@ -1,4 +1,6 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
+import '@fontsource-variable/inter'
+import '@fontsource-variable/bricolage-grotesque'
 import './globals.css'
 import ClientLayoutWrapper from '@/components/layout/ClientLayoutWrapper'
 import { RegionProvider } from '@/lib/regionContext'
@@ -28,6 +30,16 @@ export const metadata: Metadata = {
   },
 }
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#080a0f',
+}
+
+// Applies the saved theme before first paint (ThemeProvider only runs after hydration)
+const THEME_BOOTSTRAP = `try{var m=localStorage.getItem('mytube-theme')||'dark';var t=m==='auto'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):m;document.documentElement.setAttribute('data-theme',t)}catch(e){}`
+
 export default function RootLayout({
   children,
 }: {
@@ -36,8 +48,8 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
         <meta name="referrer" content="no-referrer" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

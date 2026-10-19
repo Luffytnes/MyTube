@@ -6,22 +6,26 @@ import { usePathname } from 'next/navigation'
 import {
   Home, TrendingUp, History, Clock, Music2, ThumbsUp,
   ListVideo, ListOrdered, Newspaper, Settings, MoreHorizontal, X, Tv,
-  Radio, Clapperboard, Baby,
+  Radio, Clapperboard, Baby, ShieldCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useRegion } from '@/lib/regionContext'
 import { useSubscriptions } from '@/lib/subscriptionsContext'
 import type { Translations } from '@/lib/translations'
 import SettingsPanel from './SettingsPanel'
+import { imageSrc } from '@/lib/thumbnails'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+type NavItem = { icon: typeof Home; labelKey: keyof Translations; href: string }
 
-const NAV_ITEMS: { icon: typeof Home; labelKey: keyof Translations; href: string }[] = [
+const DISCOVER_ITEMS: NavItem[] = [
   { icon: Home, labelKey: 'nav_home', href: '/' },
   { icon: TrendingUp, labelKey: 'nav_trending', href: '/trending' },
   { icon: Radio, labelKey: 'nav_live', href: '/live' },
   { icon: Clapperboard, labelKey: 'nav_shorts', href: '/shorts' },
   { icon: Baby, labelKey: 'nav_kids', href: '/kids' },
+]
+
+const LIBRARY_ITEMS: NavItem[] = [
   { icon: History, labelKey: 'nav_history', href: '/history' },
   { icon: Clock, labelKey: 'nav_watchLater', href: '/watch-later' },
   { icon: ThumbsUp, labelKey: 'nav_likes', href: '/likes' },
@@ -29,10 +33,60 @@ const NAV_ITEMS: { icon: typeof Home; labelKey: keyof Translations; href: string
   { icon: ListOrdered, labelKey: 'nav_queue', href: '/queue' },
 ]
 
-// Items shown in mobile bottom bar
-const MOBILE_PRIMARY: (keyof Translations)[] = ['nav_home', 'nav_trending', 'nav_music', 'nav_history']
+const NAV_ITEMS: NavItem[] = [...DISCOVER_ITEMS, ...LIBRARY_ITEMS]
+
+function SideLink({ href, icon: Icon, label, active }: { href: string; icon: typeof Home; label: string; active: boolean }) {
+  return (
+    <Link
+      href={href}
+      aria-current={active ? 'page' : undefined}
+      title={label}
+      className={cn(
+        'relative flex items-center justify-center xl:justify-start gap-3.5 px-3 h-10 rounded-xl text-[13.5px] font-medium transition-all duration-200 group',
+        active
+          ? 'bg-yt-red/[0.12] text-yt-text'
+          : 'text-yt-text-secondary hover:bg-yt-hover/70 hover:text-yt-text'
+      )}
+    >
+      {active && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-accent-gradient" />}
+      <Icon className={cn('w-[19px] h-[19px] flex-shrink-0 transition-all duration-200', active ? 'text-yt-red' : 'text-yt-text-muted group-hover:text-yt-text group-hover:scale-110')} />
+      <span className="hidden xl:block truncate">{label}</span>
+    </Link>
+  )
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="hidden xl:block px-3 pt-1 pb-1.5 text-[11px] font-semibold text-yt-text-muted uppercase tracking-[0.1em]">
+      {children}
+    </p>
+  )
+}
+
+function Divider() {
+  return <div className="my-3 mx-3 h-px bg-gradient-to-r from-transparent via-yt-border/70 to-transparent" />
+}
 
 const SUB_PREVIEW = 4
+
+function SubAvatar({ name, thumbnail, size }: { name: string; thumbnail?: string | null; size: string }) {
+  return (
+    <div className={cn('rounded-full flex-shrink-0 relative ring-1 ring-yt-border/60', size)}>
+      <div className="absolute inset-0 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-accent-gradient">
+        {name[0]?.toUpperCase()}
+      </div>
+      {thumbnail && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={imageSrc(thumbnail)}
+          alt=""
+          className="absolute inset-0 w-full h-full rounded-full object-cover"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+        />
+      )}
+    </div>
+  )
+}
 
 export default function Sidebar() {
   const pathname = usePathname()
@@ -71,59 +125,38 @@ export default function Sidebar() {
   return (
     <>
       {/* ── Desktop sidebar ─────────────────────────────────── */}
-      <aside className="fixed left-0 top-14 bottom-0 z-40 hidden md:flex flex-col w-20 xl:w-56 bg-yt-bg border-r border-yt-border/40 pt-3 pb-4 overflow-y-auto overflow-x-hidden transition-all">
-        <nav className="flex flex-col gap-0.5 px-2">
-          {NAV_ITEMS.map(({ icon: Icon, labelKey, href }) => {
-            const active = isActive(href)
-            const label = t(labelKey)
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  'flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors group',
-                  active ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
-                )}
-                title={label}
-              >
-                <Icon className={cn('w-5 h-5 flex-shrink-0 transition-colors', active ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red')} />
-                <span className="hidden xl:block truncate">{label}</span>
-              </Link>
-            )
-          })}
+      <aside className="fixed left-0 top-14 bottom-0 z-40 hidden md:flex flex-col w-20 xl:w-56 bg-yt-bg/60 backdrop-blur-xl border-r border-yt-border/30 pt-4 pb-4 overflow-y-auto overflow-x-hidden scrollbar-none">
+        <nav className="flex flex-col gap-0.5 px-2.5" aria-label="Discover">
+          {DISCOVER_ITEMS.map(({ icon, labelKey, href }) => (
+            <SideLink key={href} href={href} icon={icon} label={t(labelKey)} active={isActive(href)} />
+          ))}
+        </nav>
+
+        <Divider />
+        <nav className="flex flex-col gap-0.5 px-2.5" aria-label={t('nav_library')}>
+          <SectionLabel>{t('nav_library')}</SectionLabel>
+          {LIBRARY_ITEMS.map(({ icon, labelKey, href }) => (
+            <SideLink key={href} href={href} icon={icon} label={t(labelKey)} active={isActive(href)} />
+          ))}
         </nav>
 
         {/* MyTube Apps */}
-        <div className="border-t border-yt-border/40 my-3 mx-3" />
-        <nav className="px-2 flex flex-col gap-0.5">
+        <Divider />
+        <nav className="px-2.5 flex flex-col gap-0.5" aria-label={t('nav_apps')}>
+          <SectionLabel>{t('nav_apps')}</SectionLabel>
           {[
             { href: '/tv', icon: Tv, label: t('nav_iptv'), active: pathname.startsWith('/tv') },
             { href: '/music', icon: Music2, label: t('nav_music'), active: pathname.startsWith('/music') },
             { href: '/news', icon: Newspaper, label: t('nav_news'), active: pathname.startsWith('/news') },
-          ].map(({ href, icon: Icon, label, active }) => (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                'flex items-center gap-4 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors group',
-                active ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
-              )}
-              title={label}
-            >
-              <Icon className={cn('w-5 h-5 flex-shrink-0 transition-colors', active ? 'text-yt-red' : 'text-yt-text-secondary group-hover:text-yt-red')} />
-              <span className="hidden xl:block truncate">{label}</span>
-            </Link>
-          ))}
+          ].map((item) => <SideLink key={item.href} {...item} />)}
         </nav>
 
         {/* Subscriptions */}
         {subscriptions.length > 0 && (
           <>
-            <div className="border-t border-yt-border/40 my-3 mx-3" />
-            <div className="px-2">
-              <p className="hidden xl:block px-3 pb-2 text-xs font-semibold text-yt-text-muted uppercase tracking-wider">
-                {t('nav_subscriptions')}
-              </p>
+            <Divider />
+            <div className="px-2.5">
+              <SectionLabel>{t('nav_subscriptions')}</SectionLabel>
               <div className="flex flex-col gap-0.5">
                 {(showAllSubs ? subscriptions : subscriptions.slice(0, SUB_PREVIEW)).map((sub) => {
                   const active = pathname === `/channel/${sub.id}`
@@ -132,25 +165,12 @@ export default function Sidebar() {
                       key={sub.id}
                       href={`/channel/${sub.id}`}
                       className={cn(
-                        'flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors group',
-                        active ? 'bg-yt-hover text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text'
+                        'flex items-center justify-center xl:justify-start gap-3 px-3 h-10 rounded-xl text-[13.5px] transition-colors group',
+                        active ? 'bg-yt-red/[0.12] text-yt-text' : 'text-yt-text-secondary hover:bg-yt-hover/70 hover:text-yt-text'
                       )}
                       title={sub.name}
                     >
-                      <div className="w-6 h-6 rounded-full flex-shrink-0 relative">
-                        <div className="absolute inset-0 rounded-full flex items-center justify-center text-xs font-bold text-white bg-blue-600">
-                          {sub.name[0]?.toUpperCase()}
-                        </div>
-                        {sub.thumbnail && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={sub.thumbnail.startsWith('http') ? sub.thumbnail : `${API_BASE}${sub.thumbnail.startsWith('/') ? sub.thumbnail : '/' + sub.thumbnail}`}
-                            alt={sub.name}
-                            className="absolute inset-0 w-full h-full rounded-full object-cover"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                          />
-                        )}
-                      </div>
+                      <SubAvatar name={sub.name} thumbnail={sub.thumbnail} size="w-6 h-6" />
                       <span className="hidden xl:block truncate">{sub.name}</span>
                     </Link>
                   )
@@ -158,9 +178,9 @@ export default function Sidebar() {
                 {subscriptions.length > SUB_PREVIEW && (
                   <button
                     onClick={() => setShowAllSubs((p) => !p)}
-                    className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-yt-text-muted hover:bg-yt-hover hover:text-yt-text transition-colors text-left"
+                    className="flex items-center justify-center xl:justify-start gap-3 px-3 h-10 rounded-xl text-sm text-yt-text-muted hover:bg-yt-hover/70 hover:text-yt-text transition-colors text-left"
                   >
-                    <span className="w-6 h-6 rounded-full flex-shrink-0 bg-yt-secondary flex items-center justify-center text-xs">
+                    <span className="w-6 h-6 rounded-full flex-shrink-0 bg-yt-secondary flex items-center justify-center text-[10px] font-semibold">
                       {showAllSubs ? '↑' : `+${subscriptions.length - SUB_PREVIEW}`}
                     </span>
                     <span className="hidden xl:block truncate text-xs">
@@ -173,41 +193,48 @@ export default function Sidebar() {
           </>
         )}
 
-        <div className="border-t border-yt-border/40 my-3 mx-3" />
-        <div className="hidden xl:block px-5 text-xs text-yt-text-muted leading-relaxed">
-          <p className="font-medium text-yt-text-secondary mb-1">{t('nav_privacyFirst')}</p>
-          <p>{t('nav_noTracking')}</p>
-          <p className="mt-2">{t('nav_selfHosted')}</p>
+        <div className="mt-auto hidden xl:block px-3 pt-6">
+          <div className="relative overflow-hidden rounded-2xl border border-yt-border/50 bg-yt-secondary/50 p-3.5">
+            <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full bg-yt-red/20 blur-2xl" />
+            <p className="relative flex items-center gap-2 text-xs font-semibold text-yt-text">
+              <ShieldCheck className="w-4 h-4 text-yt-red" />
+              {t('nav_privacyFirst')}
+            </p>
+            <p className="relative mt-1.5 text-[11px] leading-relaxed text-yt-text-muted">{t('nav_noTracking')}</p>
+          </div>
         </div>
       </aside>
 
-      {/* ── Mobile bottom nav — floating pill ───────────────── */}
+      {/* ── Mobile bottom nav — floating glass pill ─────────── */}
       <nav
-        className="fixed left-1/2 -translate-x-1/2 z-40 md:hidden flex items-center justify-around h-20 px-4 rounded-2xl bg-yt-bg/95 backdrop-blur-xl border border-yt-border/30 shadow-[0_8px_32px_rgba(0,0,0,0.45)] w-[360px] max-w-[calc(100vw-16px)]"
+        className="fixed left-1/2 -translate-x-1/2 z-40 md:hidden flex items-center justify-around h-[68px] px-2 rounded-[22px] glass shadow-elevated w-[360px] max-w-[calc(100vw-16px)]"
         style={{ bottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}
+        aria-label="Navigation"
       >
-        <Link href="/" className={cn('flex flex-col items-center gap-1 py-2 px-3 rounded-xl transition-colors flex-1', isActive('/') ? 'text-yt-red' : 'text-yt-text-muted')}>
-          <Home className="w-6 h-6" />
-          <span className="text-[11px]">{t('nav_home')}</span>
-        </Link>
-        <Link href="/trending" className={cn('flex flex-col items-center gap-1 py-2 px-3 rounded-xl transition-colors flex-1', isActive('/trending') ? 'text-yt-red' : 'text-yt-text-muted')}>
-          <TrendingUp className="w-6 h-6" />
-          <span className="text-[11px]">{t('nav_trending')}</span>
-        </Link>
-        <Link href="/music" className={cn('flex flex-col items-center gap-1 py-2 px-3 rounded-xl transition-colors flex-1', pathname.startsWith('/music') ? 'text-yt-red' : 'text-yt-text-muted')}>
-          <Music2 className="w-6 h-6" />
-          <span className="text-[11px]">{t('nav_music')}</span>
-        </Link>
-        <Link href="/history" className={cn('flex flex-col items-center gap-1 py-2 px-3 rounded-xl transition-colors flex-1', isActive('/history') ? 'text-yt-red' : 'text-yt-text-muted')}>
-          <History className="w-6 h-6" />
-          <span className="text-[11px]">{t('nav_history')}</span>
-        </Link>
+        {[
+          { href: '/', icon: Home, label: t('nav_home'), active: isActive('/') },
+          { href: '/trending', icon: TrendingUp, label: t('nav_trending'), active: isActive('/trending') },
+          { href: '/music', icon: Music2, label: t('nav_music'), active: pathname.startsWith('/music') },
+          { href: '/history', icon: History, label: t('nav_history'), active: isActive('/history') },
+        ].map(({ href, icon: Icon, label, active }) => (
+          <Link
+            key={href}
+            href={href}
+            aria-current={active ? 'page' : undefined}
+            className={cn('relative flex flex-col items-center gap-1 py-2 px-2 rounded-2xl transition-colors flex-1 min-w-0', active ? 'text-yt-text' : 'text-yt-text-muted')}
+          >
+            <Icon className={cn('w-[22px] h-[22px]', active && 'text-yt-red')} />
+            <span className="text-[10.5px] font-medium truncate max-w-full">{label}</span>
+            {active && <span className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-yt-red" />}
+          </Link>
+        ))}
         <button
           onClick={() => setShowDrawer(true)}
-          className="flex flex-col items-center gap-1 py-2 px-3 rounded-xl text-yt-text-muted flex-1"
+          className="flex flex-col items-center gap-1 py-2 px-2 rounded-2xl text-yt-text-muted flex-1"
+          aria-label="Plus"
         >
-          <MoreHorizontal className="w-6 h-6" />
-          <span className="text-[11px]">Plus</span>
+          <MoreHorizontal className="w-[22px] h-[22px]" />
+          <span className="text-[10.5px] font-medium">Plus</span>
         </button>
       </nav>
 
@@ -215,16 +242,16 @@ export default function Sidebar() {
       {showDrawer && (
         <div className="fixed inset-0 z-[60] md:hidden">
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/50" />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" />
           {/* Sheet — positioned above the floating nav pill */}
           <div
             ref={drawerRef}
-            className="absolute left-0 right-0 bg-yt-bg rounded-t-2xl pb-6 pt-2 max-h-[80vh] overflow-y-auto"
+            className="absolute left-2 right-2 glass rounded-3xl pb-6 pt-3 max-h-[75vh] overflow-y-auto shadow-elevated animate-fade-up"
             style={{ bottom: 'calc(env(safe-area-inset-bottom) + 100px)' }}
           >
             {/* Close */}
             <div className="flex items-center justify-between px-4 mb-3">
-              <span className="text-yt-text font-semibold">MyTube</span>
+              <span className="font-display text-lg font-bold text-yt-text">MyTube</span>
               <button onClick={() => setShowDrawer(false)} className="p-2 rounded-full hover:bg-yt-hover text-yt-text-muted">
                 <X className="w-5 h-5" />
               </button>
@@ -282,20 +309,7 @@ export default function Sidebar() {
                       href={`/channel/${sub.id}`}
                       className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm text-yt-text-secondary hover:bg-yt-hover hover:text-yt-text transition-colors"
                     >
-                      <div className="w-7 h-7 rounded-full flex-shrink-0 relative">
-                        <div className="absolute inset-0 rounded-full flex items-center justify-center text-xs font-bold text-white bg-blue-600">
-                          {sub.name[0]?.toUpperCase()}
-                        </div>
-                        {sub.thumbnail && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={sub.thumbnail.startsWith('http') ? sub.thumbnail : `${API_BASE}${sub.thumbnail.startsWith('/') ? sub.thumbnail : '/' + sub.thumbnail}`}
-                            alt={sub.name}
-                            className="absolute inset-0 w-full h-full rounded-full object-cover"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                          />
-                        )}
-                      </div>
+                      <SubAvatar name={sub.name} thumbnail={sub.thumbnail} size="w-7 h-7" />
                       <span className="truncate">{sub.name}</span>
                     </Link>
                   ))}
