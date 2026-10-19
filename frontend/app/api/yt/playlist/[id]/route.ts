@@ -3,11 +3,12 @@ import { getInnertube, parseLockupView } from '@/lib/innertube'
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const yt = await getInnertube()
-    const pl = await yt.getPlaylist(params.id)
+    const pl = await yt.getPlaylist(id)
 
     const videos = (pl.items ?? [])
       .map((v: any) => parseLockupView(v))
@@ -23,7 +24,7 @@ export async function GET(
       }))
 
     return NextResponse.json({
-      id: params.id,
+      id,
       title: pl.info?.title ?? '',
       uploader: pl.info?.author?.name ?? '',
       videoCount: (pl as any).total_items ?? videos.length,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense, use } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getVideo, getPlaylist, type PlaylistDetail, type PlaylistVideo } from '@/lib/api'
@@ -179,11 +179,11 @@ function parseChapters(description: string): Chapter[] {
 }
 
 interface WatchPageProps {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 function WatchContent({ params }: WatchPageProps) {
-  const { id } = params
+  const { id } = use(params)
   const router = useRouter()
   const searchParams = useSearchParams()
   const fromQueue = searchParams.get('queue') === '1'

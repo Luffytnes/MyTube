@@ -3,11 +3,12 @@ import { getInnertube, fmtDuration, fmtViews, parseAnyVideo } from '@/lib/innert
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const yt = await getInnertube()
-    const info = await yt.getInfo(params.id)
+    const info = await yt.getInfo(id)
     const basic = info.basic_info
 
     // Build formats list
@@ -74,12 +75,12 @@ export async function GET(
     const likeCount = basic.like_count ?? 0
 
     return NextResponse.json({
-      id: params.id,
+      id,
       title: basic.title ?? '',
       description: basic.short_description ?? (basic as any).description ?? '',
       channel: basic.channel?.name ?? '',
       channelId: basic.channel?.id ?? '',
-      thumbnail: `https://i.ytimg.com/vi/${params.id}/hqdefault.jpg`,
+      thumbnail: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
       duration: fmtDuration(basic.duration),
       views: fmtViews(viewCount),
       viewCount,

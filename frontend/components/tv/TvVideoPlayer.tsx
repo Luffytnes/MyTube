@@ -120,7 +120,7 @@ export interface QueueItem {
 }
 
 export interface TvVideoPlayerProps {
-  videoRef: RefObject<HTMLVideoElement>
+  videoRef: RefObject<HTMLVideoElement | null>
   loading: boolean
   error: string | null
   onErrorBack: () => void

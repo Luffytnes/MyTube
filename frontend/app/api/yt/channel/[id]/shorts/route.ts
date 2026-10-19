@@ -3,14 +3,15 @@ import { getInnertube, parseShortsLockup, parseLockupView } from '@/lib/innertub
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const yt = await getInnertube()
-    const ch = await yt.getChannel(params.id)
+    const ch = await yt.getChannel(id)
     const feed = await ch.getShorts()
 
-    const channelId = params.id
+    const channelId = id
     const videos = (feed.videos ?? [])
       .map((v: any) => v?.type === 'ShortsLockupView' ? parseShortsLockup(v) : parseLockupView(v))
       .filter(Boolean)
@@ -19,6 +20,6 @@ export async function GET(
     return NextResponse.json({ videos, channelId })
   } catch (err: any) {
     console.error('[yt/channel/shorts]', err?.message)
-    return NextResponse.json({ videos: [], channelId: params.id }, { status: 200 })
+    return NextResponse.json({ videos: [], channelId: id }, { status: 200 })
   }
 }

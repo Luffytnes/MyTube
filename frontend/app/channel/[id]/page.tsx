@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, use } from 'react'
 import { getChannel, getChannelVideos, getChannelShorts, getChannelLive } from '@/lib/api'
 import type { ChannelInfo, VideoCard } from '@/lib/api'
 import VideoGrid from '@/components/video/VideoGrid'
@@ -32,11 +32,11 @@ function ChannelHeaderSkeleton() {
 }
 
 interface ChannelPageProps {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 export default function ChannelPage({ params }: ChannelPageProps) {
-  const { id } = params
+  const { id } = use(params)
   const { t } = useRegion()
   const { isSubscribed, toggle: toggleSubscription } = useSubscriptions()
   const [channel, setChannel] = useState<ChannelInfo | null>(null)

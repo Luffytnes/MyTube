@@ -3,11 +3,12 @@ import { getInnertube, parseCount } from '@/lib/innertube'
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     const yt = await getInnertube()
-    const ch = await yt.getChannel(params.id)
+    const ch = await yt.getChannel(id)
     const meta = ch.metadata
 
     // Extract subscriber & video count from header metadata rows
@@ -26,13 +27,13 @@ export async function GET(
     }
 
     return NextResponse.json({
-      id: params.id,
+      id,
       name: meta?.title ?? '',
       description: meta?.description ?? '',
       subscriberCount: parseCount(subscriberText),
       videoCount: parseCount(videoCountText),
-      thumbnail: `/api/channel_thumbnail/${params.id}`,
-      banner: `/api/channel_banner/${params.id}`,
+      thumbnail: `/api/channel_thumbnail/${id}`,
+      banner: `/api/channel_banner/${id}`,
       hasShorts: ch.has_shorts ?? false,
       hasLive: (ch as any).has_live_streams ?? (ch as any).has_live ?? false,
     })

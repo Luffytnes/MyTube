@@ -3,13 +3,14 @@ import { getInnertube } from '@/lib/innertube'
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   const sort = (req.nextUrl.searchParams.get('sort') ?? 'TOP_COMMENTS') as 'TOP_COMMENTS' | 'NEWEST_FIRST'
 
   try {
     const yt = await getInnertube()
-    const comments = await yt.getComments(params.id, sort)
+    const comments = await yt.getComments(id, sort)
 
     const totalCount: string =
       (comments.header as any)?.comments_count?.text ??

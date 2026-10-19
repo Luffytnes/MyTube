@@ -3,12 +3,13 @@ import { getInnertube, parseLockupView } from '@/lib/innertube'
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   const page = parseInt(req.nextUrl.searchParams.get('page') ?? '1', 10)
   try {
     const yt = await getInnertube()
-    const ch = await yt.getChannel(params.id)
+    const ch = await yt.getChannel(id)
     let feed = await ch.getVideos()
 
     // Paginate through continuations
@@ -18,7 +19,7 @@ export async function GET(
       } else break
     }
 
-    const channelId = params.id
+    const channelId = id
     const videos = (feed.videos ?? [])
       .map(parseLockupView)
       .filter(Boolean)
@@ -33,6 +34,6 @@ export async function GET(
     return NextResponse.json({ videos, channelId, page })
   } catch (err: any) {
     console.error('[yt/channel/videos]', err?.message)
-    return NextResponse.json({ videos: [], channelId: params.id, page }, { status: 200 })
+    return NextResponse.json({ videos: [], channelId: id, page }, { status: 200 })
   }
 }

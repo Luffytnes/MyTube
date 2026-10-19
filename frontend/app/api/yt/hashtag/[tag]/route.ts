@@ -3,9 +3,9 @@ import { getInnertube, parseAnyVideo } from '@/lib/innertube'
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { tag: string } }
+  { params }: { params: Promise<{ tag: string }> }
 ) {
-  const tag = decodeURIComponent(params.tag).replace(/^#/, '').toLowerCase()
+  const tag = decodeURIComponent((await params).tag).replace(/^#/, '').toLowerCase()
 
   try {
     const yt = await getInnertube()

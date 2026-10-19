@@ -1,14 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, use } from 'react'
 import { Hash } from 'lucide-react'
 import VideoGrid from '@/components/video/VideoGrid'
 import type { VideoCard } from '@/lib/api'
 import { useRegion } from '@/lib/regionContext'
 
-export default function HashtagPage({ params }: { params: { tag: string } }) {
+export default function HashtagPage({ params }: { params: Promise<{ tag: string }> }) {
   const { t } = useRegion()
-  const tag = decodeURIComponent(params.tag).replace(/^#/, '')
+  const tag = decodeURIComponent(use(params).tag).replace(/^#/, '')
   const [videos, setVideos] = useState<VideoCard[]>([])
   const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(true)
