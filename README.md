@@ -5,7 +5,7 @@
 **A privacy-focused YouTube + IPTV frontend — no tracking, no ads, no Google.**
 
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Next.js](https://img.shields.io/badge/Frontend-Next.js%2014-black?style=flat-square&logo=next.js)](https://nextjs.org)
+[![Next.js](https://img.shields.io/badge/Frontend-Next.js%2015-black?style=flat-square&logo=next.js)](https://nextjs.org)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
@@ -160,6 +160,12 @@ MyTube is a **self-hosted YouTube + IPTV frontend** that lets you browse, search
 
 ### ⌨️ Keyboard Shortcuts
 
+#### Everywhere
+| Key | Action |
+|-----|--------|
+| `/` or `Ctrl`/`⌘` + `K` | Focus the search bar |
+| `Esc` | Leave the search bar |
+
 #### Video Player
 | Key | Action |
 |-----|--------|
@@ -181,10 +187,10 @@ MyTube is a **self-hosted YouTube + IPTV frontend** that lets you browse, search
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS |
+| Frontend | Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS — self-hosted Inter + Bricolage Grotesque fonts |
 | YouTube data | youtubei.js (InnerTube API) — channel info, Shorts, Live, Kids |
-| Backend | Python, FastAPI, yt-dlp, httpx |
-| HLS streaming | hls.js — YouTube video player + IPTV live channels |
+| Backend | Python 3.11, FastAPI, yt-dlp (+ Deno and the EJS solver for YouTube's JS challenges), httpx |
+| HLS streaming | ffmpeg 9 remuxes YouTube adaptive streams to fMP4 HLS (H.264, VP9, AV1) · hls.js in the browser |
 | IPTV VOD player | Shaka Player — MSE-based adaptive streaming |
 | Music & Podcasts | ytmusicapi, Podcast Index API |
 | Radio | Radio Browser API (free, no key required) |
@@ -254,9 +260,12 @@ VPN configs, Podcast Index keys and other settings are stored in a Docker volume
 ### 💻 Local (development)
 
 #### Prerequisites
-- **Python** 3.9+
-- **Node.js** 18+
+- **Python** 3.11+
+- **Node.js** 20+
 - **npm**
+- **ffmpeg** — 8.1 or newer recommended: its HTTP `-request_size` option avoids YouTube throttling during playback (older builds work, but long videos may buffer)
+
+`pip install -r requirements.txt` also installs **Deno** and yt-dlp's challenge solver (`yt-dlp[default,deno]`): without them YouTube throttles stream URLs and hides some formats. Nothing is installed system-wide.
 
 #### One command
 
@@ -456,7 +465,7 @@ Every request your browser makes goes through **your own backend**, never direct
 
 | Endpoint | Description |
 |----------|-------------|
-| `GET /api/health` | Stack status — ffmpeg, VPN, cache, uptime |
+| `GET /api/health` | Stack status — ffmpeg (and whether it supports HTTP chunking), YouTube JS challenge solver, VPN, cache, uptime |
 
 Interactive docs → **http://localhost:8000/docs**
 
@@ -467,6 +476,7 @@ Interactive docs → **http://localhost:8000/docs**
 - Age-restricted content requires YouTube authentication (not supported)
 - Bot detection by YouTube may occasionally block requests — the VPN feature auto-rotates configs when blocking is detected (403 / 429)
 - Your server's IP is used for requests to YouTube (or your VPN's IP if enabled)
+- Search, channel and Shorts data come from YouTube.js inside the **frontend** container, which does not go through the optional VPN (streams, thumbnails and everything served by the backend do)
 
 ---
 

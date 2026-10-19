@@ -3,7 +3,7 @@
 ## Projet
 
 Lecteur multimédia auto-hébergé : YouTube (via yt-dlp + ffmpeg HLS), IPTV/Xtream, radio.
-Stack : FastAPI (Python 3.11) + Next.js 14 (TypeScript) + nginx + WireProxy (WireGuard userspace).
+Stack : FastAPI (Python 3.11) + Next.js 15 / React 19 (TypeScript) + nginx + WireProxy (WireGuard userspace).
 Déployé via Docker Compose.
 
 ## Structure
@@ -26,8 +26,8 @@ nginx/            Reverse proxy + auth HTTP Basic
 
 ## Conventions frontend
 
-- Next.js 14 App Router, TypeScript strict, Tailwind CSS
-- Vérification types : `npm run type-check` depuis `frontend/`
+- Next.js 15 App Router (React 19), TypeScript strict, Tailwind CSS
+- Vérification types : `npm run type-check` depuis `frontend/` (lance `next typegen` puis `tsc`)
 - Lint : `npm run lint` depuis `frontend/`
 - Composants dans `frontend/components/`, pages dans `frontend/app/`
 - Pas de dépendances npm inutiles
