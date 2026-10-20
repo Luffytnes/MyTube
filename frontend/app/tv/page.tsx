@@ -703,6 +703,13 @@ function TvPageContent() {
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCat, setSelectedCat] = useState<string | null>(searchParams.get('cat'))
   const [items, setItems] = useState<(Channel | VodItem | SeriesItem)[]>([])
+  // `section` follows the URL immediately while categories/items arrive later:
+  // remember what they belong to so a tab never renders another tab's data
+  // (series cards built from films had no series_id → missing React keys).
+  const [catsSection, setCatsSection] = useState<Section | null>(null)
+  const [itemsFor, setItemsFor] = useState<string | null>(null)
+  const catsSeq = useRef(0)
+  const itemsSeq = useRef(0)
   const [loading, setLoading] = useState(false)
   const [loadingCats, setLoadingCats] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -794,26 +801,31 @@ function TvPageContent() {
   }, [tmdbSections])
 
   const loadCategories = useCallback(async (sec: Section, savedCat?: string | null) => {
+    const seq = ++catsSeq.current
     setLoadingCats(true)
     setCategories([])
+    setCatsSection(null)
     setItems([])
+    setItemsFor(null)
     setError(null)
     try {
       const ep = sec === 'live' ? 'categories' : sec === 'vod' ? 'vod_categories' : 'series_categories'
       const res = await fetch(`${API_BASE}/api/iptv/${ep}`)
       if (!res.ok) throw new Error()
       const data = await res.json()
+      if (seq !== catsSeq.current) return  // another tab was opened meanwhile
       const cats: Category[] = Array.isArray(data) ? data : []
       setCategories(cats)
+      setCatsSection(sec)
       const catToSelect = savedCat && cats.find(c => c.category_id === savedCat)
         ? savedCat
         : cats[0]?.category_id ?? null
       setSelectedCat(catToSelect)
       pushUrl(sec, catToSelect)
     } catch {
-      setError(t('iptv_error'))
+      if (seq === catsSeq.current) setError(t('iptv_error'))
     } finally {
-      setLoadingCats(false)
+      if (seq === catsSeq.current) setLoadingCats(false)
     }
   }, [t, pushUrl])
 
@@ -823,9 +835,11 @@ function TvPageContent() {
   }, [configured, section, isHome])
 
   const loadItems = useCallback(async (sec: Section, catId: string) => {
+    const seq = ++itemsSeq.current
     setLoading(true)
     setError(null)
     setItems([])
+    setItemsFor(null)
     setRatings({})
     setSortMode('default')
     try {
@@ -836,17 +850,24 @@ function TvPageContent() {
       const res = await fetch(url)
       if (!res.ok) throw new Error(`${res.status}`)
       const data = await res.json()
+      if (seq !== itemsSeq.current) return  // superseded by a newer request
       setItems(Array.isArray(data) ? data : [])
+      setItemsFor(`${sec}:${catId}`)
     } catch {
-      setError(t('iptv_error'))
+      if (seq === itemsSeq.current) setError(t('iptv_error'))
     } finally {
-      setLoading(false)
+      if (seq === itemsSeq.current) setLoading(false)
     }
   }, [t])
 
   useEffect(() => {
-    if (configured && !isHome && selectedCat) loadItems(section, selectedCat)
-  }, [configured, isHome, section, selectedCat, loadItems])
+    // Wait for the new tab's categories: right after a tab switch selectedCat
+    // still holds the previous tab's category id
+    if (configured && !isHome && selectedCat && catsSection === section) loadItems(section, selectedCat)
+  }, [configured, isHome, section, selectedCat, catsSection, loadItems])
+
+  const itemsReady = itemsFor === `${section}:${selectedCat}`
+  const visibleItems = itemsReady ? items : []
 
   const handleRating = useCallback((name: string, rating: number | null) => {
     setRatings(prev => ({ ...prev, [name]: rating }))
@@ -920,7 +941,7 @@ function TvPageContent() {
               onSelect={id => { setSelectedCat(id); pushUrl(section, id) }}
             />
           </div>
-          {section !== 'live' && items.length > 1 && (
+          {section !== 'live' && visibleItems.length > 1 && (
             <div className="flex items-center gap-1 rounded-xl bg-yt-secondary border border-yt-border/40 p-0.5 flex-shrink-0">
               {([['default', 'Défaut'], ['az', 'A-Z'], ['rating', 'Note']] as [typeof sortMode, string][]).map(([val, label]) => (
                 <button
@@ -941,7 +962,7 @@ function TvPageContent() {
       )}
 
       {/* Content */}
-      {loading || loadingCats ? (
+      {loading || loadingCats || (!itemsReady && !error && !!selectedCat) ? (
         <div className="flex justify-center py-20">
           <div className="w-8 h-8 border-2 border-yt-red border-t-transparent rounded-full animate-spin" />
         </div>
@@ -957,7 +978,7 @@ function TvPageContent() {
         </div>
       ) : section === 'live' ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {(items as Channel[]).map(ch => (
+          {(visibleItems as Channel[]).map(ch => (
             <Card3D key={ch.stream_id} className="group relative">
               <Link
                 href={`/tv/watch/${ch.stream_id}?type=live&cat=${encodeURIComponent(selectedCat || '')}&name=${encodeURIComponent(ch.name)}&icon=${encodeURIComponent(ch.stream_icon || '')}`}
@@ -985,7 +1006,7 @@ function TvPageContent() {
         </div>
       ) : section === 'vod' ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {sortItems(items as VodItem[]).map(v => (
+          {sortItems(visibleItems as VodItem[]).map(v => (
             <TmdbGridCard
               key={v.stream_id}
               name={v.name}
@@ -999,7 +1020,7 @@ function TvPageContent() {
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {sortItems(items as SeriesItem[]).map(s => (
+          {sortItems(visibleItems as SeriesItem[]).map(s => (
             <TmdbGridCard
               key={s.series_id}
               name={s.name}
