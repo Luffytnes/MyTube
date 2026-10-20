@@ -90,7 +90,7 @@ function MusicSearchContent() {
       } else {
         const res = await fetch(`${API_BASE}/api/music/search?q=${encodeURIComponent(q)}&filter=${f}`)
         const data = await res.json()
-        setResults(Array.isArray(data) ? data : [])
+        setResults(Array.isArray(data) ? uniqueResults(data) : [])
       }
     } catch { setResults([]); setRadioResults([]) }
     finally { setLoading(false) }
@@ -312,6 +312,18 @@ function MusicSearchContent() {
       )}
     </div>
   )
+}
+
+/** ytmusicapi repeats items (a song as top result and again in the songs
+ *  shelf): drop the doubles, which also broke React's list keys. */
+function uniqueResults(data: Result[]): Result[] {
+  const seen = new Set<string>()
+  return data.filter((r) => {
+    const id = `${r.type}:${r.videoId ?? r.browseId ?? r.playlistId ?? r.title}`
+    if (seen.has(id)) return false
+    seen.add(id)
+    return true
+  })
 }
 
 export default function MusicSearchPage() {
