@@ -57,7 +57,9 @@ from services.ffmpeg import (
     _hls_lock,
     _start_hls_session,
     _kill_hls_sessions_for,
+    _best_m4a_audio,
     hls_session_lead,
+    is_direct_format,
     prefetch_stream_urls,
     _iptv_vod_hls_sessions,
     _iptv_vod_hls_lock,
@@ -82,19 +84,36 @@ _MEDIA_UPSTREAM_HEADERS = {
 }
 
 
-async def _proxy_media(url: str, request: Request, content_type: str, video_id: str) -> Response:
-    """Relay a googlevideo URL with a single upstream request, forwarding the
-    client's Range header and the upstream status and length headers."""
-    headers = dict(_MEDIA_UPSTREAM_HEADERS)
-    if range_header := request.headers.get("range"):
-        headers["Range"] = range_header
+# googlevideo throttles open-ended ranges ("bytes=0-") to roughly the media
+# bitrate, but serves bounded ranges at full speed: 0.34 MB/s vs 3.1 MB/s
+# measured for a 1080p stream, enough to make playback stall.
+_MEDIA_CHUNK = 2 * 1024 * 1024
 
+
+def _parse_range(header: Optional[str]) -> Optional[tuple]:
+    m = re.fullmatch(r"bytes=(\d+)-(\d*)", (header or "").strip())
+    if not m:
+        return None
+    return int(m.group(1)), (int(m.group(2)) if m.group(2) else None)
+
+
+async def _proxy_media(url: str, request: Request, content_type: str, video_id: str) -> Response:
+    """Relay a googlevideo URL to the browser as one continuous response, fetched
+    upstream in bounded chunks (see _MEDIA_CHUNK). Honours the client's Range."""
+    client_range = _parse_range(request.headers.get("range"))
+    start, end = client_range or (0, None)
     client = httpx_client(
         timeout=httpx.Timeout(connect=10.0, read=60.0, write=None, pool=10.0),
         follow_redirects=True,
     )
+
+    async def fetch(lo: int, hi: int) -> httpx.Response:
+        headers = {**_MEDIA_UPSTREAM_HEADERS, "Range": f"bytes={lo}-{hi}"}
+        return await client.send(client.build_request("GET", url, headers=headers), stream=True)
+
+    first_hi = start + _MEDIA_CHUNK - 1 if end is None else min(end, start + _MEDIA_CHUNK - 1)
     try:
-        upstream = await client.send(client.build_request("GET", url, headers=headers), stream=True)
+        upstream = await fetch(start, first_hi)
     except Exception:
         await client.aclose()
         raise HTTPException(status_code=502, detail="Upstream unreachable")
@@ -114,21 +133,52 @@ async def _proxy_media(url: str, request: Request, content_type: str, video_id: 
         record_youtube_error(upstream.status_code)
         raise HTTPException(status_code=502, detail=f"YouTube returned {upstream.status_code}")
 
-    response_headers = {"Accept-Ranges": "bytes", "Cache-Control": "no-cache"}
-    for name in ("content-length", "content-range"):
-        if value := upstream.headers.get(name):
-            response_headers[name] = value
+    total_str = upstream.headers.get("content-range", "").rpartition("/")[2]
+    if upstream.status_code != 206 or not total_str.isdigit():
+        # Upstream ignored the range: relay that single response as-is
+        response_headers = {"Accept-Ranges": "bytes", "Cache-Control": "no-cache"}
+        if value := upstream.headers.get("content-length"):
+            response_headers["content-length"] = value
+
+        async def passthrough():
+            try:
+                async for chunk in upstream.aiter_bytes(65536):
+                    yield chunk
+            finally:
+                await upstream.aclose()
+
+        return StreamingResponse(passthrough(), status_code=upstream.status_code, headers=response_headers,
+                                 media_type=content_type, background=BackgroundTask(client.aclose))
+
+    total = int(total_str)
+    last = total - 1 if end is None else min(end, total - 1)
+    response_headers = {
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "no-cache",
+        "Content-Length": str(last - start + 1),
+    }
+    if client_range:
+        response_headers["Content-Range"] = f"bytes {start}-{last}/{total}"
 
     async def body():
+        resp, pos = upstream, start
         try:
-            async for chunk in upstream.aiter_bytes(65536):
-                yield chunk
+            while True:
+                async for chunk in resp.aiter_bytes(65536):
+                    pos += len(chunk)
+                    yield chunk
+                await resp.aclose()
+                if pos > last:
+                    return
+                resp = await fetch(pos, min(pos + _MEDIA_CHUNK - 1, last))
+                if resp.status_code != 206:
+                    return  # URL expired mid-stream: the player resumes with a Range request
         finally:
-            await upstream.aclose()
+            await resp.aclose()
 
     return StreamingResponse(
         body(),
-        status_code=upstream.status_code,
+        status_code=206 if client_range else 200,
         headers=response_headers,
         media_type=content_type,
         # Runs even when the client disconnects before the body is consumed
@@ -407,7 +457,7 @@ async def get_video(video_id: VideoId):
         seen_itags = set()
         for fmt in info.get("formats", []):
             itag = fmt.get("format_id")
-            if itag in seen_itags:
+            if itag in seen_itags or not is_direct_format(fmt):
                 continue
             seen_itags.add(itag)
 
@@ -637,33 +687,57 @@ async def hls_proxy(url: str, request: Request):
         raise HTTPException(status_code=502, detail=f"Proxy error: {str(e)}")
 
 
+def _pick_progressive_video(formats: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Video-only format played directly (Shorts): H.264 first since every browser
+    decodes it, capped at 1080p on the short side (Shorts are vertical)."""
+    videos = [f for f in formats if is_direct_format(f)
+              and f.get("vcodec", "none") != "none" and f.get("acodec", "none") == "none"]
+
+    def short_side(f: Dict[str, Any]) -> int:
+        return min(f.get("width") or 0, f.get("height") or 0) or (f.get("height") or 0)
+
+    capped = [f for f in videos if short_side(f) <= 1080]
+    for pool in (
+        [f for f in capped if (f.get("vcodec") or "").startswith("avc1")],
+        [f for f in capped if f.get("ext") == "mp4"],
+        capped,
+        videos,
+    ):
+        if pool:
+            return max(pool, key=lambda f: (short_side(f), f.get("tbr") or 0))
+    return None
+
+
+async def _resolve_stream_url(video_id: str, itag: Optional[str], audio: bool) -> tuple:
+    """(url, ext) for a direct stream, through the shared extraction so a prefetch
+    already running (hover, Shorts preloading) is reused instead of duplicated."""
+    key = f"stream:{video_id}:{itag or ('bestaudio' if audio else 'best')}"
+    if cached := stream_url_cache_get(key):
+        return cached
+    info = await asyncio.shield(prefetch_stream_urls(video_id))
+    if cached := stream_url_cache_get(key):  # adaptive itags are cached by the extraction
+        return cached
+    formats = [f for f in (info or {}).get("formats", []) if is_direct_format(f)]
+    if itag:
+        fmt = next((f for f in formats if str(f.get("format_id")) == str(itag) and f.get("url")), None)
+    elif audio:
+        audio_only = [f for f in formats if f.get("url")
+                      and f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"]
+        fmt = _best_m4a_audio(formats) or (max(audio_only, key=lambda f: f.get("abr") or 0) if audio_only else None)
+    else:
+        fmt = _pick_progressive_video(formats)
+    if not fmt:
+        return None, ""
+    ext = fmt.get("ext") or ("m4a" if audio else "mp4")
+    stream_url_cache_set(key, fmt["url"], ext)
+    return fmt["url"], ext
+
+
 @router.get("/api/stream/{video_id}/audio")
 async def stream_audio(video_id: VideoId, request: Request, itag: OptionalFormatId = None):
     """Stream the best audio-only track (for dual video+audio playback in the browser)."""
     try:
-        cache_key = f"stream:{video_id}:{itag or 'bestaudio'}"
-        cached = stream_url_cache_get(cache_key)
-
-        if cached:
-            direct_url, ext = cached
-        else:
-            format_spec = itag if itag else "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio"
-            opts = get_ydl_opts(**{"format": format_spec})
-            _info = await ydl_extract(f"https://www.youtube.com/watch?v={video_id}", opts)
-            if not _info:
-                direct_url, ext = None, "m4a"
-            elif itag:
-                _found = next(
-                    (f for f in _info.get("formats", []) if str(f.get("format_id")) == str(itag)),
-                    None,
-                )
-                direct_url = _found.get("url") if _found else None
-                ext = _found.get("ext", "m4a") if _found else "m4a"
-            else:
-                direct_url = _info.get("url")
-                ext = _info.get("ext", "m4a")
-            if direct_url:
-                stream_url_cache_set(cache_key, direct_url, ext or "m4a")
+        direct_url, ext = await _resolve_stream_url(video_id, itag, audio=True)
 
         if not direct_url:
             raise HTTPException(status_code=404, detail="Audio stream not found")
@@ -895,32 +969,8 @@ async def iptv_vod_hls2_segment(
 @router.get("/api/stream/{video_id}")
 async def stream_video(video_id: VideoId, request: Request, itag: OptionalFormatId = None):
     try:
-        cache_key = f"stream:{video_id}:{itag or 'best'}"
-        cached = stream_url_cache_get(cache_key)
-
-        if cached:
-            direct_url, ext = cached
-        else:
-            # No itag = Shorts player requesting video-only (audio comes from /audio endpoint).
-            # Never use bestvideo+bestaudio: yt-dlp puts adaptive URLs in requested_formats,
-            # not in info["url"], so direct_url ends up None → 404.
-            format_spec = itag if itag else "bestvideo[ext=mp4]/bestvideo[ext=webm]/bestvideo"
-            opts = get_ydl_opts(**{"format": format_spec})
-            _info = await ydl_extract(f"https://www.youtube.com/watch?v={video_id}", opts)
-            if not _info:
-                direct_url, ext = None, None
-            elif itag:
-                _found = next(
-                    (f for f in _info.get("formats", []) if str(f.get("format_id")) == str(itag)),
-                    None,
-                )
-                direct_url = _found.get("url") if _found else None
-                ext = _found.get("ext", "mp4") if _found else None
-            else:
-                direct_url = _info.get("url")
-                ext = _info.get("ext", "mp4")
-            if direct_url:
-                stream_url_cache_set(cache_key, direct_url, ext or "mp4")
+        # No itag = Shorts player asking for video-only (audio comes from /audio)
+        direct_url, ext = await _resolve_stream_url(video_id, itag, audio=False)
 
         if not direct_url:
             raise HTTPException(status_code=404, detail="Stream URL not found")
@@ -936,9 +986,9 @@ async def stream_video(video_id: VideoId, request: Request, itag: OptionalFormat
 
 def _pick_trailer_streams(formats: List[Dict[str, Any]]) -> Optional[tuple]:
     """Best ≤720p video-only (H.264 first, for Safari) and best audio-only URLs."""
-    videos = [f for f in formats if f.get("url")
+    videos = [f for f in formats if is_direct_format(f)
               and f.get("vcodec") not in (None, "none") and f.get("acodec") in (None, "none")]
-    audios = [f for f in formats if f.get("url")
+    audios = [f for f in formats if is_direct_format(f)
               and f.get("acodec") not in (None, "none") and f.get("vcodec") in (None, "none")]
     small = [f for f in videos if (f.get("height") or 0) <= 720]
     video_pool = [f for f in small if (f.get("vcodec") or "").startswith("avc1")] or small or videos
@@ -1005,7 +1055,7 @@ async def stream_trailer(video_id: VideoId, request: Request):
                 # Find combined (pre-merged) formats: vcodec and acodec both present
                 combined = [
                     f for f in _formats
-                    if f.get("url")
+                    if is_direct_format(f)
                     and f.get("vcodec") not in (None, "none")
                     and f.get("acodec") not in (None, "none")
                 ]
@@ -1063,7 +1113,7 @@ async def get_dash_mpd(video_id: VideoId, request: Request):
         for fmt in info.get("formats", []):
             itag = fmt.get("format_id")
             url = fmt.get("url")
-            if not itag or not url:
+            if not itag or not is_direct_format(fmt):
                 continue
 
             ext = fmt.get("ext", "mp4")
@@ -1457,7 +1507,7 @@ async def download_video(
                     if has_video and not has_audio:
                         audio_fmt = next(
                             (f for f in sorted(_dl_info.get("formats", []), key=lambda f: -(f.get("abr") or 0))
-                             if f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"),
+                             if is_direct_format(f) and f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"),
                             None,
                         )
                         audio_url = audio_fmt.get("url") if audio_fmt else None
@@ -1467,7 +1517,7 @@ async def download_video(
             elif format == "mp3":
                 audio_fmt = next(
                     (f for f in sorted(_dl_info.get("formats", []), key=lambda f: -(f.get("abr") or 0))
-                     if f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"),
+                     if is_direct_format(f) and f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"),
                     None,
                 )
                 video_url = audio_fmt.get("url") if audio_fmt else None

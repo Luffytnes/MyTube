@@ -63,8 +63,15 @@ def _proxychains_prefix(proxy_url: Optional[str]) -> List[str]:
 _extractions: Dict[str, "asyncio.Task[Optional[dict]]"] = {}
 
 
+def is_direct_format(fmt: Dict[str, Any]) -> bool:
+    """Plain HTTP(S) media file. With its JS challenge solver yt-dlp also lists
+    HLS variants (protocol m3u8_native) whose URL is a playlist, not a file —
+    played directly they fail with MEDIA_ERR_SRC_NOT_SUPPORTED."""
+    return bool(fmt.get("url")) and fmt.get("protocol", "https") in ("https", "http")
+
+
 def _best_m4a_audio(formats: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    audio = [f for f in formats if f.get("url")
+    audio = [f for f in formats if is_direct_format(f)
              and f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"
              and f.get("ext") in ("m4a", "mp4")]
     return max(audio, key=lambda f: f.get("abr") or 0) if audio else None
@@ -74,7 +81,7 @@ async def _extract_and_cache(video_id: str) -> Optional[dict]:
     info = await ydl_extract(f"https://www.youtube.com/watch?v={video_id}", get_ydl_opts())
     if not info:
         return None
-    formats = info.get("formats", [])
+    formats = [f for f in info.get("formats", []) if is_direct_format(f)]
     for fmt in formats:
         fid, url = fmt.get("format_id"), fmt.get("url")
         video_only = fmt.get("vcodec", "none") != "none" and fmt.get("acodec", "none") == "none"
@@ -132,7 +139,7 @@ async def _get_video_and_audio_urls(video_id: str, itag: str) -> tuple:
         print(f"[hls] yt-dlp returned no info for {video_id}", flush=True)
         return None, None
 
-    formats = info.get("formats", [])
+    formats = [f for f in info.get("formats", []) if is_direct_format(f)]
     v_url = None
     for fmt in formats:
         if str(fmt.get("format_id")) == str(itag):

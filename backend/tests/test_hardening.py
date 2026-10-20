@@ -331,3 +331,81 @@ class TestSharedExtraction:
             assert client.post("/api/prefetch/bad").status_code == 422
             assert client.post("/api/prefetch/zzzzzzzzzz1").status_code == 202
         started.assert_called_once_with("zzzzzzzzzz1")
+
+
+class TestDirectFormats:
+    FORMATS = [
+        {"format_id": "312", "protocol": "m3u8_native", "url": "https://hls/312.m3u8", "vcodec": "avc1.64002A", "acodec": "none", "width": 1920, "height": 1080, "ext": "mp4"},
+        {"format_id": "299", "protocol": "https", "url": "https://v/299", "vcodec": "avc1.64002a", "acodec": "none", "width": 1920, "height": 1080, "ext": "mp4", "tbr": 4000},
+        {"format_id": "399", "protocol": "https", "url": "https://v/399", "vcodec": "av01.0.08M.08", "acodec": "none", "width": 1920, "height": 1080, "ext": "mp4", "tbr": 2000},
+        {"format_id": "140", "protocol": "https", "url": "https://a/140", "vcodec": "none", "acodec": "mp4a.40.2", "ext": "m4a", "abr": 129},
+        {"format_id": "233", "protocol": "m3u8_native", "url": "https://hls/233.m3u8", "vcodec": "none", "acodec": "mp4a.40.5", "ext": "mp4", "abr": 200},
+    ]
+
+    def test_hls_variants_are_not_direct(self):
+        from services.ffmpeg import is_direct_format
+        assert not is_direct_format(self.FORMATS[0])
+        assert is_direct_format(self.FORMATS[1])
+
+    def test_progressive_pick_prefers_direct_h264(self):
+        from api.youtube import _pick_progressive_video
+        assert _pick_progressive_video(self.FORMATS)["format_id"] == "299"
+
+    def test_vertical_short_is_capped_on_its_short_side(self):
+        from api.youtube import _pick_progressive_video
+        vertical = [dict(f, width=f.get("height"), height=f.get("width")) for f in self.FORMATS if f.get("width")]
+        assert _pick_progressive_video(vertical)["format_id"] == "299"
+
+    def test_best_audio_ignores_hls(self):
+        from services.ffmpeg import _best_m4a_audio
+        assert _best_m4a_audio(self.FORMATS)["format_id"] == "140"
+
+
+class TestChunkedMediaProxy:
+    """The browser gets one continuous response while upstream requests stay
+    bounded (googlevideo throttles open-ended ranges)."""
+
+    BLOB = bytes(range(256)) * (5 * 1024 * 1024 // 256 + 123)  # ~5 MB, not chunk-aligned
+
+    def _client(self, seen_ranges):
+        import re as _re
+        import httpx as _httpx
+
+        def handler(request):
+            seen_ranges.append(request.headers.get("range"))
+            m = _re.fullmatch(r"bytes=(\d+)-(\d+)", request.headers.get("range", ""))
+            lo, hi = int(m.group(1)), min(int(m.group(2)), len(self.BLOB) - 1)
+            return _httpx.Response(206, content=self.BLOB[lo:hi + 1],
+                                   headers={"content-range": f"bytes {lo}-{hi}/{len(self.BLOB)}"})
+
+        return lambda **kw: _httpx.AsyncClient(transport=_httpx.MockTransport(handler))
+
+    def _get(self, headers=None):
+        seen = []
+        with patch("api.youtube.httpx_client", self._client(seen)), \
+             patch("api.youtube._resolve_stream_url", AsyncMock(return_value=("https://gv/x", "mp4"))):
+            resp = _youtube_client().get("/api/stream/dQw4w9WgXcQ?itag=137", headers=headers or {})
+        return resp, seen
+
+    def test_full_file_is_reassembled_from_bounded_chunks(self):
+        from api.youtube import _MEDIA_CHUNK
+        resp, seen = self._get()
+        assert resp.status_code == 200
+        assert resp.content == self.BLOB
+        assert int(resp.headers["content-length"]) == len(self.BLOB)
+        assert len(seen) == -(-len(self.BLOB) // _MEDIA_CHUNK)
+        for r in seen:
+            lo, hi = map(int, r.removeprefix("bytes=").split("-"))
+            assert hi - lo + 1 <= _MEDIA_CHUNK
+
+    def test_open_range_from_offset(self):
+        resp, _ = self._get({"Range": "bytes=3000000-"})
+        assert resp.status_code == 206
+        assert resp.content == self.BLOB[3000000:]
+        assert resp.headers["content-range"] == f"bytes 3000000-{len(self.BLOB) - 1}/{len(self.BLOB)}"
+
+    def test_small_range_is_a_single_request(self):
+        resp, seen = self._get({"Range": "bytes=100-199"})
+        assert resp.status_code == 206
+        assert resp.content == self.BLOB[100:200]
+        assert seen == ["bytes=100-199"]
