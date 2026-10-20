@@ -204,7 +204,7 @@ export default function TvWatchPage() {
         video.addEventListener('canplay', onCanPlay, { once: true })
 
         if (type === 'live') {
-          await player.load(`${API_BASE}/api/iptv/hls/${id}`)
+          await player.load(`${API_BASE}/api/iptv/hls/${id}`, null, 'application/x-mpegurl')
         } else {
           // Fetch total duration from backend
           try {

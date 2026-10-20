@@ -128,7 +128,8 @@ async def iptv_stream_url(stream_id: str, request: Request):
     return {"url": f"{base}/api/iptv/hls/{stream_id}"}
 
 
-@router.get("/api/iptv/hls/{stream_id}")
+# HEAD too: players probe extension-less manifest URLs before loading them
+@router.api_route("/api/iptv/hls/{stream_id}", methods=["GET", "HEAD"])
 async def iptv_hls_stream(stream_id: str, request: Request):
     """Fetch IPTV HLS manifest and rewrite URLs through our proxy to fix CORS."""
     if not config._xtream_cfg.get("server"):
@@ -692,7 +693,16 @@ async def iptv_series_list(category_id: Optional[str] = None):
 
 @router.get("/api/iptv/series_info/{series_id}")
 async def iptv_series_info(series_id: str):
+    _check_vod_params(stream_id=series_id)
     return await _xtream_api("get_series_info", extra={"series_id": series_id}, timeout=20.0)
+
+
+@router.get("/api/iptv/vod_info/{stream_id}")
+async def iptv_vod_info(stream_id: str):
+    """Xtream metadata for a movie (plot, genre, rating…). The film page asked
+    for it as a fallback when TMDB has no match, but the route was missing."""
+    _check_vod_params(stream_id=stream_id)
+    return await _xtream_api("get_vod_info", extra={"vod_id": stream_id}, timeout=20.0)
 
 
 @router.get("/api/iptv/search")

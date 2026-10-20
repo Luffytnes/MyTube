@@ -102,7 +102,7 @@ export default function IPTVWatchPage() {
         video.addEventListener('canplay', onCanPlay, { once: true })
 
         if (type === 'live') {
-          await player.load(`${API_BASE}/api/iptv/hls/${id}`)
+          await player.load(`${API_BASE}/api/iptv/hls/${id}`, null, 'application/x-mpegurl')
         } else {
           const startSec = audioChangePositionRef.current > 0 ? Math.floor(audioChangePositionRef.current) : 0
           audioChangePositionRef.current = 0
