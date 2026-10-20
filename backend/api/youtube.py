@@ -58,6 +58,7 @@ from services.ffmpeg import (
     _start_hls_session,
     _kill_hls_sessions_for,
     hls_session_lead,
+    prefetch_stream_urls,
     _iptv_vod_hls_sessions,
     _iptv_vod_hls_lock,
     _kill_vod_session,
@@ -673,6 +674,18 @@ async def stream_audio(video_id: VideoId, request: Request, itag: OptionalFormat
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Audio stream error: {str(e)}")
+
+
+@router.post("/api/prefetch/{video_id}", status_code=202)
+async def prefetch_video(video_id: VideoId):
+    """Warm the stream URL cache before the player asks for a stream.
+
+    The frontend fires this on hover/click and when the watch page opens, so
+    the yt-dlp extraction (~2 s) overlaps with the metadata fetch instead of
+    following it. Returns immediately; concurrent calls share one extraction."""
+    if stream_url_cache_get(f"stream:{video_id}:bestaudio_m4a") is None:
+        prefetch_stream_urls(video_id)
+    return Response(status_code=202)
 
 
 @router.get("/api/hls/{video_id}/{itag}/stream.m3u8")

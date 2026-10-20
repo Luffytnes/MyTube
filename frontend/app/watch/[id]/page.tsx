@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, Suspense, use } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { getVideo, getPlaylist, type PlaylistDetail, type PlaylistVideo } from '@/lib/api'
+import { getVideo, prefetchStream, getPlaylist, type PlaylistDetail, type PlaylistVideo } from '@/lib/api'
 import { getPlaybackSettings } from '@/lib/playbackSettings'
 import { getQueue, isInQueue, addToQueue, removeFromQueue } from '@/lib/queue'
 import { saveToHistory } from '@/lib/history'
@@ -310,6 +310,8 @@ function WatchContent({ params }: WatchPageProps) {
   const loadVideo = useCallback(async () => {
     setLoading(true)
     setError(null)
+    // Stream URLs resolve server-side while the metadata loads, not after it
+    prefetchStream(id)
     try {
       const data = await getVideo(id)
       setVideo(data)

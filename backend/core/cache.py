@@ -69,7 +69,8 @@ def live_url_cache_set(video_id: str, url: str) -> None:
 
 # Cache for direct stream URLs (YouTube CDN URLs last ~6h — we cache for 3h)
 STREAM_URL_TTL = 10800  # 3 hours
-_stream_url_cache: TTLCache = TTLCache(maxsize=1000, ttl=STREAM_URL_TTL)
+# ~45 entries per prefetched video (every adaptive format)
+_stream_url_cache: TTLCache = TTLCache(maxsize=5000, ttl=STREAM_URL_TTL)
 
 
 def stream_url_cache_get(key: str) -> Optional[tuple]:

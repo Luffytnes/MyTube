@@ -57,6 +57,52 @@ def _proxychains_prefix(proxy_url: Optional[str]) -> List[str]:
     return [_PROXYCHAINS4, "-q", "-f", _PROXYCHAINS_CONF]
 
 
+# One yt-dlp extraction per video at a time, shared between the prefetch
+# endpoint (fired on hover/click) and the HLS session the player requests a
+# moment later — usually while that extraction is still running.
+_extractions: Dict[str, "asyncio.Task[Optional[dict]]"] = {}
+
+
+def _best_m4a_audio(formats: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    audio = [f for f in formats if f.get("url")
+             and f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"
+             and f.get("ext") in ("m4a", "mp4")]
+    return max(audio, key=lambda f: f.get("abr") or 0) if audio else None
+
+
+async def _extract_and_cache(video_id: str) -> Optional[dict]:
+    info = await ydl_extract(f"https://www.youtube.com/watch?v={video_id}", get_ydl_opts())
+    if not info:
+        return None
+    formats = info.get("formats", [])
+    for fmt in formats:
+        fid, url = fmt.get("format_id"), fmt.get("url")
+        video_only = fmt.get("vcodec", "none") != "none" and fmt.get("acodec", "none") == "none"
+        audio_only = fmt.get("acodec", "none") != "none" and fmt.get("vcodec", "none") == "none"
+        if fid and url and (video_only or audio_only):
+            stream_url_cache_set(f"stream:{video_id}:{fid}", url, fmt.get("ext", "mp4"))
+    if audio := _best_m4a_audio(formats):
+        stream_url_cache_set(f"stream:{video_id}:bestaudio_m4a", audio["url"], audio.get("ext", "m4a"))
+    return info
+
+
+def prefetch_stream_urls(video_id: str) -> "asyncio.Task[Optional[dict]]":
+    """Start (or join) the extraction that fills the stream URL cache."""
+    task = _extractions.get(video_id)
+    if task is None:
+        task = asyncio.ensure_future(_extract_and_cache(video_id))
+        _extractions[video_id] = task
+
+        def _done(t: "asyncio.Task[Optional[dict]]") -> None:
+            if _extractions.get(video_id) is t:
+                del _extractions[video_id]
+            if not t.cancelled():
+                t.exception()  # failures are re-raised to whoever awaits the task
+
+        task.add_done_callback(_done)
+    return task
+
+
 async def _get_video_and_audio_urls(video_id: str, itag: str) -> tuple:
     """Return (video_url, audio_url), using cache where possible."""
     video_cache_key = f"stream:{video_id}:{itag}"
@@ -67,8 +113,6 @@ async def _get_video_and_audio_urls(video_id: str, itag: str) -> tuple:
 
     if cached_v and cached_a:
         return cached_v[0], cached_a[0]
-
-    opts = get_ydl_opts(**{"quiet": True, "no_warnings": True})
 
     # Height in pixels for the most common YouTube video-only itags
     _ITAG_HEIGHT: Dict[str, int] = {
@@ -82,7 +126,8 @@ async def _get_video_and_audio_urls(video_id: str, itag: str) -> tuple:
         "266": 2160, "272": 2160, "315": 2160, "313": 2160, "401": 2160,
     }
 
-    info = await ydl_extract(f"https://www.youtube.com/watch?v={video_id}", opts)
+    # shield: a player that disconnects must not cancel an extraction others share
+    info = await asyncio.shield(prefetch_stream_urls(video_id))
     if not info:
         print(f"[hls] yt-dlp returned no info for {video_id}", flush=True)
         return None, None
@@ -169,7 +214,13 @@ async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
     session_key = f"{video_id}:{itag}:{start}"
 
     async with _hls_lock:
-        if session_key in _hls_sessions:
+        existing = _hls_sessions.get(session_key)
+        if existing and existing["process"].returncode not in (None, 0):
+            # ffmpeg died (expired URL, network error): rebuild rather than serve
+            # a truncated playlist — players no longer DELETE before starting
+            _hls_sessions.pop(session_key)
+            shutil.rmtree(existing["dir"], ignore_errors=True)
+        elif existing:
             return session_key
 
     # yt-dlp extraction takes seconds: resolving outside the lock keeps other

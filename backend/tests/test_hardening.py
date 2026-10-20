@@ -293,3 +293,41 @@ class TestNewsEntities:
         assert "&nbsp;" not in article["description"]
         assert article["description"] == "Story Source"
         assert article["title"] == "Tom & Jerry"
+
+
+class TestSharedExtraction:
+    def test_prefetch_and_session_share_one_extraction(self):
+        import asyncio
+        import services.ffmpeg as ff
+        from core.cache import stream_url_cache_invalidate
+
+        calls = []
+        info = {"formats": [
+            {"format_id": "137", "url": "https://v/137", "ext": "mp4", "vcodec": "avc1", "acodec": "none", "height": 1080},
+            {"format_id": "140", "url": "https://a/140", "ext": "m4a", "vcodec": "none", "acodec": "mp4a", "abr": 128},
+        ]}
+
+        async def fake_extract(url, opts):
+            calls.append(url)
+            await asyncio.sleep(0.05)
+            return info
+
+        async def scenario():
+            stream_url_cache_invalidate("aaaaaaaaaaa")
+            with patch.object(ff, "ydl_extract", fake_extract):
+                ff.prefetch_stream_urls("aaaaaaaaaaa")             # fired on hover
+                first = await ff._get_video_and_audio_urls("aaaaaaaaaaa", "137")  # player, mid-extraction
+                second = await ff._get_video_and_audio_urls("aaaaaaaaaaa", "137")  # served from cache
+            return first, second
+
+        first, second = asyncio.run(scenario())
+        assert first == ("https://v/137", "https://a/140")
+        assert second == first
+        assert len(calls) == 1
+
+    def test_prefetch_endpoint_accepts_valid_ids_only(self):
+        with patch("api.youtube.prefetch_stream_urls") as started:
+            client = _youtube_client()
+            assert client.post("/api/prefetch/bad").status_code == 422
+            assert client.post("/api/prefetch/zzzzzzzzzz1").status_code == 202
+        started.assert_called_once_with("zzzzzzzzzz1")

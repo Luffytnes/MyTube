@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { Bookmark, BookmarkCheck, ListPlus, ListChecks } from 'lucide-react'
-import { VideoCard as VideoCardType } from '@/lib/api'
+import { prefetchStream, VideoCard as VideoCardType } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { isInWatchLater, toggleWatchLater } from '@/lib/watchLater'
 import { isInQueue, addToQueue, removeFromQueue } from '@/lib/queue'
@@ -68,10 +68,25 @@ function stringToColor(str: string): string {
   return colors[Math.abs(hash) % colors.length]
 }
 
+/** Resolve stream URLs once the pointer rests on a card (or on tap), so playback
+ *  starts almost immediately after the click. The delay ignores pointers that
+ *  merely sweep across the grid. */
+function usePrefetchOnIntent(videoId: string) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
+  return {
+    onMouseEnter: () => { timer.current = setTimeout(() => prefetchStream(videoId), 250) },
+    onMouseLeave: () => { if (timer.current) clearTimeout(timer.current) },
+    onTouchStart: () => prefetchStream(videoId),
+    onFocus: () => prefetchStream(videoId),
+  }
+}
+
 export default function VideoCard({ video, layout = 'grid' }: VideoCardProps) {
   const [saved, setSaved] = useState(false)
   const [inQueue, setInQueue] = useState(false)
   const [progress, setProgress] = useState(0)
+  const prefetchHandlers = usePrefetchOnIntent(video.id)
 
   useEffect(() => {
     setSaved(isInWatchLater(video.id))
@@ -134,7 +149,7 @@ export default function VideoCard({ video, layout = 'grid' }: VideoCardProps) {
   if (layout === 'list') {
     return (
       <div className="flex gap-3 group rounded-xl p-1 -m-1 transition-colors hover:bg-yt-hover/40">
-        <Link href={`/watch/${video.id}`} className="flex-shrink-0">
+        <Link href={`/watch/${video.id}`} className="flex-shrink-0" {...prefetchHandlers}>
           <div className="relative w-[168px] aspect-video rounded-xl overflow-hidden bg-yt-secondary ring-1 ring-inset ring-white/5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -169,7 +184,7 @@ export default function VideoCard({ video, layout = 'grid' }: VideoCardProps) {
   // Grid layout (default)
   return (
     <div className="flex flex-col group">
-      <Link href={`/watch/${video.id}`} className="block rounded-2xl">
+      <Link href={`/watch/${video.id}`} className="block rounded-2xl" {...prefetchHandlers}>
         <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-yt-secondary ring-1 ring-inset ring-white/5 transition-all duration-300 ease-out group-hover:-translate-y-1 group-hover:shadow-card">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img

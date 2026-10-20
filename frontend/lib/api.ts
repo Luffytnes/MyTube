@@ -204,6 +204,20 @@ export async function getChannelLive(id: string): Promise<ChannelVideosResult> {
   return { videos: (data.videos ?? []).map(normalizeThumbnail), channelId: id, page: 1 }
 }
 
+const PREFETCH_TTL_MS = 10 * 60 * 1000
+const prefetchedAt = new Map<string, number>()
+
+/** Let the backend resolve stream URLs (yt-dlp, ~2 s) before the player asks
+ *  for them: fired on hover/tap and when the watch page opens. */
+export function prefetchStream(videoId: string): void {
+  const last = prefetchedAt.get(videoId)
+  if (last && Date.now() - last < PREFETCH_TTL_MS) return
+  prefetchedAt.set(videoId, Date.now())
+  fetch(`${API_BASE}/api/prefetch/${videoId}`, { method: 'POST', keepalive: true }).catch(() => {
+    prefetchedAt.delete(videoId)
+  })
+}
+
 export function getStreamUrl(videoId: string, itag?: string): string {
   const params = itag ? `?itag=${encodeURIComponent(itag)}` : ''
   return `${API_BASE}/api/stream/${videoId}${params}`

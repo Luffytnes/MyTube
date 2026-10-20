@@ -34,11 +34,25 @@ import { adaptiveFallback, pickInitialFormat, rankedVideoFormats } from '@/lib/v
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
-/** Kill server-side HLS sessions for this video+format. Callers that start a new
- *  session must wait for it: a DELETE landing after the new playlist request
- *  (e.g. delayed by a CORS preflight) would kill the fresh session. */
+const pendingStops = new Map<string, Promise<void>>()
+
+/** Kill server-side HLS sessions for this video+format (also drops its cached
+ *  stream URLs). Tracked so a new session can wait for it: a DELETE landing
+ *  after the new playlist request (e.g. delayed by a CORS preflight) would kill
+ *  the fresh session. */
 function stopHlsSession(videoId: string, itag: string): Promise<void> {
-  return fetch(`${API_BASE}/api/hls/${videoId}/${itag}`, { method: 'DELETE' }).then(() => {}, () => {})
+  const key = `${videoId}:${itag}`
+  const stop: Promise<void> = fetch(`${API_BASE}/api/hls/${videoId}/${itag}`, { method: 'DELETE' })
+    .then(() => {}, () => {})
+    .finally(() => { if (pendingStops.get(key) === stop) pendingStops.delete(key) })
+  pendingStops.set(key, stop)
+  return stop
+}
+
+/** Resolves once no DELETE for this video+format is in flight. A fresh start
+ *  sends none of its own, so the URLs prefetched on hover stay cached. */
+function afterPendingStop(videoId: string, itag: string): Promise<void> {
+  return pendingStops.get(`${videoId}:${itag}`) ?? Promise.resolve()
 }
 
 export interface Chapter {
@@ -145,6 +159,9 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   const [hoverRatio, setHoverRatio] = useState<number | null>(null)
   const [subCues, setSubCues] = useState<Array<{ start: number; end: number; lines: string[] }>>([])
   const [activeCue, setActiveCue] = useState<string[] | null>(null)
+  // Strict browsers (LibreWolf, Safari's "Stop media") refuse play() that is not
+  // a direct reaction to a click; we then need an explicit play button.
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false)
 
   const allVideoFormats = useMemo(() => rankedVideoFormats(formats), [formats])
 
@@ -218,6 +235,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
     setError(null)
     setLoading(true)
     setPlaying(false)
+    setAutoplayBlocked(false)
     setCurrentTime(0)
     setSpeed(settings.defaultSpeed)
     setVolume(settings.defaultVolume)
@@ -414,7 +432,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
     const settings = getPlaybackSettings()
     const resumePos = settings.resumePlayback ? (getPosition(videoId) ?? 0) : 0
     let cancelled = false
-    stopHlsSession(videoId, itag).then(() => { if (!cancelled) startHdHls(resumePos, settings.autoplay) })
+    afterPendingStop(videoId, itag).then(() => { if (!cancelled) startHdHls(resumePos, settings.autoplay) })
     return () => {
       cancelled = true
       if (hdHlsRef.current) { hdHlsRef.current.destroy(); hdHlsRef.current = null }
@@ -477,7 +495,14 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
     return () => window.removeEventListener('keydown', handleKey)
   }) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const safePlay = (el: HTMLVideoElement | HTMLAudioElement | null) => { el?.play().catch(() => {}) }
+  const safePlay = (el: HTMLVideoElement | HTMLAudioElement | null) => {
+    el?.play().catch((e: unknown) => {
+      if (el === videoRef.current && e instanceof DOMException && e.name === 'NotAllowedError') {
+        setAutoplayBlocked(true)
+        setLoading(false)
+      }
+    })
+  }
 
   function togglePlay() {
     const video = videoRef.current
@@ -686,7 +711,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
         autoPlay={getPlaybackSettings().autoplay}
         playsInline
         preload="auto"
-        onPlay={() => { setPlaying(true); safePlay(audioRef.current) }}
+        onPlay={() => { setPlaying(true); setAutoplayBlocked(false); safePlay(audioRef.current) }}
         onPause={() => { setPlaying(false); audioRef.current?.pause() }}
         onSeeked={() => { if (audioRef.current && videoRef.current) audioRef.current.currentTime = hlsStartOffsetRef.current + videoRef.current.currentTime }}
         onTimeUpdate={handleTimeUpdate}
@@ -714,7 +739,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
       </video>
 
       {/* Loading spinner */}
-      {loading && !error && (
+      {loading && !error && !autoplayBlocked && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="w-12 h-12 border-[3px] border-white/15 border-t-red-500 rounded-full animate-spin" />
         </div>
@@ -1001,8 +1026,22 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
         </div>
       )}
 
+      {/* Autoplay refused by the browser: a click is always allowed to start playback */}
+      {autoplayBlocked && !playing && !error && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); togglePlay() }}
+          className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-black/40 text-white animate-fade-in"
+        >
+          <span className="w-20 h-20 rounded-full bg-accent-gradient shadow-glow flex items-center justify-center animate-pulse-ring">
+            <Play className="w-8 h-8 fill-white ml-1" />
+          </span>
+          <span className="text-sm font-semibold drop-shadow">{t('player_click_to_play')}</span>
+        </button>
+      )}
+
       {/* Big play overlay */}
-      {!playing && showControls && !loading && !error && (
+      {!playing && !autoplayBlocked && showControls && !loading && !error && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="w-20 h-20 glass-chip rounded-full flex items-center justify-center shadow-elevated">
             <Play className="w-8 h-8 text-white fill-white ml-1" />
