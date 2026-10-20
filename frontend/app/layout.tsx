@@ -3,7 +3,9 @@ import '@fontsource-variable/inter'
 import '@fontsource-variable/bricolage-grotesque'
 import './globals.css'
 import ClientLayoutWrapper from '@/components/layout/ClientLayoutWrapper'
+import { cookies } from 'next/headers'
 import { RegionProvider } from '@/lib/regionContext'
+import { REGION_COOKIE, findRegion } from '@/lib/regions'
 import { SubscriptionsProvider } from '@/lib/subscriptionsContext'
 import { ThemeProvider } from '@/lib/themeContext'
 import { MusicProvider } from '@/lib/musicContext'
@@ -40,13 +42,15 @@ export const viewport: Viewport = {
 // Applies the saved theme before first paint (ThemeProvider only runs after hydration)
 const THEME_BOOTSTRAP = `try{var m=localStorage.getItem('mytube-theme')||'dark';var t=m==='auto'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):m;document.documentElement.setAttribute('data-theme',t)}catch(e){}`
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const regionCode = (await cookies()).get(REGION_COOKIE)?.value
+  const lang = findRegion(regionCode)?.lang ?? 'en'
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={lang} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
         <meta name="referrer" content="no-referrer" />
@@ -59,7 +63,7 @@ export default function RootLayout({
       </head>
       <body className="bg-yt-bg text-yt-text antialiased">
         <ThemeProvider>
-        <RegionProvider>
+        <RegionProvider initialRegionCode={regionCode}>
           <SubscriptionsProvider>
           <MusicProvider>
           <ClientLayoutWrapper>{children}</ClientLayoutWrapper>
