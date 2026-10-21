@@ -409,3 +409,60 @@ class TestChunkedMediaProxy:
         assert resp.status_code == 206
         assert resp.content == self.BLOB[100:200]
         assert seen == ["bytes=100-199"]
+
+
+class TestOrphanCleanup:
+    def test_only_mytube_session_leftovers_are_removed(self, tmp_path):
+        import services.ffmpeg as ff
+        (tmp_path / "mytube_hls_abc").mkdir()
+        (tmp_path / "mytube_hls_abc" / "seg00001.m4s").write_bytes(b"x")
+        (tmp_path / "mytube_iptv_hls_def").mkdir()
+        (tmp_path / "mytube_4243.mkv").write_bytes(b"x")
+        (tmp_path / "mytube_proxychains.conf").write_text("keep")
+        (tmp_path / "other_app_cache").mkdir()
+        with patch.object(ff.tempfile, "gettempdir", return_value=str(tmp_path)):
+            assert ff.cleanup_orphan_media_files() == 3
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["mytube_proxychains.conf", "other_app_cache"]
+
+
+class TestFreeXtreamConnection:
+    def _scenario(self, max_connections):
+        import asyncio
+        import api.iptv as iptv
+        import services.ffmpeg as ff
+        from core import config
+
+        async def run(tmp):
+            hang = asyncio.Event()
+            entries = {}
+            for key in ("1.mkv", "2.mkv"):
+                path = os.path.join(tmp, f"mytube_{key}")
+                open(path, "wb").close()
+                entries[key] = {"path": path, "task": asyncio.ensure_future(hang.wait()), "done": False, "written": 1}
+            ff._vod_dl_cache.clear()
+            ff._vod_dl_cache.update(entries)
+            iptv._max_connections.update(value=max_connections, at=time.monotonic())
+            with patch.dict(config._xtream_cfg, {"server": "http://x", "username": "u", "password": "p"}):
+                await iptv.free_xtream_connection(keep_key="2.mkv")
+            await asyncio.sleep(0)
+            result = (sorted(ff._vod_dl_cache), entries["1.mkv"]["task"].cancelled(), os.path.exists(entries["1.mkv"]["path"]))
+            for e in entries.values():
+                e["task"].cancel()
+            ff._vod_dl_cache.clear()
+            iptv._max_connections.update(value=None, at=0.0)
+            return result
+
+        import tempfile as _tf
+        import time
+        with _tf.TemporaryDirectory() as tmp:
+            return asyncio.run(run(tmp))
+
+    def test_single_connection_account_stops_other_downloads(self):
+        kept, cancelled, file_left = self._scenario(1)
+        assert kept == ["2.mkv"]
+        assert cancelled and not file_left
+
+    def test_multi_connection_account_is_left_alone(self):
+        kept, cancelled, file_left = self._scenario(2)
+        assert kept == ["1.mkv", "2.mkv"]
+        assert not cancelled and file_left

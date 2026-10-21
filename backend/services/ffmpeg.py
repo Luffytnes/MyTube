@@ -1,6 +1,7 @@
 """ffmpeg-based HLS/VOD transcoding sessions and helpers."""
 import asyncio
 import os
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -501,6 +502,9 @@ async def _start_iptv_vod_hls_session(
 
 
 HLS_IDLE_TTL = 120  # seconds before an untouched HLS session is killed
+# IPTV films/episodes get longer: pausing a movie for a few minutes is normal,
+# and a killed session made the resume fail (segments answered 404).
+IPTV_VOD_IDLE_TTL = 600
 
 
 async def _hls_idle_cleanup_loop() -> None:
@@ -522,7 +526,7 @@ async def _hls_idle_cleanup_loop() -> None:
 
         async with _iptv_vod_hls_lock:
             stale = [k for k, s in _iptv_vod_hls_sessions.items()
-                     if now - s.get("last_access", 0) > HLS_IDLE_TTL]
+                     if now - s.get("last_access", 0) > IPTV_VOD_IDLE_TTL]
             for k in stale:
                 _kill_vod_session(_iptv_vod_hls_sessions.pop(k))
 
@@ -632,6 +636,28 @@ async def _ensure_vod_download(cache_key: str, url: str) -> dict:
     _vod_dl_cache[cache_key] = entry
     entry["task"] = asyncio.create_task(_download_to_file(url, path, entry))
     return entry
+
+
+def cancel_vod_downloads(keep_key: Optional[str] = None) -> int:
+    """Stop and forget background VOD downloads other than `keep_key`.
+
+    Each download holds a connection to the Xtream server until the whole file
+    is fetched, even after the viewer moved on. Returns how many were stopped."""
+    stopped = 0
+    for key, entry in list(_vod_dl_cache.items()):
+        task = entry.get("task")
+        if key == keep_key or not task or task.done():
+            continue
+        task.cancel()
+        # Forget the partial file: once the task ends it is flagged "done" and
+        # would otherwise be served later as if it were complete
+        _vod_dl_cache.pop(key, None)
+        try:
+            os.unlink(entry["path"])
+        except OSError:
+            pass
+        stopped += 1
+    return stopped
 
 
 async def _pipe_from_vod_cache(entry: dict, stdin: asyncio.StreamWriter, start_byte: int = 0) -> None:
@@ -786,3 +812,47 @@ async def _start_ffmpeg(cmd: list, timeout: float = 25.0) -> tuple[asyncio.subpr
         rc = await proc.wait()
         raise RuntimeError(f"source inaccessible ou format non supporté (exit {rc})")
     return proc, chunk
+
+
+_ORPHAN_DIR_PREFIXES = ("mytube_hls_", "mytube_iptv_hls_")
+_ORPHAN_VOD_FILE = re.compile(r"mytube_[A-Za-z0-9_-]+\.(?:mp4|mkv|avi|ts|m2ts|mts|webm|mov|flv|m3u8)")
+
+
+def cleanup_orphan_media_files() -> int:
+    """Delete HLS session dirs and VOD cache files left by a previous process.
+
+    Sessions live in memory, so after a restart (crash, --reload, redeploy)
+    their temp files belong to nobody and were never removed — gigabytes
+    accumulated. Called at startup; returns the number of entries removed."""
+    removed = 0
+    tmp = tempfile.gettempdir()
+    for name in os.listdir(tmp):
+        path = os.path.join(tmp, name)
+        try:
+            if name.startswith(_ORPHAN_DIR_PREFIXES) and os.path.isdir(path):
+                shutil.rmtree(path, ignore_errors=True)
+                removed += 1
+            elif _ORPHAN_VOD_FILE.fullmatch(name) and os.path.isfile(path):
+                os.unlink(path)
+                removed += 1
+        except OSError:
+            continue
+    return removed
+
+
+def stop_all_sessions() -> None:
+    """Kill every ffmpeg session and delete its files (called at shutdown)."""
+    for session in list(_hls_sessions.values()):
+        try:
+            session["process"].kill()
+        except Exception:
+            pass
+        shutil.rmtree(session["dir"], ignore_errors=True)
+    _hls_sessions.clear()
+    for session in list(_iptv_vod_hls_sessions.values()):
+        _kill_vod_session(session)
+    _iptv_vod_hls_sessions.clear()
+    for entry in list(_vod_dl_cache.values()):
+        task = entry.get("task")
+        if task and not task.done():
+            task.cancel()

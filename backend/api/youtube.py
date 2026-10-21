@@ -877,10 +877,11 @@ async def iptv_vod_hls2_playlist(
     start: int = 0,
 ):
     from core import config
-    from api.iptv import _check_vod_params
+    from api.iptv import _check_vod_params, free_xtream_connection
     if not config._xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
     _check_vod_params(ext, media, stream_id)
+    await free_xtream_connection(keep_key=f"{stream_id}.{ext}")
 
     # Kill sessions for same stream but different parameters
     async with _iptv_vod_hls_lock:

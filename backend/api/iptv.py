@@ -4,6 +4,7 @@ import base64
 import json
 import os
 import re
+import time
 from time import time as _time
 from typing import Any, Optional
 from urllib.parse import urlparse
@@ -19,7 +20,7 @@ from core.cache import cache_get, cache_set
 from services.innertube import httpx_client, rewrite_hls_manifest
 from services.tmdb import _clean_title_for_tmdb
 from services.ffmpeg import _ensure_vod_download, _pipe_from_vod_cache, _log_stderr
-from services.ffmpeg import _vod_dl_cache
+from services.ffmpeg import _vod_dl_cache, cancel_vod_downloads
 
 router = APIRouter()
 
@@ -60,6 +61,37 @@ async def iptv_delete_credentials():
     config._xtream_cfg = {}
     config._xtream_save()
     return {"ok": True}
+
+
+_max_connections: dict = {"value": None, "at": 0.0}
+
+
+async def _xtream_max_connections() -> int | None:
+    """Account's simultaneous-connection limit (cached 5 min)."""
+    if _max_connections["at"] and time.monotonic() - _max_connections["at"] < 300:
+        return _max_connections["value"]
+    s, u, p = config._xtream_cfg["server"], config._xtream_cfg["username"], config._xtream_cfg["password"]
+    value = None
+    try:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            resp = await client.get(f"{s}/player_api.php", params={"username": u, "password": p})
+        value = int(resp.json().get("user_info", {}).get("max_connections"))
+    except Exception:
+        pass
+    _max_connections.update(value=value, at=time.monotonic())
+    return value
+
+
+async def free_xtream_connection(keep_key: str | None = None) -> None:
+    """Before starting a stream on a single-connection account, stop background
+    VOD downloads (they keep the only connection busy after the viewer moved on,
+    so the next channel or film was refused by the provider)."""
+    if not config._xtream_cfg.get("server"):
+        return
+    if await _xtream_max_connections() == 1:
+        stopped = cancel_vod_downloads(keep_key)
+        if stopped:
+            print(f"[iptv] stopped {stopped} background VOD download(s) to free the connection", flush=True)
 
 
 async def _xtream_api(action: str, extra: dict | None = None, timeout: float = 45.0) -> Any:
@@ -134,6 +166,7 @@ async def iptv_hls_stream(stream_id: str, request: Request):
     """Fetch IPTV HLS manifest and rewrite URLs through our proxy to fix CORS."""
     if not config._xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
+    await free_xtream_connection()
     s, u, p = config._xtream_cfg["server"], config._xtream_cfg["username"], config._xtream_cfg["password"]
     m3u8_url = f"{s}/live/{u}/{p}/{stream_id}.m3u8"
     try:
@@ -366,6 +399,7 @@ async def iptv_vod_subtitle(stream_id: str, ext: str = "mp4", media: str = "movi
     cache_key = f"{stream_id}.{ext}"
     vod_entry = _vod_dl_cache.get(cache_key)
     if not vod_entry:
+        await free_xtream_connection(keep_key=cache_key)
         vod_entry = await _ensure_vod_download(cache_key, remote_url)
 
     cache_path = vod_entry.get("path", "")
@@ -469,6 +503,7 @@ async def iptv_vod_stream_url(stream_id: str, request: Request, ext: str = "mp4"
         pass
 
     # Pre-start the file download so vod_proxy can reuse it immediately
+    await free_xtream_connection(keep_key=f"{stream_id}.{ext}")
     asyncio.create_task(_ensure_vod_download(f"{stream_id}.{ext}", src_url))
 
     return {
@@ -560,6 +595,7 @@ async def iptv_vod_proxy(stream_id: str, request: Request, ext: str = "mp4", med
         except Exception as e:
             print(f"[seek] probe failed: {e}, byte_offset=0", flush=True)
 
+    await free_xtream_connection(keep_key=f"{stream_id}.{ext}")
     vod_cache_entry = await _ensure_vod_download(f"{stream_id}.{ext}", src)
     cache_path = vod_cache_entry.get("path", "")
     cache_done = vod_cache_entry.get("done", False) and bool(cache_path) and os.path.exists(cache_path) and os.path.getsize(cache_path) > 0
