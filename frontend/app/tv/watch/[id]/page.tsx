@@ -7,6 +7,7 @@ import { useRegion } from '@/lib/regionContext'
 import { toggleTvFavorite, isTvFavorite, type TvFavoriteType } from '@/lib/tvFavorites'
 import { saveContinue, getContinueWatching, cleanSeriesIfComplete } from '@/lib/tvContinueWatching'
 import TvVideoPlayer from '@/components/tv/TvVideoPlayer'
+import { describeShakaError, isRetryableShakaError, SHAKA_CRITICAL } from '@/lib/shaka'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -126,6 +127,7 @@ export default function TvWatchPage() {
     }, 5000)
   }, [id, type, name, icon, ext, media, seriesId, seriesSeason, seriesName, seriesIcon])
 
+  const lastRecoveryRef = useRef(0)
   const handleNeedNewSession = useCallback(async (absoluteT: number) => {
     const player = playerRef.current
     if (!player || abortedRef.current) return
@@ -149,6 +151,8 @@ export default function TvWatchPage() {
       setLoading(false)
     }
   }, [id, ext, media])
+  const needNewSessionRef = useRef(handleNeedNewSession)
+  needNewSessionRef.current = handleNeedNewSession
 
   useEffect(() => {
     abortedRef.current = false
@@ -201,7 +205,24 @@ export default function TvWatchPage() {
         if (abortedRef.current) return
 
         player.addEventListener('error', (e: any) => {
-          console.error('[shaka]', e.detail)
+          const err = e.detail
+          if (err?.severity !== SHAKA_CRITICAL) {
+            // Shaka retries these itself: ending playback here cut films on a blip
+            console.warn('[shaka] recoverable', describeShakaError(err))
+            return
+          }
+          console.error('[shaka]', describeShakaError(err))
+          // Expired session (long pause) or network failure: resume once where we
+          // were before showing the error screen (at most once a minute)
+          if (isRetryableShakaError(err) && Date.now() - lastRecoveryRef.current > 60_000) {
+            lastRecoveryRef.current = Date.now()
+            if (type === 'live') {
+              player.load(`${API_BASE}/api/iptv/hls/${id}`, null, 'application/x-mpegurl').catch(() => onError())
+            } else {
+              needNewSessionRef.current(positionRef.current)
+            }
+            return
+          }
           onError()
         })
 
@@ -238,7 +259,7 @@ export default function TvWatchPage() {
         if (!abortedRef.current) video.play().catch(() => {})
       } catch (e: any) {
         if (!abortedRef.current) {
-          console.error('[shaka init]', e)
+          console.error('[shaka init]', describeShakaError(e))
           onError()
         }
       }

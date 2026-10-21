@@ -5,6 +5,7 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Radio, Film } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 import TvVideoPlayer from '@/components/tv/TvVideoPlayer'
+import { describeShakaError, SHAKA_CRITICAL } from '@/lib/shaka'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -94,7 +95,12 @@ export default function IPTVWatchPage() {
         if (abortedRef.current) return
 
         player.addEventListener('error', (e: any) => {
-          console.error('[shaka]', e.detail)
+          const err = e.detail
+          if (err?.severity !== SHAKA_CRITICAL) {
+            console.warn('[shaka] recoverable', describeShakaError(err))  // retried by Shaka
+            return
+          }
+          console.error('[shaka]', describeShakaError(err))
           onError()
         })
 
@@ -124,7 +130,7 @@ export default function IPTVWatchPage() {
 
         if (!abortedRef.current) video.play().catch(() => {})
       } catch (e: any) {
-        if (!abortedRef.current) { console.error('[shaka init]', e); onError() }
+        if (!abortedRef.current) { console.error('[shaka init]', describeShakaError(e)); onError() }
       }
     }
 
