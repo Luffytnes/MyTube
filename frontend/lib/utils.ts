@@ -72,3 +72,11 @@ export function formatSubscribers(n: number): string {
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K subscribers`
   return `${n} subscribers`
 }
+
+/** Append the items not already listed; `added` tells "Load more" whether the
+ *  page brought anything new (when it did not, the list is complete). */
+export function appendUnique<T extends { id: string }>(prev: T[], next: T[]): { list: T[]; added: number } {
+  const seen = new Set(prev.map((item) => item.id))
+  const fresh = next.filter((item) => !seen.has(item.id) && Boolean(seen.add(item.id)))
+  return { list: fresh.length ? [...prev, ...fresh] : prev, added: fresh.length }
+}

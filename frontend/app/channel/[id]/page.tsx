@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback, use } from 'react'
+import { useState, useEffect, useCallback, useRef, use } from 'react'
 import { getChannel, getChannelVideos, getChannelShorts, getChannelLive } from '@/lib/api'
 import type { ChannelInfo, VideoCard } from '@/lib/api'
 import VideoGrid from '@/components/video/VideoGrid'
 import { VideoGridSkeleton } from '@/components/ui/Skeleton'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { formatSubscribers } from '@/lib/utils'
+import { appendUnique, formatSubscribers } from '@/lib/utils'
 import { Bell, BellOff } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
 import { useSubscriptions } from '@/lib/subscriptionsContext'
@@ -41,6 +41,8 @@ export default function ChannelPage({ params }: ChannelPageProps) {
   const { isSubscribed, toggle: toggleSubscription } = useSubscriptions()
   const [channel, setChannel] = useState<ChannelInfo | null>(null)
   const [videos, setVideos] = useState<VideoCard[]>([])
+  // Mirror of `videos` so an async page load can tell whether it added anything
+  const videosRef = useRef<VideoCard[]>([])
   const [shortsVideos, setShortsVideos] = useState<VideoCard[]>([])
   const [liveVideos, setLiveVideos] = useState<VideoCard[]>([])
   const [channelLoading, setChannelLoading] = useState(true)
@@ -72,9 +74,10 @@ export default function ChannelPage({ params }: ChannelPageProps) {
       setVideosLoading(true)
       try {
         const data = await getChannelVideos(id, p)
-        if (reset) setVideos(data.videos)
-        else setVideos((prev) => [...prev, ...data.videos])
-        setHasMore(data.videos.length > 0)
+        const { list, added } = appendUnique(reset ? [] : videosRef.current, data.videos)
+        videosRef.current = list
+        setVideos(list)
+        setHasMore(added > 0)
       } catch (err) {
         console.error(err)
       } finally {

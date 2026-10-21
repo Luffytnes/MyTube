@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import VideoGrid from '@/components/video/VideoGrid'
 import ChannelCard from '@/components/search/ChannelCard'
 import PlaylistCard from '@/components/search/PlaylistCard'
 import { searchVideos } from '@/lib/api'
+import { appendUnique } from '@/lib/utils'
 import type { VideoCard, ChannelSearchResult, PlaylistSearchResult } from '@/lib/api'
 import { Search } from 'lucide-react'
 import { useRegion } from '@/lib/regionContext'
@@ -32,6 +33,8 @@ function SearchContent() {
   const { t } = useRegion()
 
   const [videos, setVideos] = useState<VideoCard[]>([])
+  // Mirror of `videos` so an async page load can tell whether it added anything
+  const videosRef = useRef<VideoCard[]>([])
   const [channels, setChannels] = useState<ChannelSearchResult[]>([])
   const [playlists, setPlaylists] = useState<PlaylistSearchResult[]>([])
   const [loading, setLoading] = useState(false)
@@ -47,15 +50,15 @@ function SearchContent() {
     setError(null)
     try {
       const data = await searchVideos(q, p)
+      const { list, added } = appendUnique(reset ? [] : videosRef.current, data.videos)
+      videosRef.current = list
+      setVideos(list)
       if (reset) {
-        setVideos(data.videos)
         setChannels(data.channels)
         setPlaylists(data.playlists)
-      } else {
-        setVideos((prev) => [...prev, ...data.videos])
-        // channels and playlists only appear on page 1
       }
-      setHasMore(data.videos.length > 0)
+      // channels and playlists only appear on page 1
+      setHasMore(added > 0)
     } catch (err) {
       setError(t('error_trending'))
       console.error(err)
@@ -67,6 +70,7 @@ function SearchContent() {
   useEffect(() => {
     setPage(1)
     setVideos([])
+    videosRef.current = []
     setChannels([])
     setPlaylists([])
     setActiveFilter('all')

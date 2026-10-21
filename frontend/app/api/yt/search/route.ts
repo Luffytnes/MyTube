@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getInnertube, parseVideoItem } from '@/lib/innertube'
+import { feedPage } from '@/lib/feedCache'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
@@ -8,9 +9,11 @@ export async function GET(req: NextRequest) {
 
   try {
     const yt = await getInnertube()
-    const results = page > 1
-      ? await (await yt.search(q, { type: 'video' })).getContinuation()
-      : await yt.search(q, { type: 'video' })
+    const results = await feedPage(`search:${q}`, page, () => yt.search(q, { type: 'video' }))
+    if (!results) {
+      // Past the last page
+      return NextResponse.json({ videos: [], channels: [], playlists: [], query: q, page })
+    }
 
     const videos = (results.videos ?? [])
       .map(parseVideoItem)
