@@ -38,6 +38,7 @@ export default function TvWatchPage() {
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const playerRef = useRef<any>(null)
+  const sessionSeqRef = useRef(0)  // latest seek wins; earlier loads are superseded
   const abortedRef = useRef(false)
   const startOffsetRef = useRef(0)
   const totalDurationRef = useRef(0)
@@ -128,19 +129,24 @@ export default function TvWatchPage() {
   const handleNeedNewSession = useCallback(async (absoluteT: number) => {
     const player = playerRef.current
     if (!player || abortedRef.current) return
+    const seq = ++sessionSeqRef.current
     const newStart = Math.max(0, Math.floor(absoluteT))
     setStartOffsetBoth(newStart)
     setLoading(true)
     const url = `${API_BASE}/api/iptv/vod_hls2/${id}/playlist.m3u8?ext=${ext}&media=${media}&audio_idx=${audioIdxRef.current}&start=${newStart}`
     try {
       await player.load(url)
-      if (!abortedRef.current) {
+      if (!abortedRef.current && seq === sessionSeqRef.current) {
         setLoading(false)
         videoRef.current?.play().catch(() => {})
       }
     } catch (e) {
-      console.error('[shaka] seek-to-new-session failed:', e)
-      if (!abortedRef.current) setLoading(false)
+      // A newer seek interrupts this load (Shaka LOAD_INTERRUPTED, code 7000): expected
+      const code = (e as { code?: number } | null)?.code
+      if (seq !== sessionSeqRef.current || code === 7000 || abortedRef.current) return
+      // shaka.util.Error has no enumerable message: log its code and data
+      console.error('[shaka] seek-to-new-session failed:', code, (e as { data?: unknown } | null)?.data)
+      setLoading(false)
     }
   }, [id, ext, media])
 

@@ -174,6 +174,8 @@ export default function TvVideoPlayer({
   const timeOffsetRef = useRef(timeOffset)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dragging = useRef(false)
+  // Position previewed while dragging; the seek is committed once, on release
+  const [scrubTime, setScrubTime] = useState<number | null>(null)
   const showQueueRef = useRef(false)
   const openPanelRef = useRef<'audio' | 'sub' | null>(null)
   const seekRef = useRef<HTMLDivElement>(null)
@@ -279,8 +281,8 @@ export default function TvVideoPlayer({
       const v = videoRef.current
       if (!v) return
       if (e.code === 'Space') { e.preventDefault(); v.paused ? v.play().catch(() => {}) : v.pause() }
-      if (e.code === 'ArrowRight') { e.preventDefault(); v.currentTime = Math.min(v.duration || 0, v.currentTime + 10) }
-      if (e.code === 'ArrowLeft') { e.preventDefault(); v.currentTime = Math.max(0, v.currentTime - 10) }
+      if (e.code === 'ArrowRight') { e.preventDefault(); skipRef.current(10) }
+      if (e.code === 'ArrowLeft') { e.preventDefault(); skipRef.current(-10) }
       if (e.code === 'KeyM') { e.preventDefault(); v.muted = !v.muted }
       if (e.code === 'KeyF') { e.preventDefault(); handleFullscreen() }
       revealControls()
@@ -305,46 +307,63 @@ export default function TvVideoPlayer({
     else document.exitFullscreen().catch(() => {})
   }
 
-  function seekTo(clientX: number) {
+  function timeAt(clientX: number): number | null {
     const bar = seekRef.current
-    const v = videoRef.current
     const displayDur = externalDuration ?? duration
-    if (!bar || !v || !displayDur) return
+    if (!bar || !displayDur) return null
     const { left, width } = bar.getBoundingClientRect()
-    const ratio = Math.max(0, Math.min(1, (clientX - left) / width))
-    const absoluteT = ratio * displayDur
-    if (onNeedNewSession) {
-      onNeedNewSession(absoluteT)
-    } else {
-      const clamped = Math.max(0, Math.min(v.duration || displayDur, absoluteT - timeOffset))
+    return Math.max(0, Math.min(1, (clientX - left) / width)) * displayDur
+  }
+
+  /** Seek to an absolute time. Inside the part the current session has already
+   *  transcoded, seek locally; otherwise ask the page for a new session (which
+   *  restarts ffmpeg, so it must not happen on every pointer move). */
+  function commitSeek(absoluteT: number) {
+    const v = videoRef.current
+    if (!v) return
+    const displayDur = externalDuration ?? duration
+    const target = Math.max(0, displayDur ? Math.min(displayDur, absoluteT) : absoluteT)
+    const rel = target - timeOffset
+    const seekable = v.seekable
+    const seekableEnd = seekable.length ? seekable.end(seekable.length - 1) : 0
+    if (!onNeedNewSession || (rel >= 0 && rel <= seekableEnd - 1)) {
+      const clamped = Math.max(0, Math.min(v.duration || displayDur, rel))
       v.currentTime = clamped
       setCurrentTime(clamped)
+    } else {
+      onNeedNewSession(target)
     }
   }
 
   function onSeekDown(e: React.PointerEvent<HTMLDivElement>) {
     e.currentTarget.setPointerCapture(e.pointerId)
     dragging.current = true
-    seekTo(e.clientX)
+    setScrubTime(timeAt(e.clientX))
   }
   function onSeekMove(e: React.PointerEvent<HTMLDivElement>) {
     if (!dragging.current) return
-    seekTo(e.clientX)
+    setScrubTime(timeAt(e.clientX))
   }
   function onSeekUp(e: React.PointerEvent<HTMLDivElement>) {
+    if (!dragging.current) return
     dragging.current = false
-    seekTo(e.clientX)
+    setScrubTime(null)
+    const t = timeAt(e.clientX)
+    if (t !== null) commitSeek(t)
   }
 
   function skip(sec: number) {
     const v = videoRef.current
     if (!v) return
-    v.currentTime = Math.max(0, Math.min(v.duration || 0, v.currentTime + sec))
+    commitSeek(timeOffset + v.currentTime + sec)
     revealControls()
   }
 
+  const skipRef = useRef(skip)
+  skipRef.current = skip
+
   const displayDur = externalDuration ?? duration
-  const displayTime = currentTime + timeOffset
+  const displayTime = scrubTime ?? currentTime + timeOffset
   const displayBuffered = buffered + timeOffset
   const playedPct = displayDur > 0 ? Math.min(100, (displayTime / displayDur) * 100) : 0
   const bufPct = displayDur > 0 ? Math.min(100, (displayBuffered / displayDur) * 100) : 0
