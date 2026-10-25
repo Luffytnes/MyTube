@@ -1,4 +1,4 @@
-fastapi==0.135.2
+fastapi==0.159.1
 uvicorn[standard]==0.42.0
 yt-dlp[default,deno]==2026.8.19
 httpx[socks]==0.28.1
