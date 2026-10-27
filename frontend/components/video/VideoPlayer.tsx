@@ -23,9 +23,10 @@ import {
   RotateCcw,
   RotateCw,
   Check,
+  Languages,
 } from 'lucide-react'
 import { formatDuration } from '@/lib/utils'
-import { getStreamUrl, getAudioUrl, getSubtitles, getSubtitleUrl, type VideoFormat, type SubtitleTrack } from '@/lib/api'
+import { getStreamUrl, getAudioUrl, getAudioTracks, getSubtitles, getSubtitleUrl, type AudioTrack, type VideoFormat, type SubtitleTrack } from '@/lib/api'
 import VolumeSlider from '@/components/ui/VolumeSlider'
 import { useRegion } from '@/lib/regionContext'
 import { getPlaybackSettings, setPlaybackSettings } from '@/lib/playbackSettings'
@@ -116,7 +117,7 @@ function PanelItem({
 }
 
 export default function VideoPlayer({ videoId, formats, title, isLive, knownDuration, onEnded, onNext, onPrev, hasNext, hasPrev, chapters = [], seekToRef }: VideoPlayerProps) {
-  const { t } = useRegion()
+  const { t, lang: uiLang } = useRegion()
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -155,6 +156,11 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   const [subtitleTracks, setSubtitleTracks] = useState<SubtitleTrack[]>([])
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>(() => getPlaybackSettings().subtitleLang)
   const [showSubtitleMenu, setShowSubtitleMenu] = useState(false)
+  // Audio language: null = the video's original track (the backend default)
+  const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([])
+  const [audioLang, setAudioLang] = useState<string | null>(null)
+  const audioLangRef = useRef<string | null>(null)
+  const [showAudioMenu, setShowAudioMenu] = useState(false)
   const [scrubRatio, setScrubRatio] = useState<number | null>(null)
   const [hoverRatio, setHoverRatio] = useState<number | null>(null)
   const [subCues, setSubCues] = useState<Array<{ start: number; end: number; lines: string[] }>>([])
@@ -177,6 +183,36 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
     }
     setSelectedSubtitle(settings.subtitleLang)
   }, [videoId])
+
+  // Audio languages (YouTube's AI dubs): fetched once per video, original by default
+  useEffect(() => {
+    setAudioTracks([])
+    setAudioLang(null)
+    audioLangRef.current = null
+    let cancelled = false
+    getAudioTracks(videoId).then(tracks => { if (!cancelled) setAudioTracks(tracks) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [videoId])
+
+  const originalLang = audioTracks.find(track => track.original)?.lang ?? null
+
+  function languageName(track: AudioTrack): string {
+    try {
+      const name = new Intl.DisplayNames([uiLang], { type: 'language' }).of(track.lang)
+      if (name) return name.charAt(0).toUpperCase() + name.slice(1)
+    } catch { /* unsupported code: use YouTube's label */ }
+    return track.label
+  }
+
+  function selectAudioLanguage(lang: string | null) {
+    setShowAudioMenu(false)
+    if (lang === audioLangRef.current) return
+    audioLangRef.current = lang
+    setAudioLang(lang)
+    const video = videoRef.current
+    // Restart the HLS session on the new track where playback currently is
+    if (video && isVideoOnlyRef.current) startHdHlsRef.current?.(hlsStartOffsetRef.current + video.currentTime, !video.paused)
+  }
 
   // Fetch + parse subtitle VTT
   useEffect(() => {
@@ -323,7 +359,8 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
     if (hadPreviousSession || isErrorRestart) { video.removeAttribute('src'); video.load() }
     hlsStartOffsetRef.current = startOffset
     const itag = String(selectedFormat.itag)
-    const hlsUrl = `${API_BASE}/api/hls/${videoId}/${itag}/stream.m3u8?start=${Math.floor(startOffset)}`
+    const audioParam = audioLangRef.current ? `&audio=${encodeURIComponent(audioLangRef.current)}` : ''
+    const hlsUrl = `${API_BASE}/api/hls/${videoId}/${itag}/stream.m3u8?start=${Math.floor(startOffset)}${audioParam}`
     setLoading(true)
     import('hls.js').then(({ default: Hls }) => {
       if (!videoRef.current) return
@@ -673,7 +710,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   const bufferedProgress = duration > 0 ? (buffered / duration) * 100 : 0
   const displayTimeVal = scrubRatio !== null ? scrubRatio * duration : currentTime
   const hoverTimeVal = hoverRatio !== null ? hoverRatio * duration : 0
-  const anyMenuOpen = showSpeedMenu || showQualityMenu || showSubtitleMenu
+  const anyMenuOpen = showSpeedMenu || showQualityMenu || showSubtitleMenu || showAudioMenu
 
   // Current chapter at hover/current time
   const hoverChapter = chapters.length > 0 && duration > 0
@@ -694,7 +731,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
       }}
       onClick={() => {
         if (justShowedControlsRef.current) { justShowedControlsRef.current = false; return }
-        if (anyMenuOpen) { setShowSpeedMenu(false); setShowQualityMenu(false); setShowSubtitleMenu(false); return }
+        if (anyMenuOpen) { setShowSpeedMenu(false); setShowQualityMenu(false); setShowSubtitleMenu(false); setShowAudioMenu(false); return }
         togglePlay()
       }}
     >
@@ -816,6 +853,19 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                       sublabel={fmt.ext?.toUpperCase()}
                       active={selectedFormat?.itag === fmt.itag}
                       onClick={() => selectQuality(fmt)}
+                    />
+                  ))}
+                </Panel>
+              )}
+              {showAudioMenu && audioTracks.length > 1 && (
+                <Panel title={t('player_audio_language')} icon={<Languages className="w-4 h-4" />}>
+                  {audioTracks.map(track => (
+                    <PanelItem
+                      key={track.lang}
+                      label={languageName(track)}
+                      sublabel={track.original ? t('player_audio_original') : undefined}
+                      active={(audioLang ?? originalLang) === track.lang}
+                      onClick={() => selectAudioLanguage(track.original ? null : track.lang)}
                     />
                   ))}
                 </Panel>
@@ -980,11 +1030,20 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                 <div className="flex items-center gap-0.5">
                   {!isLive && (!isMobile || fullscreen) && (
                     <button
-                      onClick={e => { e.stopPropagation(); setShowSpeedMenu(v => !v); setShowQualityMenu(false); setShowSubtitleMenu(false) }}
+                      onClick={e => { e.stopPropagation(); setShowSpeedMenu(v => !v); setShowQualityMenu(false); setShowSubtitleMenu(false); setShowAudioMenu(false) }}
                       className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors text-xs font-bold ${showSpeedMenu ? 'bg-accent-gradient text-white shadow-glow' : 'text-white/85 hover:text-white hover:bg-white/10'}`}
                       title="Vitesse"
                     >
                       {speed === 1 ? '1×' : `${speed}×`}
+                    </button>
+                  )}
+                  {!isLive && isVideoOnly && audioTracks.length > 1 && (!isMobile || fullscreen) && (
+                    <button
+                      onClick={e => { e.stopPropagation(); setShowAudioMenu(v => !v); setShowSpeedMenu(false); setShowQualityMenu(false); setShowSubtitleMenu(false) }}
+                      className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${showAudioMenu || audioLang ? 'bg-accent-gradient text-white shadow-glow' : 'text-white/85 hover:text-white hover:bg-white/10'}`}
+                      title={t('player_audio_language')}
+                    >
+                      <Languages className="w-5 h-5" />
                     </button>
                   )}
                   {!isLive && (!isMobile || fullscreen) && (
@@ -996,7 +1055,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                         } else {
                           setShowSubtitleMenu(v => !v)
                         }
-                        setShowSpeedMenu(false); setShowQualityMenu(false)
+                        setShowSpeedMenu(false); setShowQualityMenu(false); setShowAudioMenu(false)
                       }}
                       className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${showSubtitleMenu || selectedSubtitle !== 'off' ? 'bg-accent-gradient text-white shadow-glow' : 'text-white/85 hover:text-white hover:bg-white/10'}`}
                       title="Sous-titres"
@@ -1006,7 +1065,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                   )}
                   {!isLive && allVideoFormats.length > 0 && (!isMobile || fullscreen) && (
                     <button
-                      onClick={e => { e.stopPropagation(); setShowQualityMenu(v => !v); setShowSpeedMenu(false); setShowSubtitleMenu(false) }}
+                      onClick={e => { e.stopPropagation(); setShowQualityMenu(v => !v); setShowSpeedMenu(false); setShowSubtitleMenu(false); setShowAudioMenu(false) }}
                       className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${showQualityMenu ? 'bg-accent-gradient text-white shadow-glow' : 'text-white/85 hover:text-white hover:bg-white/10'}`}
                       title="Qualité"
                     >

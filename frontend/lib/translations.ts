@@ -121,6 +121,7 @@ export interface Translations {
   nav_kids: string; nav_live: string; nav_shorts: string
   nav_library: string; nav_apps: string
   player_click_to_play: string
+  player_audio_language: string; player_audio_original: string
   home_trending_now: string; home_featured: string; home_watch_now: string; home_discover: string
   kids_empty: string; kids_cat_cartoons: string; kids_cat_education: string; kids_cat_stories: string
   live_empty: string; shorts_empty: string
@@ -251,6 +252,7 @@ export const translations: Record<Lang, Translations> = {
     nav_kids: 'Kids', nav_live: 'Live', nav_shorts: 'Shorts',
     nav_library: 'Library', nav_apps: 'Apps', home_trending_now: 'Trending now', home_featured: 'Featured', home_watch_now: 'Watch now', home_discover: 'Search for what you love or subscribe to channels: this page will build itself around you.',
     player_click_to_play: 'Click to play',
+    player_audio_language: 'Audio language', player_audio_original: 'Original',
     kids_empty: 'No kids content found', kids_cat_cartoons: 'Cartoons', kids_cat_education: 'Educational', kids_cat_stories: 'Stories',
     live_empty: 'No live streams found', shorts_empty: 'No shorts found',
     tab_shorts: 'Shorts', tab_live: 'Live',
@@ -376,6 +378,7 @@ export const translations: Record<Lang, Translations> = {
     nav_kids: 'Kids', nav_live: 'Direct', nav_shorts: 'Shorts',
     nav_library: 'Bibliothèque', nav_apps: 'Applications', home_trending_now: 'Tendances du moment', home_featured: 'À la une', home_watch_now: 'Regarder', home_discover: 'Recherchez ce que vous aimez ou abonnez-vous à des chaînes : cette page se construira autour de vous.',
     player_click_to_play: 'Cliquer pour lire',
+    player_audio_language: 'Langue audio', player_audio_original: 'Originale',
     kids_empty: 'Aucun contenu enfants trouvé', kids_cat_cartoons: 'Dessins animés', kids_cat_education: 'Éducatif', kids_cat_stories: 'Histoires',
     live_empty: 'Aucun live trouvé', shorts_empty: 'Aucun short trouvé',
     tab_shorts: 'Shorts', tab_live: 'Direct',
@@ -501,6 +504,7 @@ export const translations: Record<Lang, Translations> = {
     nav_kids: 'Kids', nav_live: 'En vivo', nav_shorts: 'Shorts',
     nav_library: 'Biblioteca', nav_apps: 'Aplicaciones', home_trending_now: 'Tendencias del momento', home_featured: 'Destacado', home_watch_now: 'Ver ahora', home_discover: 'Busca lo que te gusta o suscríbete a canales: esta página se construirá a tu medida.',
     player_click_to_play: 'Haz clic para reproducir',
+    player_audio_language: 'Idioma del audio', player_audio_original: 'Original',
     kids_empty: 'No se encontró contenido infantil', kids_cat_cartoons: 'Dibujos animados', kids_cat_education: 'Educativo', kids_cat_stories: 'Cuentos',
     live_empty: 'No se encontraron transmisiones en vivo', shorts_empty: 'No se encontraron shorts',
     tab_shorts: 'Shorts', tab_live: 'En vivo',
@@ -626,6 +630,7 @@ export const translations: Record<Lang, Translations> = {
     nav_kids: 'Kids', nav_live: 'Live', nav_shorts: 'Shorts',
     nav_library: 'Mediathek', nav_apps: 'Apps', home_trending_now: 'Gerade angesagt', home_featured: 'Im Fokus', home_watch_now: 'Jetzt ansehen', home_discover: 'Suche nach dem, was dir gefällt, oder abonniere Kanäle: Diese Seite passt sich dir an.',
     player_click_to_play: 'Zum Abspielen klicken',
+    player_audio_language: 'Audiosprache', player_audio_original: 'Original',
     kids_empty: 'Kein Kinderinhalt gefunden', kids_cat_cartoons: 'Zeichentrick', kids_cat_education: 'Lehrreich', kids_cat_stories: 'Geschichten',
     live_empty: 'Keine Livestreams gefunden', shorts_empty: 'Keine Shorts gefunden',
     tab_shorts: 'Shorts', tab_live: 'Live',
@@ -751,6 +756,7 @@ export const translations: Record<Lang, Translations> = {
     nav_kids: 'Kids', nav_live: 'Ao vivo', nav_shorts: 'Shorts',
     nav_library: 'Biblioteca', nav_apps: 'Apps', home_trending_now: 'Em alta agora', home_featured: 'Em destaque', home_watch_now: 'Assistir', home_discover: 'Pesquise o que você gosta ou inscreva-se em canais: esta página vai se adaptar a você.',
     player_click_to_play: 'Clique para reproduzir',
+    player_audio_language: 'Idioma do áudio', player_audio_original: 'Original',
     kids_empty: 'Nenhum conteúdo infantil encontrado', kids_cat_cartoons: 'Desenhos animados', kids_cat_education: 'Educacional', kids_cat_stories: 'Histórias',
     live_empty: 'Nenhuma transmissão ao vivo encontrada', shorts_empty: 'Nenhum short encontrado',
     tab_shorts: 'Shorts', tab_live: 'Ao vivo',
@@ -876,6 +882,7 @@ export const translations: Record<Lang, Translations> = {
     nav_kids: 'Kids', nav_live: 'In diretta', nav_shorts: 'Shorts',
     nav_library: 'Raccolta', nav_apps: 'App', home_trending_now: 'Di tendenza ora', home_featured: 'In evidenza', home_watch_now: 'Guarda ora', home_discover: 'Cerca ciò che ami o iscriviti ai canali: questa pagina si costruirà intorno a te.',
     player_click_to_play: 'Clicca per riprodurre',
+    player_audio_language: 'Lingua audio', player_audio_original: 'Originale',
     kids_empty: 'Nessun contenuto per bambini trovato', kids_cat_cartoons: 'Cartoni animati', kids_cat_education: 'Educativo', kids_cat_stories: 'Storie',
     live_empty: 'Nessuna diretta trovata', shorts_empty: 'Nessun short trovato',
     tab_shorts: 'Shorts', tab_live: 'In diretta',
@@ -1001,6 +1008,7 @@ export const translations: Record<Lang, Translations> = {
     nav_kids: 'Kids', nav_live: 'ライブ', nav_shorts: 'ショート',
     nav_library: 'ライブラリ', nav_apps: 'アプリ', home_trending_now: '今話題', home_featured: 'ピックアップ', home_watch_now: '今すぐ見る', home_discover: '好きなものを検索したりチャンネルを登録したりすると、このページがあなた向けになります。',
     player_click_to_play: 'クリックして再生',
+    player_audio_language: '音声の言語', player_audio_original: 'オリジナル',
     kids_empty: '子ども向けコンテンツが見つかりません', kids_cat_cartoons: 'アニメ', kids_cat_education: '教育', kids_cat_stories: 'お話',
     live_empty: 'ライブ配信が見つかりません', shorts_empty: 'ショートが見つかりません',
     tab_shorts: 'ショート', tab_live: 'ライブ',
@@ -1126,6 +1134,7 @@ export const translations: Record<Lang, Translations> = {
     nav_kids: 'Kids', nav_live: '라이브', nav_shorts: '쇼츠',
     nav_library: '보관함', nav_apps: '앱', home_trending_now: '지금 인기', home_featured: '추천', home_watch_now: '지금 보기', home_discover: '좋아하는 것을 검색하거나 채널을 구독하면 이 페이지가 맞춤으로 구성됩니다.',
     player_click_to_play: '클릭하여 재생',
+    player_audio_language: '오디오 언어', player_audio_original: '원본',
     kids_empty: '어린이 콘텐츠를 찾을 수 없습니다', kids_cat_cartoons: '만화', kids_cat_education: '교육', kids_cat_stories: '이야기',
     live_empty: '라이브 스트림을 찾을 수 없습니다', shorts_empty: '쇼츠를 찾을 수 없습니다',
     tab_shorts: '쇼츠', tab_live: '라이브',
@@ -1251,6 +1260,7 @@ export const translations: Record<Lang, Translations> = {
     nav_kids: 'Kids', nav_live: 'Прямой эфир', nav_shorts: 'Shorts',
     nav_library: 'Библиотека', nav_apps: 'Приложения', home_trending_now: 'Сейчас в тренде', home_featured: 'Рекомендуем', home_watch_now: 'Смотреть', home_discover: 'Ищите то, что вам нравится, или подписывайтесь на каналы — эта страница подстроится под вас.',
     player_click_to_play: 'Нажмите, чтобы воспроизвести',
+    player_audio_language: 'Язык аудио', player_audio_original: 'Оригинал',
     kids_empty: 'Детский контент не найден', kids_cat_cartoons: 'Мультфильмы', kids_cat_education: 'Образовательное', kids_cat_stories: 'Сказки',
     live_empty: 'Трансляций не найдено', shorts_empty: 'Shorts не найдены',
     tab_shorts: 'Shorts', tab_live: 'Прямой эфир',

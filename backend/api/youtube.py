@@ -58,6 +58,9 @@ from services.ffmpeg import (
     _start_hls_session,
     _kill_hls_sessions_for,
     _best_m4a_audio,
+    audio_rank,
+    cached_audio_tracks,
+    hls_session_key,
     hls_session_lead,
     is_direct_format,
     prefetch_stream_urls,
@@ -77,6 +80,7 @@ PlaylistId = Annotated[str, PathParam(pattern=PLAYLIST_ID_PATTERN)]
 FormatId = Annotated[str, PathParam(pattern=FORMAT_ID_PATTERN)]
 LangCode = Annotated[str, PathParam(pattern=LANG_PATTERN)]
 OptionalFormatId = Annotated[Optional[str], Query(pattern=FORMAT_ID_PATTERN)]
+OptionalLang = Annotated[Optional[str], Query(pattern=LANG_PATTERN)]
 
 _MEDIA_UPSTREAM_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -723,7 +727,7 @@ async def _resolve_stream_url(video_id: str, itag: Optional[str], audio: bool) -
     elif audio:
         audio_only = [f for f in formats if f.get("url")
                       and f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"]
-        fmt = _best_m4a_audio(formats) or (max(audio_only, key=lambda f: f.get("abr") or 0) if audio_only else None)
+        fmt = _best_m4a_audio(formats) or (max(audio_only, key=audio_rank) if audio_only else None)
     else:
         fmt = _pick_progressive_video(formats)
     if not fmt:
@@ -750,6 +754,17 @@ async def stream_audio(video_id: VideoId, request: Request, itag: OptionalFormat
         raise HTTPException(status_code=500, detail=f"Audio stream error: {str(e)}")
 
 
+@router.get("/api/audio_tracks/{video_id}")
+async def audio_tracks(video_id: VideoId):
+    """Audio languages of a video, the original first. YouTube adds AI-dubbed
+    tracks to many videos; the original plays unless another is requested."""
+    tracks = cached_audio_tracks(video_id)
+    if tracks is None:
+        await asyncio.shield(prefetch_stream_urls(video_id))
+        tracks = cached_audio_tracks(video_id) or []
+    return {"tracks": tracks}
+
+
 @router.post("/api/prefetch/{video_id}", status_code=202)
 async def prefetch_video(video_id: VideoId):
     """Warm the stream URL cache before the player asks for a stream.
@@ -763,13 +778,15 @@ async def prefetch_video(video_id: VideoId):
 
 
 @router.get("/api/hls/{video_id}/{itag}/stream.m3u8")
-async def hls_playlist(video_id: VideoId, itag: FormatId, start: int = 0):
-    """Start (or reuse) an ffmpeg HLS session from `start` seconds."""
+async def hls_playlist(video_id: VideoId, itag: FormatId, start: int = 0, audio: OptionalLang = None):
+    """Start (or reuse) an ffmpeg HLS session from `start` seconds. `audio` picks
+    an audio language (see /api/audio_tracks); the original track by default."""
     try:
         async with _hls_lock:
-            # Kill any existing session for a different start time
+            # Kill any existing session for a different start time or audio track
             prefix = f"{video_id}:{itag}:"
-            existing = [k for k in _hls_sessions if k.startswith(prefix) and k != f"{video_id}:{itag}:{start}"]
+            wanted = hls_session_key(video_id, itag, start, audio)
+            existing = [k for k in _hls_sessions if k.startswith(prefix) and k != wanted]
             for k in existing:
                 session = _hls_sessions.pop(k)
                 try:
@@ -778,7 +795,7 @@ async def hls_playlist(video_id: VideoId, itag: FormatId, start: int = 0):
                     pass
                 shutil.rmtree(session["dir"], ignore_errors=True)
 
-        session_key = await _start_hls_session(video_id, itag, start)
+        session_key = await _start_hls_session(video_id, itag, start, audio)
         session = _hls_sessions.get(session_key)
         if session is None:
             raise HTTPException(status_code=503, detail="Session interrupted, please retry")
@@ -813,13 +830,14 @@ async def hls_playlist(video_id: VideoId, itag: FormatId, start: int = 0):
             content = content.replace("#EXTM3U", f"#EXTM3U\n#EXT-X-START:TIME-OFFSET={lead:.3f},PRECISE=YES", 1)
         # Rewrite segment and init-segment filenames to include the start offset
         segment_base = f"/api/hls/{video_id}/{itag}/{start}"
+        query = f"?audio={audio}" if audio else ""
         content = re.sub(
             r'^(seg\d+\.(?:m4s|ts))$',
-            lambda m: f"{segment_base}/{m.group(1)}",
+            lambda m: f"{segment_base}/{m.group(1)}{query}",
             content,
             flags=re.MULTILINE,
         )
-        content = content.replace('URI="init.mp4"', f'URI="{segment_base}/init.mp4"')
+        content = content.replace('URI="init.mp4"', f'URI="{segment_base}/init.mp4{query}"')
 
         return Response(
             content=content,
@@ -833,12 +851,12 @@ async def hls_playlist(video_id: VideoId, itag: FormatId, start: int = 0):
 
 
 @router.get("/api/hls/{video_id}/{itag}/{start}/{segment}")
-async def hls_segment(video_id: VideoId, itag: FormatId, start: int, segment: str):
+async def hls_segment(video_id: VideoId, itag: FormatId, start: int, segment: str, audio: OptionalLang = None):
     """Serve an HLS segment (or the fMP4 init segment) from the session temp dir."""
     if not re.fullmatch(r'seg\d+\.(?:m4s|ts)|init\.mp4', segment):
         raise HTTPException(status_code=400, detail="Invalid segment name")
 
-    session_key = f"{video_id}:{itag}:{start}"
+    session_key = hls_session_key(video_id, itag, start, audio)
     session = _hls_sessions.get(session_key)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -1507,7 +1525,7 @@ async def download_video(
                     ext = video_fmt.get("ext", "mp4")
                     if has_video and not has_audio:
                         audio_fmt = next(
-                            (f for f in sorted(_dl_info.get("formats", []), key=lambda f: -(f.get("abr") or 0))
+                            (f for f in sorted(_dl_info.get("formats", []), key=audio_rank, reverse=True)
                              if is_direct_format(f) and f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"),
                             None,
                         )
@@ -1517,7 +1535,7 @@ async def download_video(
                         audio_url, needs_merge = None, False
             elif format == "mp3":
                 audio_fmt = next(
-                    (f for f in sorted(_dl_info.get("formats", []), key=lambda f: -(f.get("abr") or 0))
+                    (f for f in sorted(_dl_info.get("formats", []), key=audio_rank, reverse=True)
                      if is_direct_format(f) and f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"),
                     None,
                 )

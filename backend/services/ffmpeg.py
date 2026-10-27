@@ -9,6 +9,7 @@ from time import time as _time
 from typing import Any, Dict, List, Optional
 
 import httpx
+from cachetools import TTLCache
 from fastapi import HTTPException
 
 from core import config
@@ -34,7 +35,7 @@ def _redact_url(url: str) -> str:
     except Exception:
         return "[url redacted]"
 
-# Active HLS transcoding sessions: key = f"{video_id}:{itag}"
+# Active HLS transcoding sessions, keyed by hls_session_key()
 _hls_sessions: Dict[str, Dict[str, Any]] = {}
 _hls_lock = asyncio.Lock()
 
@@ -71,11 +72,55 @@ def is_direct_format(fmt: Dict[str, Any]) -> bool:
     return bool(fmt.get("url")) and fmt.get("protocol", "https") in ("https", "http")
 
 
-def _best_m4a_audio(formats: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    audio = [f for f in formats if is_direct_format(f)
-             and f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"
-             and f.get("ext") in ("m4a", "mp4")]
-    return max(audio, key=lambda f: f.get("abr") or 0) if audio else None
+def audio_rank(fmt: Dict[str, Any]) -> tuple:
+    """Original audio track first, then bitrate. YouTube adds AI-dubbed tracks
+    with the same bitrate as the original, so ranking on bitrate alone picked
+    an arbitrary language (yt-dlp gives the original language_preference 10)."""
+    return (fmt.get("language_preference") or 0, fmt.get("abr") or 0)
+
+
+def _audio_only(formats: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [f for f in formats if is_direct_format(f)
+            and f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"]
+
+
+def _best_m4a_audio(formats: List[Dict[str, Any]], lang: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    audio = [f for f in _audio_only(formats) if f.get("ext") in ("m4a", "mp4")]
+    if lang:
+        # Unknown language (track removed since): fall back to the original
+        audio = [f for f in audio if f.get("language") == lang] or audio
+    return max(audio, key=audio_rank) if audio else None
+
+
+def _track_label(fmt: Dict[str, Any]) -> str:
+    # format_note looks like "English (US) original (default), medium"
+    note = (fmt.get("format_note") or "").split(",")[0]
+    return re.sub(r"\s+(original|dubbed|descriptive|\(default\)).*$", "", note).strip() or str(fmt.get("language"))
+
+
+def list_audio_tracks(formats: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """One entry per audio language, the original first."""
+    best: Dict[str, Dict[str, Any]] = {}
+    for fmt in _audio_only(formats):
+        lang = fmt.get("language")
+        if lang and (lang not in best or audio_rank(fmt) > audio_rank(best[lang])):
+            best[lang] = fmt
+    tracks = [
+        {"lang": lang, "label": _track_label(fmt), "original": (fmt.get("language_preference") or 0) >= 10}
+        for lang, fmt in best.items()
+    ]
+    return sorted(tracks, key=lambda t: (not t["original"], t["label"]))
+
+
+_audio_tracks_cache: TTLCache = TTLCache(maxsize=1000, ttl=3 * 3600)
+
+
+def cached_audio_tracks(video_id: str) -> Optional[List[Dict[str, Any]]]:
+    return _audio_tracks_cache.get(video_id)
+
+
+def hls_session_key(video_id: str, itag: str, start: int, audio_lang: Optional[str] = None) -> str:
+    return f"{video_id}:{itag}:{start}:{audio_lang or ''}"
 
 
 async def _extract_and_cache(video_id: str) -> Optional[dict]:
@@ -91,6 +136,11 @@ async def _extract_and_cache(video_id: str) -> Optional[dict]:
             stream_url_cache_set(f"stream:{video_id}:{fid}", url, fmt.get("ext", "mp4"))
     if audio := _best_m4a_audio(formats):
         stream_url_cache_set(f"stream:{video_id}:bestaudio_m4a", audio["url"], audio.get("ext", "m4a"))
+    tracks = list_audio_tracks(formats)
+    _audio_tracks_cache[video_id] = tracks
+    for track in tracks:
+        if audio := _best_m4a_audio(formats, track["lang"]):
+            stream_url_cache_set(f"stream:{video_id}:audio:{track['lang']}", audio["url"], audio.get("ext", "m4a"))
     return info
 
 
@@ -111,10 +161,11 @@ def prefetch_stream_urls(video_id: str) -> "asyncio.Task[Optional[dict]]":
     return task
 
 
-async def _get_video_and_audio_urls(video_id: str, itag: str) -> tuple:
-    """Return (video_url, audio_url), using cache where possible."""
+async def _get_video_and_audio_urls(video_id: str, itag: str, audio_lang: Optional[str] = None) -> tuple:
+    """Return (video_url, audio_url), using cache where possible. Without
+    `audio_lang` the original audio track is used."""
     video_cache_key = f"stream:{video_id}:{itag}"
-    audio_cache_key = f"stream:{video_id}:bestaudio_m4a"
+    audio_cache_key = f"stream:{video_id}:audio:{audio_lang}" if audio_lang else f"stream:{video_id}:bestaudio_m4a"
 
     cached_v = stream_url_cache_get(video_cache_key)
     cached_a = stream_url_cache_get(audio_cache_key)
@@ -189,15 +240,11 @@ async def _get_video_and_audio_urls(video_id: str, itag: str) -> tuple:
             print(f"[hls] unknown itag {itag} not found for {video_id}. Available: {available}", flush=True)
 
     a_url = None
-    audio_fmts = [f for f in sorted(formats, key=lambda f: -(f.get("abr") or 0))
-                  if f.get("acodec", "none") != "none" and f.get("vcodec", "none") == "none"]
-    for fmt in audio_fmts:
-        if fmt.get("ext") in ("m4a", "mp4"):
-            a_url = fmt.get("url")
-            stream_url_cache_set(audio_cache_key, a_url, fmt.get("ext", "m4a"))
-            break
-    if not a_url:
-        fallback_exts = [f"{f.get('format_id')}/{f.get('ext')}" for f in audio_fmts]
+    if audio := _best_m4a_audio(formats, audio_lang):
+        a_url = audio["url"]
+        stream_url_cache_set(audio_cache_key, a_url, audio.get("ext", "m4a"))
+    else:
+        fallback_exts = [f"{f.get('format_id')}/{f.get('ext')}" for f in _audio_only(formats)]
         print(f"[hls] no m4a/mp4 audio for {video_id}. Audio formats: {fallback_exts}", flush=True)
     return v_url, a_url
 
@@ -217,9 +264,9 @@ def _evict_hls_sessions_over_limit() -> None:
         shutil.rmtree(session["dir"], ignore_errors=True)
 
 
-async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
+async def _start_hls_session(video_id: str, itag: str, start: int = 0, audio_lang: Optional[str] = None) -> str:
     """Start ffmpeg transcoding from `start` seconds. Returns the session key."""
-    session_key = f"{video_id}:{itag}:{start}"
+    session_key = hls_session_key(video_id, itag, start, audio_lang)
 
     async with _hls_lock:
         existing = _hls_sessions.get(session_key)
@@ -233,7 +280,7 @@ async def _start_hls_session(video_id: str, itag: str, start: int = 0) -> str:
 
     # yt-dlp extraction takes seconds: resolving outside the lock keeps other
     # videos' playlists and segments responsive in the meantime.
-    video_url, audio_url = await _get_video_and_audio_urls(video_id, itag)
+    video_url, audio_url = await _get_video_and_audio_urls(video_id, itag, audio_lang)
     if not video_url or not audio_url:
         raise HTTPException(status_code=404, detail="Stream URLs not found")
 

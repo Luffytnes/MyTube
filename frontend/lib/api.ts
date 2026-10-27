@@ -204,6 +204,20 @@ export async function getChannelLive(id: string): Promise<ChannelVideosResult> {
   return { videos: (data.videos ?? []).map(normalizeThumbnail), channelId: id, page: 1 }
 }
 
+export interface AudioTrack {
+  lang: string
+  label: string
+  original: boolean
+}
+
+/** Audio languages of a video (original first): YouTube adds AI-dubbed tracks. */
+export async function getAudioTracks(videoId: string): Promise<AudioTrack[]> {
+  const res = await fetch(`${API_BASE}/api/audio_tracks/${videoId}`, { cache: 'no-store' })
+  if (!res.ok) return []
+  const data = await res.json()
+  return Array.isArray(data.tracks) ? data.tracks : []
+}
+
 const PREFETCH_TTL_MS = 10 * 60 * 1000
 const prefetchedAt = new Map<string, number>()
 

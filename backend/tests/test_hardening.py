@@ -466,3 +466,42 @@ class TestFreeXtreamConnection:
         kept, cancelled, file_left = self._scenario(2)
         assert kept == ["1.mkv", "2.mkv"]
         assert not cancelled and file_left
+
+
+class TestAudioLanguages:
+    FORMATS = [
+        # Same bitrate everywhere, like YouTube's AI dubs: only language_preference marks the original
+        {"format_id": "140-0", "protocol": "https", "url": "https://a/vi", "vcodec": "none", "acodec": "mp4a", "ext": "m4a", "abr": 129.5, "language": "vi", "language_preference": -1, "format_note": "Vietnamese, medium"},
+        {"format_id": "140-9", "protocol": "https", "url": "https://a/fr", "vcodec": "none", "acodec": "mp4a", "ext": "m4a", "abr": 129.5, "language": "fr", "language_preference": -1, "format_note": "French, medium"},
+        {"format_id": "140-23", "protocol": "https", "url": "https://a/en", "vcodec": "none", "acodec": "mp4a", "ext": "m4a", "abr": 129.5, "language": "en-US", "language_preference": 10, "format_note": "English (US) original (default), medium"},
+        {"format_id": "139-9", "protocol": "https", "url": "https://a/fr-low", "vcodec": "none", "acodec": "mp4a", "ext": "m4a", "abr": 48.8, "language": "fr", "language_preference": -1, "format_note": "French, low"},
+        {"format_id": "251-9", "protocol": "https", "url": "https://a/fr-opus", "vcodec": "none", "acodec": "opus", "ext": "webm", "abr": 140, "language": "fr", "language_preference": -1, "format_note": "French, medium"},
+    ]
+
+    def test_default_is_the_original_track(self):
+        from services.ffmpeg import _best_m4a_audio
+        assert _best_m4a_audio(self.FORMATS)["format_id"] == "140-23"
+
+    def test_requested_language(self):
+        from services.ffmpeg import _best_m4a_audio
+        assert _best_m4a_audio(self.FORMATS, "fr")["format_id"] == "140-9"
+
+    def test_unknown_language_falls_back_to_original(self):
+        from services.ffmpeg import _best_m4a_audio
+        assert _best_m4a_audio(self.FORMATS, "ko")["format_id"] == "140-23"
+
+    def test_track_list(self):
+        from services.ffmpeg import list_audio_tracks
+        assert list_audio_tracks(self.FORMATS) == [
+            {"lang": "en-US", "label": "English (US)", "original": True},
+            {"lang": "fr", "label": "French", "original": False},
+            {"lang": "vi", "label": "Vietnamese", "original": False},
+        ]
+
+    def test_audio_language_is_part_of_the_hls_session(self):
+        from services.ffmpeg import hls_session_key
+        assert hls_session_key("dQw4w9WgXcQ", "137", 0) != hls_session_key("dQw4w9WgXcQ", "137", 0, "fr")
+
+    def test_invalid_audio_parameter_rejected(self):
+        resp = _youtube_client().get("/api/hls/dQw4w9WgXcQ/137/stream.m3u8?audio=fr%0A")
+        assert resp.status_code == 422
