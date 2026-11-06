@@ -23,6 +23,10 @@ const KNOWN: Record<number, string> = {
 
 export function describeShakaError(err: unknown): string {
   const e = (err ?? {}) as ShakaErrorLike
+  if (e.code === undefined) {
+    // Not a shaka.util.Error (DOMException, TypeError…): say what it is
+    return err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+  }
   const data = Array.isArray(e.data) ? e.data : []
   const label = e.code !== undefined ? KNOWN[e.code] ?? 'see shaka.util.Error.Code' : 'unknown'
   // Network errors carry [uri, status, …]

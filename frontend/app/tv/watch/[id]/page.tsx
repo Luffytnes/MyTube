@@ -155,6 +155,10 @@ export default function TvWatchPage() {
   needNewSessionRef.current = handleNeedNewSession
 
   useEffect(() => {
+    // Per-run flag: abortedRef is shared by all runs and the next run resets it,
+    // so a still-pending init from the previous run (React dev double-mount, quick
+    // episode change) used to carry on and attach a second player to the video.
+    let cancelled = false
     abortedRef.current = false
     setLoading(true)
     setError(null)
@@ -169,7 +173,7 @@ export default function TvWatchPage() {
       if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null }
     }
     function onError() {
-      if (abortedRef.current) return
+      if (cancelled) return
       clearLoadTimeout()
       setError(t('iptv_error'))
       setLoading(false)
@@ -183,16 +187,17 @@ export default function TvWatchPage() {
 
     async function init() {
       const video = videoRef.current
-      if (!video || abortedRef.current) return
+      if (!video || cancelled) return
 
-      loadTimeout = setTimeout(onError, 60000)
+      // VOD resumes far into a file wait for the download to reach that point
+      loadTimeout = setTimeout(onError, type === 'live' ? 60000 : 100000)
 
       try {
         // Dynamic import — Shaka only runs in the browser
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const shakaModule: any = await import('shaka-player')
         const shaka = shakaModule.default ?? shakaModule
-        if (abortedRef.current) return
+        if (cancelled) return
 
         shaka.polyfill.installAll()
         if (!shaka.Player.isBrowserSupported()) {
@@ -201,8 +206,13 @@ export default function TvWatchPage() {
 
         player = new shaka.Player()
         playerRef.current = player
+        if (type !== 'live') {
+          // The backend may need over a minute before the first playlist (see above);
+          // Shaka's 30 s default ended in "code 1003 (request timeout)"
+          player.configure({ manifest: { retryParameters: { timeout: 90_000, maxAttempts: 2 } } })
+        }
         await player.attach(video)
-        if (abortedRef.current) return
+        if (cancelled) return
 
         player.addEventListener('error', (e: any) => {
           const err = e.detail
@@ -243,7 +253,7 @@ export default function TvWatchPage() {
               setTotalDuration(dur)
             }
           } catch {}
-          if (abortedRef.current) return
+          if (cancelled) return
 
           // Determine start position (resume or audio-change position)
           const startSec = audioChangePositionRef.current > 0
@@ -256,9 +266,9 @@ export default function TvWatchPage() {
           await player.load(hlsUrl)
         }
 
-        if (!abortedRef.current) video.play().catch(() => {})
+        if (!cancelled) video.play().catch(() => {})
       } catch (e: any) {
-        if (!abortedRef.current) {
+        if (!cancelled) {
           console.error('[shaka init]', describeShakaError(e))
           onError()
         }
@@ -268,6 +278,7 @@ export default function TvWatchPage() {
     init()
 
     return () => {
+      cancelled = true
       abortedRef.current = true
       clearLoadTimeout()
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
@@ -281,7 +292,7 @@ export default function TvWatchPage() {
           cleanSeriesIfComplete(seriesId, allSeriesEpisodeIdsRef.current)
       }
       player?.destroy().catch?.(() => {})
-      playerRef.current = null
+      if (playerRef.current === player) playerRef.current = null
       const video = videoRef.current
       if (video) { video.pause(); video.src = '' }
     }

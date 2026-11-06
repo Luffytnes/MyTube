@@ -51,6 +51,9 @@ export default function IPTVWatchPage() {
   }, [id, type, ext, media])
 
   useEffect(() => {
+    // Per-run flag: the shared abortedRef is reset by the next run, which let a
+    // pending init from the previous run attach a second player to the video
+    let cancelled = false
     abortedRef.current = false
     setLoading(true)
     setError(null)
@@ -62,7 +65,7 @@ export default function IPTVWatchPage() {
       if (loadTimeout) { clearTimeout(loadTimeout); loadTimeout = null }
     }
     function onError() {
-      if (abortedRef.current) return
+      if (cancelled) return
       clearLoadTimeout()
       setError(t('iptv_error'))
       setLoading(false)
@@ -76,7 +79,7 @@ export default function IPTVWatchPage() {
 
     async function init() {
       const video = videoRef.current
-      if (!video || abortedRef.current) return
+      if (!video || cancelled) return
 
       loadTimeout = setTimeout(onError, 60000)
 
@@ -84,7 +87,7 @@ export default function IPTVWatchPage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const shakaModule: any = await import('shaka-player')
         const shaka = shakaModule.default ?? shakaModule
-        if (abortedRef.current) return
+        if (cancelled) return
 
         shaka.polyfill.installAll()
         if (!shaka.Player.isBrowserSupported()) { onError(); return }
@@ -92,7 +95,7 @@ export default function IPTVWatchPage() {
         player = new shaka.Player()
         playerRef.current = player
         await player.attach(video)
-        if (abortedRef.current) return
+        if (cancelled) return
 
         player.addEventListener('error', (e: any) => {
           const err = e.detail
@@ -128,15 +131,16 @@ export default function IPTVWatchPage() {
           }
         }
 
-        if (!abortedRef.current) video.play().catch(() => {})
+        if (!cancelled) video.play().catch(() => {})
       } catch (e: any) {
-        if (!abortedRef.current) { console.error('[shaka init]', describeShakaError(e)); onError() }
+        if (!cancelled) { console.error('[shaka init]', describeShakaError(e)); onError() }
       }
     }
 
     init()
 
     return () => {
+      cancelled = true
       abortedRef.current = true
       clearLoadTimeout()
       if (type !== 'live') {
