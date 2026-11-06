@@ -505,3 +505,136 @@ class TestAudioLanguages:
     def test_invalid_audio_parameter_rejected(self):
         resp = _youtube_client().get("/api/hls/dQw4w9WgXcQ/137/stream.m3u8?audio=fr%0A")
         assert resp.status_code == 422
+
+
+class TestVodRefusedByProvider:
+    """Single-connection accounts: right after an episode the provider keeps
+    counting the closed connection and refuses the next stream for a while."""
+
+    def _download(self, statuses, retry_secs=5.0):
+        import asyncio
+        import tempfile as _tf
+        import httpx as _httpx
+        import services.ffmpeg as ff
+
+        calls = []
+
+        def handler(request):
+            status = statuses[min(len(calls), len(statuses) - 1)]
+            calls.append(status)
+            if status == "empty":
+                return _httpx.Response(200, content=b"")
+            return _httpx.Response(status, content=b"x" * 1000 if status == 200 else b"")
+
+        def client(**kw):
+            kw.pop("follow_redirects", None)
+            return _httpx.AsyncClient(transport=_httpx.MockTransport(handler), **kw)
+
+        async def run(path):
+            entry = {"path": path, "written": 0, "done": False, "total_size": 0, "event": asyncio.Event()}
+            with patch.object(ff, "httpx_client", client), \
+                 patch.object(ff, "VOD_REFUSED_RETRY_DELAY", 0.01), \
+                 patch.object(ff, "VOD_REFUSED_RETRY_SECS", retry_secs):
+                await ff._download_to_file("http://iptv.example/series/u/p/1.mp4", path, entry)
+            return entry
+
+        with _tf.TemporaryDirectory() as tmp:
+            entry = asyncio.run(run(os.path.join(tmp, "mytube_1.mp4")))
+        return entry, calls
+
+    def test_retries_until_the_provider_accepts(self):
+        entry, calls = self._download([403, 403, 200])
+        assert entry["written"] == 1000 and entry["done"]
+        assert calls[:3] == [403, 403, 200]
+
+    def test_empty_ok_response_counts_as_refused(self):
+        entry, calls = self._download(["empty", 200])
+        assert entry["written"] == 1000
+        assert calls[:2] == ["empty", 200]
+
+    def test_playlist_reports_the_refusal(self, tmp_path):
+        import api.iptv as iptv
+        from core import config
+        proc = MagicMock(returncode=1)
+        session = {"dir": str(tmp_path), "process": proc, "pipe_task": None, "key": "9:mp4:series:0:0",
+                   "vod_entry": {"done": True, "written": 0, "error": "HTTP 403"}}
+        with patch.dict(config._xtream_cfg, {"server": "http://iptv.example", "username": "u", "password": "p"}), \
+             patch.object(iptv, "free_xtream_connection", AsyncMock()), \
+             patch("api.youtube._start_iptv_vod_hls_session", AsyncMock(return_value=session)):
+            resp = _youtube_client().get("/api/iptv/vod_hls2/9/playlist.m3u8?ext=mp4&media=series")
+        assert resp.status_code == 502
+        assert "refused" in resp.json()["detail"] and "403" in resp.json()["detail"]
+
+    def test_missing_file_is_not_retried(self):
+        entry, calls = self._download([404, 200])
+        assert calls == [404]
+        assert entry["written"] == 0 and entry["error"] == 404
+
+    def test_gives_up_after_the_retry_window(self):
+        entry, calls = self._download([403], retry_secs=0.05)
+        assert entry["done"] and entry["written"] == 0
+        assert entry["error"] == "HTTP 403"
+        assert 1 < len(calls) < 50
+
+
+class TestVodProbeInput:
+    """Track/duration probes must not open a second provider connection."""
+
+    def _probe(self, max_connections, entry=None, ext="mp4", need_duration=False):
+        import asyncio
+        import tempfile as _tf
+        import api.iptv as iptv
+        import services.ffmpeg as ff
+        from core import config
+
+        started = []
+
+        async def run(tmp):
+            path = os.path.join(tmp, f"mytube_7.{ext}")
+            ff._vod_dl_cache.clear()
+            if entry is not None:
+                with open(path, "wb") as f:
+                    f.write(b"x")
+                ff._vod_dl_cache[f"7.{ext}"] = {"path": path, **entry}
+
+            async def fake_download(key, url):
+                started.append(url)
+                with open(path, "wb") as f:
+                    f.write(b"x")
+                fresh = {"path": path, "written": 11 * 1024 * 1024, "done": False, "task": None}
+                ff._vod_dl_cache[key] = fresh
+                return fresh
+
+            iptv._max_connections.update(value=max_connections, at=time.monotonic())
+            try:
+                with patch.dict(config._xtream_cfg, {"server": "http://iptv.example", "username": "u", "password": "p"}), \
+                     patch.object(iptv, "_ensure_vod_download", fake_download):
+                    src = await iptv._vod_probe_input("7", ext, "series", min_bytes=10 * 1024 * 1024,
+                                                      wait=1.0, need_duration=need_duration)
+                return src, path
+            finally:
+                ff._vod_dl_cache.clear()
+                iptv._max_connections.update(value=None, at=0.0)
+
+        import time
+        with _tf.TemporaryDirectory() as tmp:
+            src, path = asyncio.run(run(tmp))
+        return src, path, started
+
+    def test_complete_download_is_probed_locally(self):
+        src, path, started = self._probe(2, {"written": 500, "done": True})
+        assert src == path and not started
+
+    def test_single_connection_waits_for_the_download(self):
+        src, path, started = self._probe(1)
+        assert src == path
+        assert started == ["http://iptv.example/series/u/p/7.mp4"]
+
+    def test_single_connection_never_returns_the_provider_url(self):
+        # A partial .ts can't give the full duration, and the provider is off limits
+        src, _, _ = self._probe(1, ext="ts", need_duration=True)
+        assert src is None
+
+    def test_multi_connection_account_may_read_the_provider(self):
+        src, _, started = self._probe(2)
+        assert src == "http://iptv.example/series/u/p/7.mp4" and not started

@@ -543,7 +543,8 @@ async def _start_iptv_vod_hls_session(
             pipe_task = asyncio.ensure_future(_pipe_from_vod_cache(vod_entry, proc.stdin, 0))
             pipe_task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
 
-        session = {"dir": tmpdir, "process": proc, "pipe_task": pipe_task, "start": start, "key": session_key, "last_access": _time()}
+        session = {"dir": tmpdir, "process": proc, "pipe_task": pipe_task, "start": start, "key": session_key,
+                   "last_access": _time(), "vod_entry": vod_entry}
         _iptv_vod_hls_sessions[session_key] = session
         return session
 
@@ -609,16 +610,27 @@ async def _log_stderr(stderr: asyncio.StreamReader) -> None:
 
 _vod_dl_cache: dict[str, dict] = {}
 
+# Right after the previous film/episode, the provider may refuse the next one:
+# on single-connection accounts a closed stream still counts as active for
+# about a minute. Keep retrying the first request for that long instead of
+# failing the playback with an empty file.
+VOD_REFUSED_RETRY_SECS = 75.0
+VOD_REFUSED_RETRY_DELAY = 3.0
+# Statuses that won't change by waiting (missing file, bad request)
+_VOD_FINAL_STATUSES = (400, 404, 410)
+
 
 async def _download_to_file(url: str, path: str, entry: dict) -> None:
     """Download *url* with reconnection and write to *path*."""
     offset = 0
+    retry_until: Optional[float] = None
     try:
         with open(path, 'wb') as f:
             for _ in range(300):
                 headers: dict[str, str] = {}
                 if offset > 0:
                     headers["Range"] = f"bytes={offset}-"
+                refused = None
                 try:
                     async with httpx_client(
                         timeout=httpx.Timeout(connect=15.0, read=120.0, write=None, pool=None),
@@ -628,34 +640,53 @@ async def _download_to_file(url: str, path: str, entry: dict) -> None:
                             if resp.status_code == 416:
                                 break
                             if resp.status_code not in (200, 206):
+                                if offset > 0 or resp.status_code in _VOD_FINAL_STATUSES:
+                                    entry["error"] = resp.status_code
+                                    break
+                                refused = f"HTTP {resp.status_code}"
+                            elif resp.status_code == 200 and offset > 0:
                                 break
-                            if resp.status_code == 200 and offset > 0:
-                                break
-                            if not entry.get("total_size"):
-                                cl = int(resp.headers.get("content-length", 0) or 0)
-                                cr = resp.headers.get("content-range", "")
-                                if cr and "/" in cr:
-                                    try:
-                                        cl = int(cr.split("/")[-1].strip())
-                                    except Exception:
-                                        pass
-                                if cl > 0:
-                                    entry["total_size"] = cl
-                            async for chunk in resp.aiter_bytes(65536):
-                                f.write(chunk)
-                                f.flush()
-                                entry["written"] += len(chunk)
-                                offset += len(chunk)
-                                entry["event"].set()
-                                entry["event"].clear()
-                    await asyncio.sleep(0.2)
+                            else:
+                                if not entry.get("total_size"):
+                                    cl = int(resp.headers.get("content-length", 0) or 0)
+                                    cr = resp.headers.get("content-range", "")
+                                    if cr and "/" in cr:
+                                        try:
+                                            cl = int(cr.split("/")[-1].strip())
+                                        except Exception:
+                                            pass
+                                    if cl > 0:
+                                        entry["total_size"] = cl
+                                async for chunk in resp.aiter_bytes(65536):
+                                    f.write(chunk)
+                                    f.flush()
+                                    entry["written"] += len(chunk)
+                                    offset += len(chunk)
+                                    entry["event"].set()
+                                    entry["event"].clear()
+                                if offset == 0:
+                                    # Some panels answer "200" with an empty body when over the limit
+                                    refused = "an empty response"
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
                     print(f"[vod_cache] dl error at {offset}: {exc}", flush=True)
-                    if offset == 0:
-                        break
+                    if offset > 0:
+                        await asyncio.sleep(0.2)
+                        continue
+                    refused = type(exc).__name__
+                if refused is None:
                     await asyncio.sleep(0.2)
+                    continue
+                entry["error"] = refused
+                now = asyncio.get_running_loop().time()
+                if retry_until is None:
+                    retry_until = now + VOD_REFUSED_RETRY_SECS
+                    print(f"[vod_cache] provider refused the stream ({refused}), "
+                          f"retrying for up to {VOD_REFUSED_RETRY_SECS:.0f}s", flush=True)
+                if now >= retry_until:
+                    break
+                await asyncio.sleep(VOD_REFUSED_RETRY_DELAY)
         print(f"[vod_cache] done, total={offset} bytes, path={path}", flush=True)
     except asyncio.CancelledError:
         pass
@@ -683,6 +714,18 @@ async def _ensure_vod_download(cache_key: str, url: str) -> dict:
     _vod_dl_cache[cache_key] = entry
     entry["task"] = asyncio.create_task(_download_to_file(url, path, entry))
     return entry
+
+
+async def wait_for_vod_data(entry: dict, min_bytes: int, timeout: float) -> bool:
+    """Wait until the download holds *min_bytes* (or is complete and non-empty)."""
+    deadline = asyncio.get_running_loop().time() + timeout
+    while True:
+        written = entry.get("written", 0)
+        if written >= min_bytes or (entry.get("done") and written > 0):
+            return os.path.exists(entry.get("path", ""))
+        if entry.get("done") or asyncio.get_running_loop().time() >= deadline:
+            return False
+        await asyncio.sleep(0.25)
 
 
 def cancel_vod_downloads(keep_key: Optional[str] = None) -> int:

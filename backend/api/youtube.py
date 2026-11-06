@@ -916,10 +916,15 @@ async def iptv_vod_hls2_playlist(
     session["last_access"] = _time()
 
     playlist_path = Path(session["dir"]) / "playlist.m3u8"
+    vod_entry = session.get("vod_entry") or {}
 
-    for _ in range(150):
-        if playlist_path.exists() and playlist_path.stat().st_size > 10:
-            break
+    # 15 s to produce the first segment once data flows. While the provider is
+    # still refusing the stream (the download retries, see VOD_REFUSED_RETRY_SECS)
+    # keep waiting, up to 85 s in all: the player gives a manifest 90 s.
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    ready_by = started + 15
+    while not (playlist_path.exists() and playlist_path.stat().st_size > 10):
         proc = session["process"]
         if proc.returncode is not None and proc.returncode != 0:
             async with _iptv_vod_hls_lock:
@@ -928,10 +933,16 @@ async def iptv_vod_hls2_playlist(
             if pt and not pt.done():
                 pt.cancel()
             shutil.rmtree(session["dir"], ignore_errors=True)
+            if vod_entry.get("done") and not vod_entry.get("written"):
+                reason = vod_entry.get("error") or "no data"
+                raise HTTPException(status_code=502, detail=f"IPTV provider refused the stream ({reason})")
             raise HTTPException(status_code=503, detail="ffmpeg failed to start")
+        now = loop.time()
+        if not vod_entry.get("written") and not vod_entry.get("done"):
+            ready_by = max(ready_by, min(now + 15, started + 85))
+        if now >= ready_by:
+            raise HTTPException(status_code=504, detail="HLS transcoding timeout")
         await asyncio.sleep(0.1)
-    else:
-        raise HTTPException(status_code=504, detail="HLS transcoding timeout")
 
     content = playlist_path.read_text()
     # Declare EVENT so Shaka starts from the first segment, not the live edge

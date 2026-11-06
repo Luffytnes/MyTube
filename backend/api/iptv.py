@@ -20,7 +20,7 @@ from core.cache import cache_get, cache_set
 from services.innertube import httpx_client, rewrite_hls_manifest
 from services.tmdb import _clean_title_for_tmdb
 from services.ffmpeg import _ensure_vod_download, _pipe_from_vod_cache, _log_stderr
-from services.ffmpeg import _vod_dl_cache, cancel_vod_downloads
+from services.ffmpeg import _vod_dl_cache, cancel_vod_downloads, wait_for_vod_data
 
 router = APIRouter()
 
@@ -92,6 +92,43 @@ async def free_xtream_connection(keep_key: str | None = None) -> None:
         stopped = cancel_vod_downloads(keep_key)
         if stopped:
             print(f"[iptv] stopped {stopped} background VOD download(s) to free the connection", flush=True)
+
+
+# Containers that carry the track list and the full duration up front, so a
+# partial download probes like the whole file
+_HEADER_FIRST_EXT = {"mp4", "m4v", "mov", "mkv", "webm"}
+
+
+async def _vod_probe_input(stream_id: str, ext: str, media: str, *, min_bytes: int,
+                           wait: float, need_duration: bool = False) -> str | None:
+    """What ffprobe/ffmpeg should read to inspect a film or episode.
+
+    The local download when it holds enough data. Reading the provider directly
+    opens one more connection: single-connection accounts can't spare it (the
+    provider keeps counting it for about a minute, then refuses the playback
+    download), so for them this waits for the download instead. None when there
+    is nothing that can be read safely yet."""
+    s, u, p = config._xtream_cfg["server"], config._xtream_cfg["username"], config._xtream_cfg["password"]
+    remote = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
+    key = f"{stream_id}.{ext}"
+    partial_ok = not need_duration or ext.lower() in _HEADER_FIRST_EXT
+
+    def usable(entry: dict | None) -> bool:
+        if not entry or not os.path.exists(entry.get("path", "")):
+            return False
+        written = entry.get("written", 0)
+        return (entry.get("done") and written > 0) or (partial_ok and written >= min_bytes)
+
+    entry = _vod_dl_cache.get(key)
+    if usable(entry):
+        return entry["path"]
+    if await _xtream_max_connections() != 1:
+        return remote
+    await free_xtream_connection(keep_key=key)
+    entry = await _ensure_vod_download(key, remote)
+    if partial_ok and await wait_for_vod_data(entry, min_bytes, wait) and usable(entry):
+        return entry["path"]
+    return None
 
 
 async def _xtream_api(action: str, extra: dict | None = None, timeout: float = 45.0) -> Any:
@@ -317,17 +354,19 @@ async def iptv_vod_tracks(stream_id: str, ext: str = "mp4", media: str = "movie"
     if not config._xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
     _check_vod_params(ext, media, stream_id)
-    s, u, p = config._xtream_cfg["server"], config._xtream_cfg["username"], config._xtream_cfg["password"]
-    src_url = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
+    src = await _vod_probe_input(stream_id, ext, media, min_bytes=10 * 1024 * 1024, wait=20.0)
+    if src is None:
+        return {"audio": [], "subtitles": []}
+    remote_args = ["-seekable", "0"] if src.startswith("http") else []
     streams = []
     try:
         proc = await asyncio.create_subprocess_exec(
             _FFPROBE,
             "-v", "quiet", "-print_format", "json",
-            "-seekable", "0",
+            *remote_args,
             "-analyzeduration", "8000000", "-probesize", "20000000",
             "-show_streams",
-            src_url,
+            src,
             stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
@@ -391,25 +430,17 @@ async def iptv_vod_subtitle(stream_id: str, ext: str = "mp4", media: str = "movi
     if not config._xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
     _check_vod_params(ext, media, stream_id)
-    s, u, p = config._xtream_cfg["server"], config._xtream_cfg["username"], config._xtream_cfg["password"]
-    remote_url = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
-
     # Prefer the local cache file (already being downloaded by the HLS session).
     # Even a partial file lets ffmpeg seek via the MKV cues element instantly.
     cache_key = f"{stream_id}.{ext}"
-    vod_entry = _vod_dl_cache.get(cache_key)
-    if not vod_entry:
+    if cache_key not in _vod_dl_cache:
+        s, u, p = config._xtream_cfg["server"], config._xtream_cfg["username"], config._xtream_cfg["password"]
         await free_xtream_connection(keep_key=cache_key)
-        vod_entry = await _ensure_vod_download(cache_key, remote_url)
-
-    cache_path = vod_entry.get("path", "")
-    cache_written = vod_entry.get("written", 0)
-    use_local = (
-        bool(cache_path)
-        and os.path.exists(cache_path)
-        and cache_written >= 10 * 1024 * 1024  # at least 10 MB (covers MKV headers + index)
-    )
-    src = cache_path if use_local else remote_url
+        await _ensure_vod_download(cache_key, f"{s}/{media}/{u}/{p}/{stream_id}.{ext}")
+    src = await _vod_probe_input(stream_id, ext, media, min_bytes=10 * 1024 * 1024, wait=20.0)
+    if src is None:
+        raise HTTPException(status_code=503, detail="Film not downloaded far enough yet, retry shortly")
+    use_local = not src.startswith("http")
 
     cmd = [
         _FFMPEG, "-loglevel", "error",
@@ -456,15 +487,20 @@ async def iptv_vod_stream_url(stream_id: str, request: Request, ext: str = "mp4"
     src_url = f"{s}/{media}/{u}/{p}/{stream_id}.{ext}"
 
     duration_secs: float | None = None
+    probe_src = await _vod_probe_input(stream_id, ext, media, min_bytes=10 * 1024 * 1024,
+                                       wait=10.0, need_duration=True)
     try:
+        if probe_src is None:
+            raise LookupError("nothing to probe yet")
+        remote_args = ["-seekable", "0"] if probe_src.startswith("http") else []
         proc = await asyncio.create_subprocess_exec(
             _FFPROBE,
             "-v", "quiet", "-print_format", "json",
-            "-seekable", "0",
+            *remote_args,
             "-analyzeduration", "3000000", "-probesize", "10000000",
             # Ask for both container duration and per-stream duration (fallback)
             "-show_entries", "format=duration:stream=duration,codec_type",
-            src_url,
+            probe_src,
             stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
