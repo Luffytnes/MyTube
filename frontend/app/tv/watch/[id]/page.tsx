@@ -221,10 +221,11 @@ export default function TvWatchPage() {
             console.warn('[shaka] recoverable', describeShakaError(err))
             return
           }
-          console.error('[shaka]', describeShakaError(err))
           // Expired session (long pause) or network failure: resume once where we
           // were before showing the error screen (at most once a minute)
           if (isRetryableShakaError(err) && Date.now() - lastRecoveryRef.current > 60_000) {
+            // Handled: a warning, not an error (the dev overlay reports errors)
+            console.warn('[shaka] recovering from', describeShakaError(err))
             lastRecoveryRef.current = Date.now()
             if (type === 'live') {
               player.load(`${API_BASE}/api/iptv/hls/${id}`, null, 'application/x-mpegurl').catch(() => onError())
@@ -233,6 +234,7 @@ export default function TvWatchPage() {
             }
             return
           }
+          console.error('[shaka]', describeShakaError(err))
           onError()
         })
 
@@ -414,6 +416,9 @@ export default function TvWatchPage() {
           previewUrl={isLive ? undefined : (time: number) => `${API_BASE}/api/iptv/vod_thumb/${id}?ext=${ext}&t=${time}`}
           artwork={icon ? `${API_BASE}/api/iptv/icon?url=${encodeURIComponent(icon)}` : undefined}
           artist={isLive ? t('iptv_live') : seriesName || undefined}
+          onKeepAlive={isLive ? undefined : () => {
+            fetch(`${API_BASE}/api/iptv/vod_hls2/${id}/playlist.m3u8?ext=${ext}&media=${media}&audio_idx=${audioIdxRef.current}&start=${startOffsetRef.current}`).catch(() => {})
+          }}
         />
       </div>
     </div>

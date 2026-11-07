@@ -233,6 +233,9 @@ export default function IPTVWatchPage() {
           timeOffset={startOffset}
           previewUrl={type === 'live' ? undefined : (time: number) => `${API_BASE}/api/iptv/vod_thumb/${id}?ext=${ext}&t=${time}`}
           artwork={icon ? `${API_BASE}/api/iptv/icon?url=${encodeURIComponent(icon)}` : undefined}
+          onKeepAlive={type === 'live' ? undefined : () => {
+            fetch(`${API_BASE}/api/iptv/vod_hls2/${id}/playlist.m3u8?ext=${ext}&media=${media}&audio_idx=${audioIdxRef.current}&start=${startOffsetRef.current}`).catch(() => {})
+          }}
         />
       </div>
     </div>

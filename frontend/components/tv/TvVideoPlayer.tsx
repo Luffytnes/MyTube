@@ -155,6 +155,8 @@ export interface TvVideoPlayerProps {
   /** Media Session (media keys, Control Center) */
   artwork?: string
   artist?: string
+  /** Called every few minutes while paused, so the server keeps the film's session */
+  onKeepAlive?: () => void
 }
 
 export default function TvVideoPlayer({
@@ -168,7 +170,7 @@ export default function TvVideoPlayer({
   queue = [], currentQueueId, queueTitle = 'Liste de lecture',
   onEnded, onPrev, onNext,
   timeOffset = 0, externalDuration, onNeedNewSession,
-  previewUrl, artwork, artist,
+  previewUrl, artwork, artist, onKeepAlive,
 }: TvVideoPlayerProps) {
   const { t } = useRegion()
   const ext = useExtensions()
@@ -276,6 +278,18 @@ export default function TvVideoPlayer({
       if (previewTimer.current) clearTimeout(previewTimer.current)
     }
   }, [])
+
+  // The server drops a film session nobody asked anything for 10 minutes, and a
+  // paused player asks nothing: resuming after a long pause then hit 404s
+  const keepAliveRef = useRef(onKeepAlive)
+  keepAliveRef.current = onKeepAlive
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const v = videoRef.current
+      if (v && v.paused && !v.ended) keepAliveRef.current?.()
+    }, 4 * 60_000)
+    return () => clearInterval(timer)
+  }, [videoRef])
 
   // Position for media keys / Control Center, about once a second
   useEffect(() => {
