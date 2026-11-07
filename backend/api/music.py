@@ -1,5 +1,6 @@
 """YouTube Music and internet radio API routes."""
 import asyncio
+import re
 import urllib.parse
 from typing import Annotated, Dict, Optional
 
@@ -478,3 +479,102 @@ async def music_home(country: CountryCode = "ZZ"):
         # Some countries have no charts: fall back to the global ones
         return await music_home("ZZ")
     return {"topSongs": charts["songs"][:20], "trending": charts["trending"], "artists": charts["artists"][:12]}
+
+
+# ---------------------------------------------------------------------------
+# Lyrics: LRCLIB (open, synced) first, then YouTube Music's own lyrics
+# ---------------------------------------------------------------------------
+
+LRCLIB_API = "https://lrclib.net/api"
+# LRCLIB asks clients to name themselves; this says nothing about the user
+_LRCLIB_HEADERS = {"User-Agent": "MyTube (https://github.com/Luffytnes/MyTube)"}
+_lyrics_cache: TTLCache = TTLCache(maxsize=512, ttl=86400)
+_LRC_LINE = re.compile(r"^\[(\d+):(\d+(?:\.\d+)?)\](.*)$")
+_TITLE_NOISE = re.compile(
+    r"\s*[\(\[][^)\]]*(official|video|audio|lyrics?|paroles|clip|visuali[sz]er|hd|4k|remaster)[^)\]]*[\)\]]",
+    re.IGNORECASE,
+)
+
+
+def _parse_lrc(text: str) -> list[dict]:
+    lines = []
+    for raw in text.splitlines():
+        m = _LRC_LINE.match(raw.strip())
+        if m:
+            lines.append({"time": int(m.group(1)) * 60 + float(m.group(2)), "text": m.group(3).strip()})
+    return lines
+
+
+def _plain_lines(text: str) -> list[dict]:
+    return [{"time": None, "text": line.strip()} for line in text.splitlines()]
+
+
+async def _lrclib_lookup(title: str, artist: str, duration: int) -> dict | None:
+    """Best LRCLIB record for this song ({} when it has none). Prefers synced
+    lyrics. None when LRCLIB could not be reached."""
+    params = {"track_name": title, "artist_name": artist}
+    try:
+        async with httpx_client(timeout=8.0, headers=_LRCLIB_HEADERS) as client:
+            if duration:
+                resp = await client.get(f"{LRCLIB_API}/get", params={**params, "duration": duration})
+                if resp.status_code == 200 and resp.json().get("syncedLyrics"):
+                    return resp.json()
+            resp = await client.get(f"{LRCLIB_API}/search", params=params)
+            results = resp.json() if resp.status_code == 200 else []
+    except Exception:
+        return None
+    if not isinstance(results, list):
+        return {}
+    # Another cut of the song (radio edit, live) has different timings
+    if duration:
+        results = [r for r in results if abs((r.get("duration") or 0) - duration) <= 3]
+    synced = [r for r in results if r.get("syncedLyrics")]
+    return (synced or [r for r in results if r.get("plainLyrics")] or [{}])[0]
+
+
+def _ytmusic_lyrics(video_id: str) -> dict | None:
+    ytm = get_ytm()
+    browse_id = (ytm.get_watch_playlist(videoId=video_id, limit=1) or {}).get("lyrics")
+    if not browse_id:
+        return None
+    found = ytm.get_lyrics(browse_id, timestamps=True)
+    if not found or not found.get("lyrics"):
+        return None
+    if found.get("hasTimestamps"):
+        lines = [{"time": line.start_time / 1000, "text": line.text} for line in found["lyrics"]]
+    else:
+        lines = _plain_lines(found["lyrics"])
+    return {"synced": bool(found.get("hasTimestamps")), "lines": lines, "source": found.get("source") or "YouTube Music"}
+
+
+@router.get("/api/music/lyrics/{video_id}")
+async def music_lyrics(
+    video_id: VideoId,
+    title: Annotated[str, Query(max_length=300)] = "",
+    artist: Annotated[str, Query(max_length=300)] = "",
+    duration: Annotated[int, Query(ge=0, le=36000)] = 0,
+):
+    """Lyrics for a song: synced when a source has timings ({time, text} lines)."""
+    if video_id in _lyrics_cache:
+        return _lyrics_cache[video_id]
+    clean_title = _TITLE_NOISE.sub("", title).strip()
+    result: dict = {"synced": False, "lines": [], "source": None}
+    lrclib = await _lrclib_lookup(clean_title, artist, duration) if clean_title and artist else {}
+    reached = lrclib is not None
+    if lrclib and lrclib.get("syncedLyrics"):
+        result = {"synced": True, "lines": _parse_lrc(lrclib["syncedLyrics"]), "source": "LRCLIB"}
+    else:
+        try:
+            ytm = await asyncio.to_thread(_ytmusic_lyrics, video_id)
+        except Exception:
+            ytm, reached = None, False
+        if ytm and (ytm["synced"] or not lrclib):
+            result = ytm
+        elif lrclib and lrclib.get("plainLyrics"):
+            result = {"synced": False, "lines": _plain_lines(lrclib["plainLyrics"]), "source": "LRCLIB"}
+        elif ytm:
+            result = ytm
+    # A source that could not be reached is retried on the next request
+    if reached or result["lines"]:
+        _lyrics_cache[video_id] = result
+    return result

@@ -28,6 +28,8 @@ from api.news import router as news_router
 from api.vpn import router as vpn_router
 from api.tmdb import router as tmdb_router
 from api.podcasts import router as podcasts_router
+from api.sponsorblock import router as sponsorblock_router
+from api.userdata import router as userdata_router
 
 
 @asynccontextmanager
@@ -68,6 +70,8 @@ app.include_router(news_router)
 app.include_router(vpn_router)
 app.include_router(tmdb_router)
 app.include_router(podcasts_router)
+app.include_router(sponsorblock_router)
+app.include_router(userdata_router)
 
 
 if __name__ == "__main__":

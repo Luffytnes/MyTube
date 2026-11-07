@@ -4,9 +4,17 @@ import { useState, useEffect, useRef, useCallback, RefObject } from 'react'
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   Loader2, List, X, RotateCcw, RotateCw, Check, Headphones,
-  SkipBack, SkipForward,
+  SkipBack, SkipForward, PictureInPicture2,
 } from 'lucide-react'
 import VolumeSlider from '@/components/ui/VolumeSlider'
+import { useExtensions, onExtensionsChange, stepVolume, volumeToSlider } from '@/lib/extensions'
+import { claimMediaSession, releaseMediaSession, updateMediaSession } from '@/lib/mediaSession'
+import { attachAudioEffects, needsAudioGraph } from '@/lib/audioEffects'
+import { useWheelVolume } from '@/lib/useWheelVolume'
+import { useRegion } from '@/lib/regionContext'
+
+// Preview frames are generated every 10 s of the film (one image per step)
+const PREVIEW_STEP = 10
 
 interface SubCue { start: number; end: number; lines: string[] }
 
@@ -142,6 +150,11 @@ export interface TvVideoPlayerProps {
   timeOffset?: number
   externalDuration?: number
   onNeedNewSession?: (absoluteTime: number) => void
+  /** Seek-bar preview image at an absolute time (films and episodes) */
+  previewUrl?: (time: number) => string
+  /** Media Session (media keys, Control Center) */
+  artwork?: string
+  artist?: string
 }
 
 export default function TvVideoPlayer({
@@ -155,8 +168,21 @@ export default function TvVideoPlayer({
   queue = [], currentQueueId, queueTitle = 'Liste de lecture',
   onEnded, onPrev, onNext,
   timeOffset = 0, externalDuration, onNeedNewSession,
+  previewUrl, artwork, artist,
 }: TvVideoPlayerProps) {
+  const { t } = useRegion()
+  const ext = useExtensions()
   const containerRef = useRef<HTMLDivElement>(null)
+  const volumeGroupRef = useRef<HTMLDivElement>(null)
+  const mediaSessionId = useRef(Symbol('tv-player'))
+  const lastSessionUpdate = useRef(0)
+  const [pipSupported, setPipSupported] = useState(false)
+  const [volumeHud, setVolumeHud] = useState<number | null>(null)
+  const volumeHudTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Preview image shown for this step once it has loaded (debounced while moving)
+  const [previewStep, setPreviewStep] = useState<number | null>(null)
+  const [previewLoaded, setPreviewLoaded] = useState<number | null>(null)
+  const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -199,8 +225,12 @@ export default function TvVideoPlayer({
       setActiveCue(cue ? cue.lines : null)
     }
     const onDur = () => setDuration(isFinite(v.duration) && v.duration > 0 ? v.duration : 0)
-    const onPlay = () => { setPlaying(true); setWaiting(false) }
-    const onPause = () => setPlaying(false)
+    const onPlay = () => {
+      setPlaying(true); setWaiting(false)
+      claimSessionRef.current()
+      if (needsAudioGraph()) void attachAudioEffects(v)
+    }
+    const onPause = () => { setPlaying(false); updateMediaSession(mediaSessionId.current, false) }
     const onVol = () => { setVolume(v.volume); setMuted(v.muted) }
     const onProg = () => { if (v.buffered.length) setBuffered(v.buffered.end(v.buffered.length - 1)) }
     const onWait = () => setWaiting(true)
@@ -229,6 +259,41 @@ export default function TvVideoPlayer({
       v.removeEventListener('ended', onEnd)
     }
   }, [videoRef, onTimeUpdate, onEnded])
+
+  useEffect(() => { setPipSupported(!!document.pictureInPictureEnabled) }, [])
+
+  // An effect switched on during playback applies at once
+  useEffect(() => onExtensionsChange(() => {
+    const v = videoRef.current
+    if (v && !v.paused && needsAudioGraph()) void attachAudioEffects(v)
+  }), [videoRef])
+
+  useEffect(() => {
+    const id = mediaSessionId.current
+    return () => {
+      releaseMediaSession(id)
+      if (volumeHudTimer.current) clearTimeout(volumeHudTimer.current)
+      if (previewTimer.current) clearTimeout(previewTimer.current)
+    }
+  }, [])
+
+  // Position for media keys / Control Center, about once a second
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v) return
+    const onTime = () => {
+      const now = Date.now()
+      if (now - lastSessionUpdate.current < 1000) return
+      lastSessionUpdate.current = now
+      updateMediaSession(mediaSessionId.current, !v.paused, {
+        duration: externalDuration ?? v.duration,
+        position: timeOffsetRef.current + v.currentTime,
+        playbackRate: v.playbackRate,
+      })
+    }
+    v.addEventListener('timeupdate', onTime)
+    return () => v.removeEventListener('timeupdate', onTime)
+  }, [videoRef, externalDuration])
 
   // Fullscreen listener
   useEffect(() => {
@@ -284,6 +349,8 @@ export default function TvVideoPlayer({
       if (e.code === 'ArrowRight') { e.preventDefault(); skipRef.current(10) }
       if (e.code === 'ArrowLeft') { e.preventDefault(); skipRef.current(-10) }
       if (e.code === 'KeyM') { e.preventDefault(); v.muted = !v.muted }
+      if (e.code === 'ArrowUp') { e.preventDefault(); applyVolumeRef.current(stepVolume(v.volume, 1)) }
+      if (e.code === 'ArrowDown') { e.preventDefault(); applyVolumeRef.current(stepVolume(v.volume, -1)) }
       if (e.code === 'KeyF') { e.preventDefault(); handleFullscreen() }
       revealControls()
     }
@@ -362,6 +429,62 @@ export default function TvVideoPlayer({
   const skipRef = useRef(skip)
   skipRef.current = skip
 
+  function applyVolume(val: number) {
+    const v = videoRef.current
+    if (!v) return
+    v.volume = val
+    v.muted = val === 0
+    setVolumeHud(Math.round(volumeToSlider(val) * 100))
+    if (volumeHudTimer.current) clearTimeout(volumeHudTimer.current)
+    volumeHudTimer.current = setTimeout(() => setVolumeHud(null), 900)
+  }
+  const applyVolumeRef = useRef(applyVolume)
+  applyVolumeRef.current = applyVolume
+
+  function claimSession() {
+    claimMediaSession(mediaSessionId.current, {
+      title: title ?? '',
+      artist: artist ?? 'MyTube TV',
+      artwork: artwork ? [{ src: artwork, sizes: '512x512', type: 'image/jpeg' }] : [],
+    }, {
+      play: () => { videoRef.current?.play().catch(() => {}) },
+      pause: () => { videoRef.current?.pause() },
+      seekbackward: onNeedNewSession ? () => skipRef.current(-10) : null,
+      seekforward: onNeedNewSession ? () => skipRef.current(10) : null,
+      seekto: onNeedNewSession ? details => { if (details.seekTime !== undefined) commitSeekRef.current(details.seekTime) } : null,
+      previoustrack: onPrev ? () => onPrev() : null,
+      nexttrack: onNext ? () => onNext() : null,
+    })
+  }
+  const claimSessionRef = useRef(claimSession)
+  claimSessionRef.current = claimSession
+  const commitSeekRef = useRef(commitSeek)
+  commitSeekRef.current = commitSeek
+
+  async function togglePictureInPicture(e: React.MouseEvent) {
+    e.stopPropagation()
+    const v = videoRef.current
+    if (!v) return
+    try {
+      if (document.pictureInPictureElement) await document.exitPictureInPicture()
+      else await v.requestPictureInPicture()
+    } catch { /* refused */ }
+  }
+
+  useWheelVolume(volumeGroupRef, () => videoRef.current?.volume ?? volume, applyVolume)
+  useWheelVolume(containerRef, () => videoRef.current?.volume ?? volume, applyVolume, isFullscreen)
+
+  /** Show the preview of the step under the pointer, once it stays there briefly
+   *  (each image is made by ffmpeg on the server). */
+  function hoverPreview(ratio: number | null) {
+    if (!previewUrl || !ext.seekPreview) return
+    const dur = externalDuration ?? duration
+    if (previewTimer.current) clearTimeout(previewTimer.current)
+    if (ratio === null || !dur) { setPreviewStep(null); return }
+    const step = Math.floor((ratio * dur) / PREVIEW_STEP) * PREVIEW_STEP
+    previewTimer.current = setTimeout(() => setPreviewStep(step), 120)
+  }
+
   const displayDur = externalDuration ?? duration
   const displayTime = scrubTime ?? currentTime + timeOffset
   const displayBuffered = buffered + timeOffset
@@ -380,6 +503,7 @@ export default function TvVideoPlayer({
       onMouseMove={revealControls}
       onMouseLeave={() => { if (playing && !dragging.current) setShowControls(false) }}
       onTouchStart={revealControls}
+      onDoubleClick={handleFullscreen}
     >
       <video ref={videoRef} className="w-full h-full" playsInline crossOrigin="anonymous" onClick={togglePlay} />
 
@@ -409,6 +533,12 @@ export default function TvVideoPlayer({
         </div>
       )}
 
+      {volumeHud !== null && (
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-40 pointer-events-none bg-black/70 backdrop-blur-md rounded-full px-4 py-1.5 text-white text-sm font-semibold tabular-nums">
+          {t('player_volume')} {volumeHud} %
+        </div>
+      )}
+
       {/* Controls overlay */}
       {!error && (
         <div
@@ -426,7 +556,7 @@ export default function TvVideoPlayer({
           </div>
 
           {/* Bottom zone */}
-          <div className="relative" onClick={e => e.stopPropagation()}>
+          <div className="relative" onClick={e => e.stopPropagation()} onDoubleClick={e => e.stopPropagation()}>
             {/* Bottom gradient */}
             <div className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-black/90 to-transparent pointer-events-none" />
 
@@ -521,9 +651,11 @@ export default function TvVideoPlayer({
                     const bar = seekRef.current
                     if (!bar) return
                     const { left, width } = bar.getBoundingClientRect()
-                    setHoverRatio(Math.max(0, Math.min(1, (e.clientX - left) / width)))
+                    const ratio = Math.max(0, Math.min(1, (e.clientX - left) / width))
+                    setHoverRatio(ratio)
+                    hoverPreview(ratio)
                   }}
-                  onMouseLeave={() => setHoverRatio(null)}
+                  onMouseLeave={() => { setHoverRatio(null); hoverPreview(null) }}
                 >
                   {/* Extended hit area */}
                   <div className="absolute inset-x-0 -top-3 -bottom-3" />
@@ -537,9 +669,20 @@ export default function TvVideoPlayer({
                   {/* Hover time tooltip */}
                   {hoverRatio !== null && displayDur > 0 && (
                     <div
-                      className="absolute bottom-full mb-3 pointer-events-none -translate-x-1/2"
-                      style={{ left: `${hoverRatio * 100}%` }}
+                      className="absolute bottom-full mb-3 pointer-events-none -translate-x-1/2 flex flex-col items-center gap-1 z-20"
+                      style={{ left: previewUrl && ext.seekPreview ? `clamp(96px, ${hoverRatio * 100}%, calc(100% - 96px))` : `${hoverRatio * 100}%` }}
                     >
+                      {previewUrl && ext.seekPreview && previewStep !== null && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={previewUrl(previewStep)}
+                          alt=""
+                          width={192}
+                          className={`w-48 aspect-video object-cover rounded-lg ring-1 ring-white/25 shadow-2xl bg-black ${previewLoaded === previewStep ? '' : 'hidden'}`}
+                          onLoad={() => setPreviewLoaded(previewStep)}
+                          onError={() => setPreviewLoaded(null)}
+                        />
+                      )}
                       <div className="bg-black/85 text-white text-xs px-2 py-1 rounded font-mono whitespace-nowrap">
                         {fmt(hoverRatio * displayDur)}
                       </div>
@@ -595,7 +738,7 @@ export default function TvVideoPlayer({
                   >
                     <RotateCw className="w-5 h-5" />
                   </button>
-                  <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                  <div ref={volumeGroupRef} className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                     <button
                       onClick={() => { const v = videoRef.current; if (v) v.muted = !v.muted }}
                       className="w-10 h-10 flex items-center justify-center text-white hover:text-white/70 transition-colors"
@@ -643,6 +786,15 @@ export default function TvVideoPlayer({
                       title={queueTitle}
                     >
                       <List className="w-5 h-5" />
+                    </button>
+                  )}
+                  {pipSupported && (
+                    <button
+                      onClick={togglePictureInPicture}
+                      className="w-10 h-10 flex items-center justify-center text-white/80 hover:text-white transition-colors"
+                      title={t('player_pip')}
+                    >
+                      <PictureInPicture2 className="w-5 h-5" />
                     </button>
                   )}
                   <button

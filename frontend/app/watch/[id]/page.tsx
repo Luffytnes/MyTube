@@ -397,6 +397,8 @@ function WatchContent({ params }: WatchPageProps) {
               hasPrev={true}
               chapters={video.chapters?.length ? video.chapters : (video.description ? parseChapters(video.description) : [])}
               seekToRef={seekToRef}
+              artist={video.channel.name}
+              artwork={ytThumbnail(id, 'hq')}
             />
             </div>
 

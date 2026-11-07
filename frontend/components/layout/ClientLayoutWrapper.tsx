@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation'
 import { useEffect, type ReactNode } from 'react'
 import { useRegion } from '@/lib/regionContext'
+import { startServerSync } from '@/lib/serverSync'
 import Header from './Header'
 import Sidebar from './Sidebar'
 
@@ -11,6 +12,8 @@ export default function ClientLayoutWrapper({ children }: { children: ReactNode 
   const { lang } = useRegion()
   // Screen readers and hyphenation follow the UI language, not the static "en"
   useEffect(() => { document.documentElement.lang = lang }, [lang])
+  // Saved data survive browsers that wipe site data on close (copy kept by the server)
+  useEffect(() => { startServerSync() }, [])
   const isMusic = pathname.startsWith('/music')
   const isTv = pathname.startsWith('/tv')
 

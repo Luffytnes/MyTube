@@ -60,9 +60,11 @@ from services.ffmpeg import (
     _best_m4a_audio,
     audio_rank,
     cached_audio_tracks,
+    cached_player_formats,
     hls_session_key,
     hls_session_lead,
     is_direct_format,
+    player_formats,
     prefetch_stream_urls,
     _iptv_vod_hls_sessions,
     _iptv_vod_hls_lock,
@@ -457,51 +459,7 @@ async def get_video(video_id: VideoId):
         if not info:
             raise HTTPException(status_code=404, detail="Video not found")
 
-        formats = []
-        seen_itags = set()
-        for fmt in info.get("formats", []):
-            itag = fmt.get("format_id")
-            if itag in seen_itags or not is_direct_format(fmt):
-                continue
-            seen_itags.add(itag)
-
-            has_video = fmt.get("vcodec", "none") != "none"
-            has_audio = fmt.get("acodec", "none") != "none"
-            height = fmt.get("height")
-            ext = fmt.get("ext", "mp4")
-            filesize = fmt.get("filesize") or fmt.get("filesize_approx")
-
-            if has_video:
-                quality = f"{height}p" if height else fmt.get("format_note", "unknown")
-            elif has_audio:
-                abr = fmt.get("abr")
-                quality = f"{int(abr)}k audio" if abr else fmt.get("format_note", "audio")
-            else:
-                continue
-
-            formats.append(
-                {
-                    "itag": itag,
-                    "ext": ext,
-                    "quality": quality,
-                    "filesize": filesize,
-                    "hasAudio": has_audio,
-                    "hasVideo": has_video,
-                    "height": height or 0,
-                    "abr": fmt.get("abr") or 0,
-                }
-            )
-
-        # Sort: combined first (has both), then video-only (by height desc), then audio-only
-        def sort_key(f):
-            if f["hasVideo"] and f["hasAudio"]:
-                return (0, -(f["height"] or 0))
-            elif f["hasVideo"]:
-                return (1, -(f["height"] or 0))
-            else:
-                return (2, -(f["abr"] or 0))
-
-        formats.sort(key=sort_key)
+        formats = player_formats(info.get("formats", []))
 
         # Related videos — try metadata first, then fallback to channel search
         related: List[Dict[str, Any]] = []
@@ -760,9 +718,27 @@ async def audio_tracks(video_id: VideoId):
     tracks to many videos; the original plays unless another is requested."""
     tracks = cached_audio_tracks(video_id)
     if tracks is None:
-        await asyncio.shield(prefetch_stream_urls(video_id))
+        try:
+            await asyncio.shield(prefetch_stream_urls(video_id))
+        except Exception:
+            return {"tracks": []}  # unplayable (private, removed…): the player reports it
         tracks = cached_audio_tracks(video_id) or []
     return {"tracks": tracks}
+
+
+@router.get("/api/formats/{video_id}")
+async def video_formats(video_id: VideoId):
+    """Playable formats according to yt-dlp. YouTube sometimes sends YouTube.js
+    the player data without any stream list; the player then falls back on
+    these (from the extraction shared with playback)."""
+    formats = cached_player_formats(video_id)
+    if formats is None:
+        try:
+            await asyncio.shield(prefetch_stream_urls(video_id))
+        except Exception:
+            return {"formats": []}
+        formats = cached_player_formats(video_id) or []
+    return {"formats": formats}
 
 
 @router.post("/api/prefetch/{video_id}", status_code=202)

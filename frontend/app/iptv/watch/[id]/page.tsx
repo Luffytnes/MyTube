@@ -231,6 +231,8 @@ export default function IPTVWatchPage() {
           onSubChange={setSubIdx}
           onTimeUpdate={handleTimeUpdate}
           timeOffset={startOffset}
+          previewUrl={type === 'live' ? undefined : (time: number) => `${API_BASE}/api/iptv/vod_thumb/${id}?ext=${ext}&t=${time}`}
+          artwork={icon ? `${API_BASE}/api/iptv/icon?url=${encodeURIComponent(icon)}` : undefined}
         />
       </div>
     </div>

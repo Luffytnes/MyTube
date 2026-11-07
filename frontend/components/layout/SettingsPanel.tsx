@@ -1,15 +1,16 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Sun, Moon, Monitor, Upload, Wifi, WifiOff, AlertCircle, Loader2, Shield, RefreshCw, MapPin, Trash2, Check, Globe, Network, Play, Database, Download, CheckCircle2, Mic2, Eye, EyeOff, Tv } from 'lucide-react'
+import { X, Sun, Moon, Monitor, Upload, Wifi, WifiOff, AlertCircle, Loader2, Shield, RefreshCw, MapPin, Trash2, Check, Globe, Network, Play, Database, Download, CheckCircle2, Mic2, Eye, EyeOff, Tv, Puzzle } from 'lucide-react'
 import { useTheme, type ThemeMode } from '@/lib/themeContext'
 import { useRegion, REGIONS } from '@/lib/regionContext'
 import { getPlaybackSettings, setPlaybackSettings, type PlaybackSettings } from '@/lib/playbackSettings'
+import ExtensionsSettings from './ExtensionsSettings'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
 type VpnStatus = 'disconnected' | 'connecting' | 'connected' | 'disconnecting' | 'error'
-type Tab = 'general' | 'playback' | 'data' | 'wireproxy' | 'podcast' | 'iptv'
+type Tab = 'general' | 'playback' | 'extensions' | 'data' | 'wireproxy' | 'podcast' | 'iptv'
 
 interface VpnState {
   status: VpnStatus
@@ -254,7 +255,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
 
   function handleExport() {
     const data: Record<string, unknown> = {}
-    const keys = ['mytube-history', 'mytube-search-history', 'mytube-watch-later', 'mytube-likes', 'mytube-queue', 'mytube-resume-positions', 'mytube-saved-playlists', 'mytube-subscriptions', 'mytube-playback-settings', 'mytube-music-playlists', 'mytube-music-search-history', 'mytube-podcast-subscriptions', 'tv_favorites', 'tv_continue_watching']
+    const keys = ['mytube-history', 'mytube-search-history', 'mytube-watch-later', 'mytube-likes', 'mytube-queue', 'mytube-resume-positions', 'mytube-saved-playlists', 'mytube-subscriptions', 'mytube-playback-settings', 'mytube-music-playlists', 'mytube-music-search-history', 'mytube-podcast-subscriptions', 'mytube-extensions', 'tv_favorites', 'tv_continue_watching']
     for (const k of keys) {
       const raw = localStorage.getItem(k)
       if (raw) data[k] = JSON.parse(raw)
@@ -334,6 +335,11 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       id: 'playback',
       label: t('settings_tab_playback'),
       icon: <Play className="w-4 h-4" />,
+    },
+    {
+      id: 'extensions',
+      label: t('settings_tab_extensions'),
+      icon: <Puzzle className="w-4 h-4" />,
     },
     {
       id: 'data',
@@ -438,7 +444,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           {/* Header — desktop only */}
           <div className="hidden sm:flex items-center justify-between px-6 py-4 border-b border-yt-border/50">
             <h2 className="font-display text-yt-text font-semibold text-lg">
-              {tab === 'general' ? 'Général' : tab === 'playback' ? t('settings_tab_playback') : tab === 'data' ? t('settings_data_tab') : tab === 'podcast' ? 'Podcast Index' : tab === 'iptv' ? t('iptv_settings') : 'Wireproxy'}
+              {tab === 'general' ? 'Général' : tab === 'playback' ? t('settings_tab_playback') : tab === 'extensions' ? t('settings_tab_extensions') : tab === 'data' ? t('settings_data_tab') : tab === 'podcast' ? 'Podcast Index' : tab === 'iptv' ? t('iptv_settings') : 'Wireproxy'}
             </h2>
             <button
               onClick={onClose}
@@ -657,8 +663,11 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             )}
 
             {/* ── DONNÉES ── */}
+            {tab === 'extensions' && <ExtensionsSettings />}
+
             {tab === 'data' && (
               <div className="space-y-6">
+                <p className="text-sm text-yt-text-secondary leading-relaxed">{t('settings_sync_note')}</p>
                 {/* Export / Import */}
                 <section>
                   <p className="text-xs font-semibold text-yt-text-muted uppercase tracking-widest mb-3">Export / Import</p>

@@ -1,3 +1,4 @@
+import type { Storyboard } from '@/lib/storyboard'
 import { ytThumbnail } from '@/lib/thumbnails'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
@@ -161,6 +162,14 @@ export async function getVideo(id: string): Promise<VideoDetail> {
     throw new Error(body.detail || `Failed to fetch video: ${res.statusText}`)
   }
   const raw = await res.json()
+  // YouTube sometimes answers YouTube.js without any stream list: take the
+  // formats yt-dlp found (its extraction already runs, see prefetchStream)
+  if (!raw.isLive && !(raw.formats ?? []).some((f: VideoFormat) => f.hasVideo)) {
+    try {
+      const fallback = await fetch(`${API_BASE}/api/formats/${id}`)
+      if (fallback.ok) raw.formats = (await fallback.json()).formats ?? []
+    } catch { /* the player reports that nothing can be played */ }
+  }
   const channelId: string = raw.channelId ?? ''
   return {
     ...raw,
@@ -173,6 +182,16 @@ export async function getVideo(id: string): Promise<VideoDetail> {
     related: (raw.related ?? []).map((item: any) =>
       item.type === 'channel' ? item : normalizeThumbnail(item as VideoCard)
     ),
+  }
+}
+
+/** Seek-bar preview sheets of a video (null when YouTube has none, e.g. live). */
+export async function getStoryboard(id: string): Promise<Storyboard | null> {
+  try {
+    const res = await fetch(`${YT_API}/storyboard/${id}`)
+    return res.ok ? ((await res.json()).storyboard ?? null) : null
+  } catch {
+    return null
   }
 }
 

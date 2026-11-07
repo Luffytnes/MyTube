@@ -10,7 +10,8 @@ from typing import Any, Optional
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import APIRouter, Body, HTTPException, Request
+from cachetools import TTLCache
+from fastapi import APIRouter, Body, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 
 from core.security import validate_proxy_url_async, ssrf_redirect_hook
@@ -547,6 +548,49 @@ async def iptv_vod_stream_url(stream_id: str, request: Request, ext: str = "mp4"
         "hls": False,
         "duration": duration_secs,
     }
+
+
+_thumb_cache: TTLCache = TTLCache(maxsize=1000, ttl=3600)
+# Hovering the seek bar fires many requests; a couple of ffmpeg at a time is plenty
+_thumb_slots = asyncio.Semaphore(2)
+
+
+@router.get("/api/iptv/vod_thumb/{stream_id}")
+async def iptv_vod_thumb(stream_id: str, ext: str = "mp4", t: int = Query(0, ge=0, le=86400)):
+    """Seek-bar preview frame at second *t* of a film/episode.
+
+    Read from the local download only, never from the provider (single-connection
+    accounts can't spare a connection for previews): 404 for a part not
+    downloaded yet."""
+    _check_vod_params(ext=ext, stream_id=stream_id)
+    key = f"{stream_id}.{ext}"
+    headers = {"Cache-Control": "private, max-age=3600"}
+    if (key, t) in _thumb_cache:
+        return Response(content=_thumb_cache[(key, t)], media_type="image/jpeg", headers=headers)
+    entry = _vod_dl_cache.get(key)
+    if not entry or not entry.get("written") or not os.path.exists(entry.get("path", "")):
+        raise HTTPException(status_code=404, detail="Not downloaded yet")
+    async with _thumb_slots:
+        proc = await asyncio.create_subprocess_exec(
+            _FFMPEG, "-loglevel", "error",
+            # The keyframe before t is close enough for a preview, and much faster
+            "-noaccurate_seek", "-ss", str(t), "-i", entry["path"],
+            "-frames:v", "1", "-vf", "scale=192:-2", "-c:v", "mjpeg", "-q:v", "6",
+            "-f", "image2", "pipe:1",
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        try:
+            image, _ = await asyncio.wait_for(proc.communicate(), timeout=6.0)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            image = b""
+    if not image:
+        raise HTTPException(status_code=404, detail="Not downloaded that far yet")
+    _thumb_cache[(key, t)] = image
+    return Response(content=image, media_type="image/jpeg", headers=headers)
 
 
 @router.get("/api/iptv/vod_hls/{stream_id}")

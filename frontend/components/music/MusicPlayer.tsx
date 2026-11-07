@@ -4,13 +4,19 @@ import { useRef, ChangeEvent, useState, useCallback, useEffect } from 'react'
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Shuffle, Repeat, Repeat1, ListMusic,
-  ChevronDown, ListOrdered, Plus, Check,
+  ChevronDown, ListOrdered, Plus, Check, MicVocal,
 } from 'lucide-react'
 import { useMusic } from '@/lib/musicContext'
 import { cn } from '@/lib/utils'
 import VolumeSlider from '@/components/ui/VolumeSlider'
 import { getMusicPlaylists, addTrackToPlaylist, type MusicPlaylist } from '@/lib/musicPlaylists'
 import { imageSrc } from '@/lib/thumbnails'
+import { useExtensions } from '@/lib/extensions'
+import { useAlbumColor } from '@/lib/albumColor'
+import { useWheelVolume } from '@/lib/useWheelVolume'
+import { useRegion } from '@/lib/regionContext'
+import LyricsPanel from '@/components/music/LyricsPanel'
+import Visualizer from '@/components/music/Visualizer'
 
 function formatTime(s: number): string {
   if (!isFinite(s)) return '0:00'
@@ -19,13 +25,20 @@ function formatTime(s: number): string {
   return `${m}:${sec.toString().padStart(2, '0')}`
 }
 
-function FullScreenPlayer({ onClose }: { onClose: () => void }) {
+function FullScreenPlayer({ onClose, initialLyrics = false }: { onClose: () => void; initialLyrics?: boolean }) {
   const {
     currentTrack, queue, currentIndex, playing, currentTime, duration,
     volume, muted, shuffle, repeat,
     playPause, next, prev, seek, setVolume, toggleMute,
     toggleShuffle, toggleRepeat, playAtIndex,
   } = useMusic()
+  const { t } = useRegion()
+  const ext = useExtensions()
+  const albumColor = useAlbumColor(currentTrack?.thumbnail, ext.albumColors)
+  const volumeRowRef = useRef<HTMLDivElement>(null)
+  useWheelVolume(volumeRowRef, () => volume, setVolume)
+  const [showLyrics, setShowLyrics] = useState(initialLyrics)
+  const lyricsAvailable = !!currentTrack && !currentTrack.isRadio && !currentTrack.directUrl
 
   const [showQueue, setShowQueue] = useState(false)
   const [scrubValue, setScrubValue] = useState<number | null>(null)
@@ -56,11 +69,18 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col bg-yt-bg overflow-hidden">
-      {/* Blurred background */}
+      {/* Blurred background (through the proxy: the browser never contacts Google) */}
       {currentTrack.thumbnail && (
         <div
           className="absolute inset-0 bg-cover bg-center scale-110"
-          style={{ backgroundImage: `url(${currentTrack.thumbnail})`, filter: 'blur(40px) brightness(0.3)', zIndex: -1 }}
+          style={{ backgroundImage: `url("${imageSrc(currentTrack.thumbnail)}")`, filter: 'blur(40px) brightness(0.3)', zIndex: -1 }}
+        />
+      )}
+      {/* Cover colour tint */}
+      {albumColor && (
+        <div
+          className="absolute inset-0 pointer-events-none transition-[background] duration-700"
+          style={{ background: `radial-gradient(120% 80% at 20% 0%, rgb(${albumColor} / 0.5), transparent 65%), linear-gradient(to top, rgb(${albumColor} / 0.18), transparent 50%)`, zIndex: -1 }}
         />
       )}
 
@@ -76,18 +96,35 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
         <p className="text-white/60 text-xs sm:text-sm font-medium uppercase tracking-widest truncate mx-4">
           {currentTrack.album || 'En écoute'}
         </p>
-        <button
-          onClick={() => setShowQueue((v) => !v)}
-          className={cn('p-2 rounded-full transition-colors flex-shrink-0', showQueue ? 'text-white bg-white/20' : 'text-white/60 hover:text-white hover:bg-white/10')}
-          aria-label="File d'attente"
-        >
-          <ListOrdered className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {lyricsAvailable && (
+            <button
+              onClick={() => setShowLyrics((v) => !v)}
+              className={cn('p-2 rounded-full transition-colors', showLyrics ? 'text-white bg-white/20' : 'text-white/60 hover:text-white hover:bg-white/10')}
+              aria-label={t('lyrics_title')}
+              title={t('lyrics_title')}
+            >
+              <MicVocal className="w-5 h-5" />
+            </button>
+          )}
+          <button
+            onClick={() => setShowQueue((v) => !v)}
+            className={cn('p-2 rounded-full transition-colors', showQueue ? 'text-white bg-white/20' : 'text-white/60 hover:text-white hover:bg-white/10')}
+            aria-label="File d'attente"
+          >
+            <ListOrdered className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-1 min-h-0 gap-4 px-6 sm:px-6 pb-4 sm:pb-6">
         {/* Main content */}
         <div className="flex flex-col flex-1 min-w-0">
+          {/* Lyrics take the artwork's place */}
+          {showLyrics && lyricsAvailable ? (
+            <LyricsPanel className="flex-1 min-h-0 mb-3 sm:mb-4" />
+          ) : (
+          <>
           {/* Album art — fixed size, not flex-1 */}
           <div className="flex justify-center py-3 sm:py-6">
             <div className="w-full max-w-[140px] sm:max-w-xs aspect-square rounded-2xl overflow-hidden shadow-2xl flex-shrink-0">
@@ -105,6 +142,11 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
               )}
             </div>
           </div>
+          {ext.visualizer && !currentTrack.isRadio && (
+            <Visualizer color={albumColor} className="h-12 sm:h-16 mb-3 px-6 sm:px-0" />
+          )}
+          </>
+          )}
 
           {/* Track info */}
           <div className="mb-3 sm:mb-6 px-6 sm:px-0">
@@ -178,7 +220,7 @@ function FullScreenPlayer({ onClose }: { onClose: () => void }) {
           </div>
 
           {/* Volume — slider desktop only, mobile uses physical buttons */}
-          <div className="flex items-center gap-3 px-6 sm:px-0 mb-5">
+          <div ref={volumeRowRef} className="flex items-center gap-3 px-6 sm:px-0 mb-5">
             <button onClick={toggleMute} className="text-white/50 hover:text-white transition-colors flex-shrink-0">
               {muted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
             </button>
@@ -359,7 +401,13 @@ export default function MusicPlayer() {
   } = useMusic()
 
   const [showFullPlayer, setShowFullPlayer] = useState(false)
+  const [openOnLyrics, setOpenOnLyrics] = useState(false)
   const progressRef = useRef<HTMLInputElement>(null)
+  const volumeRef = useRef<HTMLDivElement>(null)
+  const { t } = useRegion()
+  const ext = useExtensions()
+  const albumColor = useAlbumColor(currentTrack?.thumbnail, ext.albumColors)
+  useWheelVolume(volumeRef, () => volume, setVolume)
 
   if (!currentTrack) return null
 
@@ -373,19 +421,22 @@ export default function MusicPlayer() {
 
   return (
     <>
-      {showFullPlayer && <FullScreenPlayer onClose={() => setShowFullPlayer(false)} />}
+      {showFullPlayer && <FullScreenPlayer initialLyrics={openOnLyrics} onClose={() => setShowFullPlayer(false)} />}
 
       {/* Mini player — floating pill on mobile, full-width bar on desktop */}
       <div
         className="fixed left-1/2 -translate-x-1/2 md:left-0 md:right-0 md:translate-x-0 md:bottom-0 z-50 rounded-2xl md:rounded-none bg-yt-bg/95 md:bg-yt-bg backdrop-blur-xl md:backdrop-blur-none border border-yt-border/30 md:border-0 md:border-t md:border-yt-border/60 shadow-[0_8px_32px_rgba(0,0,0,0.5)] md:shadow-2xl overflow-hidden w-[360px] max-w-[calc(100vw-16px)] md:w-auto"
-        style={{ bottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}
+        style={{
+          bottom: 'calc(env(safe-area-inset-bottom) + 12px)',
+          ...(albumColor ? { backgroundImage: `linear-gradient(90deg, rgb(${albumColor} / 0.22), transparent 45%)` } : {}),
+        }}
       >
         {/* No progress strip on mini player — only shown in fullscreen */}
 
         <div className="flex items-center px-3 sm:px-4 gap-2 sm:gap-4 h-16 sm:h-20">
           {/* Track info */}
           <button
-            onClick={() => setShowFullPlayer(true)}
+            onClick={() => { setOpenOnLyrics(false); setShowFullPlayer(true) }}
             className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 text-left group hover:opacity-80 transition-opacity sm:w-64 sm:flex-none"
           >
             {currentTrack.thumbnail ? (
@@ -494,7 +545,17 @@ export default function MusicPlayer() {
           </button>
 
           {/* Volume — desktop only */}
-          <div className="hidden md:flex items-center gap-2 w-36 flex-shrink-0 justify-end">
+          <div ref={volumeRef} className="hidden md:flex items-center gap-2 w-44 flex-shrink-0 justify-end">
+            {!currentTrack.isRadio && !currentTrack.directUrl && (
+              <button
+                onClick={() => { setOpenOnLyrics(true); setShowFullPlayer(true) }}
+                className="text-yt-text-muted hover:text-yt-text transition-colors mr-1"
+                aria-label={t('lyrics_title')}
+                title={t('lyrics_title')}
+              >
+                <MicVocal className="w-4 h-4" />
+              </button>
+            )}
             <button onClick={toggleMute} className="text-yt-text-muted hover:text-yt-text transition-colors" aria-label="Mute">
               {muted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
             </button>

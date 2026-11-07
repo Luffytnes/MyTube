@@ -24,6 +24,8 @@ import {
   RotateCw,
   Check,
   Languages,
+  PictureInPicture2,
+  X,
 } from 'lucide-react'
 import { formatDuration } from '@/lib/utils'
 import { getStreamUrl, getAudioUrl, getAudioTracks, getSubtitles, getSubtitleUrl, type AudioTrack, type VideoFormat, type SubtitleTrack } from '@/lib/api'
@@ -32,6 +34,13 @@ import { useRegion } from '@/lib/regionContext'
 import { getPlaybackSettings, setPlaybackSettings } from '@/lib/playbackSettings'
 import { savePosition, getPosition } from '@/lib/resumePosition'
 import { adaptiveFallback, pickInitialFormat, rankedVideoFormats } from '@/lib/videoFormats'
+import { getStoryboard } from '@/lib/api'
+import { storyboardTile, type Storyboard } from '@/lib/storyboard'
+import { useExtensions, onExtensionsChange, SPONSOR_COLORS, stepVolume, volumeToSlider, type SponsorCategory } from '@/lib/extensions'
+import { useSponsorSegments, activeSegment } from '@/lib/sponsorblock'
+import { claimMediaSession, releaseMediaSession, updateMediaSession } from '@/lib/mediaSession'
+import { attachAudioEffects, needsAudioGraph } from '@/lib/audioEffects'
+import { useWheelVolume } from '@/lib/useWheelVolume'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
@@ -74,6 +83,9 @@ interface VideoPlayerProps {
   hasPrev?: boolean
   chapters?: Chapter[]
   seekToRef?: React.MutableRefObject<((t: number) => void) | null>
+  /** Media Session (media keys, Control Center): channel name and artwork URL */
+  artist?: string
+  artwork?: string
 }
 
 // Panel wrapper — Vidking-style dark floating card
@@ -116,7 +128,7 @@ function PanelItem({
   )
 }
 
-export default function VideoPlayer({ videoId, formats, title, isLive, knownDuration, onEnded, onNext, onPrev, hasNext, hasPrev, chapters = [], seekToRef }: VideoPlayerProps) {
+export default function VideoPlayer({ videoId, formats, title, isLive, knownDuration, onEnded, onNext, onPrev, hasNext, hasPrev, chapters = [], seekToRef, artist, artwork }: VideoPlayerProps) {
   const { t, lang: uiLang } = useRegion()
   const videoRef = useRef<HTMLVideoElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -168,8 +180,54 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   // Strict browsers (LibreWolf, Safari's "Stop media") refuse play() that is not
   // a direct reaction to a click; we then need an explicit play button.
   const [autoplayBlocked, setAutoplayBlocked] = useState(false)
+  const ext = useExtensions()
+  const volumeGroupRef = useRef<HTMLDivElement>(null)
+  const [volumeHud, setVolumeHud] = useState<number | null>(null)
+  const volumeHudTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [storyboard, setStoryboard] = useState<Storyboard | null>(null)
+  const [pipSupported, setPipSupported] = useState(false)
+  const mediaSessionId = useRef(Symbol('youtube-player'))
+  const lastSessionUpdate = useRef(0)
+  // SponsorBlock: segments handled (skipped, muted or undone) during this playback
+  const segments = useSponsorSegments(isLive ? null : videoId, ext.sponsorBlock)
+  const handledSegments = useRef<Set<number>>(new Set())
+  const segmentMuted = useRef<number | null>(null)
+  const [skipNotice, setSkipNotice] = useState<{ category: string; start: number } | null>(null)
+  const skipNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const allVideoFormats = useMemo(() => rankedVideoFormats(formats), [formats])
+
+  useEffect(() => {
+    handledSegments.current = new Set()
+    segmentMuted.current = null
+    setSkipNotice(null)
+  }, [videoId])
+
+  useEffect(() => {
+    setStoryboard(null)
+    if (isLive || !ext.seekPreview) return
+    let cancelled = false
+    getStoryboard(videoId).then(board => { if (!cancelled) setStoryboard(board) })
+    return () => { cancelled = true }
+  }, [videoId, isLive, ext.seekPreview])
+
+  // Firefox/LibreWolf have no Picture-in-Picture API (they offer their own button on the video)
+  useEffect(() => { setPipSupported(!!document.pictureInPictureEnabled) }, [])
+
+  // An effect switched on during playback applies at once
+  useEffect(() => onExtensionsChange(() => {
+    const v = videoRef.current
+    if (v && !v.paused && needsAudioGraph()) void attachAudioEffects(v)
+  }), [])
+
+  useEffect(() => {
+    const id = mediaSessionId.current
+    return () => {
+      releaseMediaSession(id)
+      if (volumeHudTimer.current) clearTimeout(volumeHudTimer.current)
+      if (skipNoticeTimer.current) clearTimeout(skipNoticeTimer.current)
+    }
+  }, [])
 
   useEffect(() => {
     if (duration > 0) effectiveDurationRef.current = duration
@@ -267,9 +325,11 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
 
   useEffect(() => {
     const settings = getPlaybackSettings()
-    setSelectedFormat(pickInitialFormat(allVideoFormats, settings.defaultQuality))
-    setError(null)
-    setLoading(true)
+    const initial = pickInitialFormat(allVideoFormats, settings.defaultQuality)
+    setSelectedFormat(initial)
+    // Nothing to play (private or removed video, YouTube refused): say so instead of spinning
+    setError(!initial && !isLive ? t('player_no_format') : null)
+    setLoading(!!initial || !!isLive)
     setPlaying(false)
     setAutoplayBlocked(false)
     setCurrentTime(0)
@@ -523,8 +583,8 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
         case 'f': e.preventDefault(); toggleFullscreen(); break
         case 'ArrowRight': e.preventDefault(); video.currentTime = Math.min(video.duration, video.currentTime + 5); break
         case 'ArrowLeft': e.preventDefault(); video.currentTime = Math.max(0, video.currentTime - 5); break
-        case 'ArrowUp': e.preventDefault(); video.volume = Math.min(1, video.volume + 0.1); setVolume(video.volume); break
-        case 'ArrowDown': e.preventDefault(); video.volume = Math.max(0, video.volume - 0.1); setVolume(video.volume); break
+        case 'ArrowUp': e.preventDefault(); applyVolume(stepVolume(video.volume, 1)); break
+        case 'ArrowDown': e.preventDefault(); applyVolume(stepVolume(video.volume, -1)); break
         case 'm': e.preventDefault(); toggleMute(); break
       }
     }
@@ -588,6 +648,101 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
     if (video.buffered.length > 0) setBuffered(hlsStartOffsetRef.current + video.buffered.end(video.buffered.length - 1))
     const audio = audioRef.current
     if (audio && !audio.paused && Math.abs(audio.currentTime - absoluteTime) > 0.3) audio.currentTime = absoluteTime
+    handleSponsorSegments(video, absoluteTime)
+    const now = Date.now()
+    if (now - lastSessionUpdate.current > 1000) {
+      lastSessionUpdate.current = now
+      updateMediaSession(mediaSessionId.current, !video.paused, {
+        duration: effectiveDurationRef.current || video.duration,
+        position: absoluteTime,
+        playbackRate: video.playbackRate,
+      })
+    }
+  }
+
+  /** Seek to an absolute time (HD formats restart their HLS session there). */
+  function seekToTime(time: number) {
+    const video = videoRef.current
+    if (!video) return
+    setCurrentTime(time)
+    if (isVideoOnly) {
+      startHdHls(time, !video.paused)
+    } else {
+      video.currentTime = time
+      if (audioRef.current) audioRef.current.currentTime = time
+    }
+  }
+
+  function handleSponsorSegments(video: HTMLVideoElement, time: number) {
+    if (!ext.sponsorBlock || segments.length === 0) return
+    if (segmentMuted.current !== null) {
+      const seg = segments[segmentMuted.current]
+      if (time < seg.start || time >= seg.end) { video.muted = false; segmentMuted.current = null }
+    }
+    if (video.paused || video.seeking) return
+    const hit = activeSegment(segments, time, ext.sponsorCategories, handledSegments.current)
+    if (!hit) return
+    handledSegments.current.add(hit.index)
+    if (hit.segment.actionType === 'mute') {
+      video.muted = true
+      segmentMuted.current = hit.index
+      return
+    }
+    if (skipNoticeTimer.current) clearTimeout(skipNoticeTimer.current)
+    setSkipNotice({ category: hit.segment.category, start: hit.segment.start })
+    skipNoticeTimer.current = setTimeout(() => setSkipNotice(null), 6000)
+    const dur = effectiveDurationRef.current || video.duration || 0
+    if (dur > 0 && hit.segment.end >= dur - 1) {
+      // The segment runs to the end (outro, end cards): move on like at the end
+      video.pause()
+      onEnded?.()
+      return
+    }
+    seekToTime(hit.segment.end)
+  }
+
+  function undoSkip() {
+    if (!skipNotice) return
+    seekToTime(skipNotice.start)
+    setSkipNotice(null)
+  }
+
+  function showVolumeHud(v: number) {
+    // Slider position, not the raw level (they differ with the progressive curve)
+    setVolumeHud(Math.round(volumeToSlider(v) * 100))
+    if (volumeHudTimer.current) clearTimeout(volumeHudTimer.current)
+    volumeHudTimer.current = setTimeout(() => setVolumeHud(null), 900)
+  }
+
+  /** Volume from the wheel or the keyboard: saved, unmutes, shows the level. */
+  function applyVolume(v: number) {
+    handleVolumeChange({ target: { value: String(v) } } as React.ChangeEvent<HTMLInputElement>)
+    showVolumeHud(v)
+  }
+
+  async function togglePictureInPicture() {
+    const video = videoRef.current
+    if (!video) return
+    try {
+      if (document.pictureInPictureElement) await document.exitPictureInPicture()
+      else await video.requestPictureInPicture()
+    } catch { /* refused (e.g. no video frame yet) */ }
+  }
+
+  function claimSession() {
+    claimMediaSession(mediaSessionId.current, {
+      title,
+      artist: artist ?? '',
+      artwork: artwork ? [{ src: artwork, sizes: '480x360', type: 'image/jpeg' }] : [],
+    }, {
+      play: () => { const v = videoRef.current; if (v?.paused) togglePlay() },
+      pause: () => { const v = videoRef.current; if (v && !v.paused) togglePlay() },
+      seekbackward: () => { const v = videoRef.current; if (v) seekToTime(Math.max(0, hlsStartOffsetRef.current + v.currentTime - 10)) },
+      seekforward: () => { const v = videoRef.current; if (v) seekToTime(hlsStartOffsetRef.current + v.currentTime + 10) },
+      seekto: details => { if (details.seekTime !== undefined) seekToTime(details.seekTime) },
+      previoustrack: onPrev && hasPrev ? () => onPrev() : null,
+      nexttrack: onNext && hasNext ? () => onNext() : null,
+    })
   }
 
   function handleLoadedMetadata() {
@@ -671,16 +826,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   function seekToRatio(ratio: number) {
     const video = videoRef.current
     if (!video) return
-    const dur = effectiveDurationRef.current || video.duration
-    const time = ratio * dur
-    setCurrentTime(time)
-    if (isVideoOnly) {
-      const wasPlaying = !video.paused
-      startHdHls(time, wasPlaying)
-    } else {
-      video.currentTime = time
-      if (audioRef.current) audioRef.current.currentTime = time
-    }
+    seekToTime(ratio * (effectiveDurationRef.current || video.duration))
   }
 
   function onSeekPointerDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -709,8 +855,20 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
   const displayProgress = displayRatio * 100
   const bufferedProgress = duration > 0 ? (buffered / duration) * 100 : 0
   const displayTimeVal = scrubRatio !== null ? scrubRatio * duration : currentTime
-  const hoverTimeVal = hoverRatio !== null ? hoverRatio * duration : 0
+  // Preview follows the pointer, or the finger while scrubbing on touch screens
+  const previewRatio = scrubRatio ?? hoverRatio
+  const hoverTimeVal = previewRatio !== null ? previewRatio * duration : 0
   const anyMenuOpen = showSpeedMenu || showQualityMenu || showSubtitleMenu || showAudioMenu
+  const previewTile = storyboard && ext.seekPreview && previewRatio !== null && duration > 0
+    ? storyboardTile(storyboard, hoverTimeVal, duration, 176)
+    : null
+  const visibleSegments = ext.sponsorBlock && duration > 0
+    ? segments.filter(seg => seg.actionType !== 'poi' && ext.sponsorCategories[seg.category as SponsorCategory])
+    : []
+
+  useWheelVolume(volumeGroupRef, () => videoRef.current?.volume ?? volume, applyVolume)
+  // Fullscreen: nothing to scroll, the wheel works anywhere on the video
+  useWheelVolume(containerRef, () => videoRef.current?.volume ?? volume, applyVolume, fullscreen)
 
   // Current chapter at hover/current time
   const hoverChapter = chapters.length > 0 && duration > 0
@@ -732,8 +890,11 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
       onClick={() => {
         if (justShowedControlsRef.current) { justShowedControlsRef.current = false; return }
         if (anyMenuOpen) { setShowSpeedMenu(false); setShowQualityMenu(false); setShowSubtitleMenu(false); setShowAudioMenu(false); return }
+        // Touch: a tap shows/hides the controls (pausing is the play button's job)
+        if (isMobile) { setShowControls(v => !v); return }
         togglePlay()
       }}
+      onDoubleClick={() => { if (!isMobile) toggleFullscreen() }}
     >
       {/* Hidden audio — video-only formats (unused: HLS stream already muxes audio via ffmpeg) */}
       {audioSrc && !isVideoOnly && (
@@ -748,8 +909,14 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
         autoPlay={getPlaybackSettings().autoplay}
         playsInline
         preload="auto"
-        onPlay={() => { setPlaying(true); setAutoplayBlocked(false); safePlay(audioRef.current) }}
-        onPause={() => { setPlaying(false); audioRef.current?.pause() }}
+        // CORS-mode requests (the API allows them) let the equalizer read the sound
+        crossOrigin="anonymous"
+        onPlay={() => {
+          setPlaying(true); setAutoplayBlocked(false); safePlay(audioRef.current)
+          claimSession()
+          if (needsAudioGraph(ext)) void attachAudioEffects(videoRef.current)
+        }}
+        onPause={() => { setPlaying(false); audioRef.current?.pause(); updateMediaSession(mediaSessionId.current, false) }}
         onSeeked={() => { if (audioRef.current && videoRef.current) audioRef.current.currentTime = hlsStartOffsetRef.current + videoRef.current.currentTime }}
         onTimeUpdate={handleTimeUpdate}
         onDurationChange={() => {
@@ -809,7 +976,6 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
       {!error && (
         <div
           className={`absolute inset-0 flex flex-col justify-between transition-opacity duration-200 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-          onClick={e => e.stopPropagation()}
         >
           {/* Top: gradient + title */}
           <div className="relative pointer-events-none">
@@ -820,7 +986,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
           </div>
 
           {/* Bottom zone */}
-          <div className="relative" onClick={e => e.stopPropagation()}>
+          <div className="relative" onClick={e => e.stopPropagation()} onDoubleClick={e => e.stopPropagation()}>
             {/* Bottom gradient */}
             <div className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-black/90 to-transparent pointer-events-none" />
 
@@ -919,6 +1085,18 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                     <div className="absolute inset-y-0 left-0 bg-white/30 rounded-full" style={{ width: `${bufferedProgress}%` }} />
                     {/* Played */}
                     <div className="absolute inset-y-0 left-0 bg-accent-gradient rounded-full shadow-[0_0_12px_rgb(var(--yt-red)/0.6)]" style={{ width: `${displayProgress}%` }} />
+                    {/* SponsorBlock segments */}
+                    {visibleSegments.map((seg, i) => (
+                      <div
+                        key={i}
+                        className="absolute inset-y-0 pointer-events-none opacity-90"
+                        style={{
+                          left: `${(seg.start / duration) * 100}%`,
+                          width: `${Math.max(0.4, ((seg.end - seg.start) / duration) * 100)}%`,
+                          background: SPONSOR_COLORS[seg.category as SponsorCategory],
+                        }}
+                      />
+                    ))}
                     {/* Chapter markers */}
                     {chapters.map((ch, i) => (
                       <div
@@ -933,11 +1111,15 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                       style={{ left: `calc(${displayProgress}% - 6px)` }}
                     />
                     {/* Hover time tooltip */}
-                    {hoverRatio !== null && duration > 0 && (
+                    {previewRatio !== null && duration > 0 && (
                       <div
-                        className="absolute bottom-full mb-3 pointer-events-none -translate-x-1/2 flex flex-col items-center gap-1"
-                        style={{ left: `${hoverRatio * 100}%` }}
+                        className="absolute bottom-full mb-3 pointer-events-none -translate-x-1/2 flex flex-col items-center gap-1 z-20"
+                        // Kept inside the player near both ends of the bar
+                        style={{ left: previewTile ? `clamp(${previewTile.width / 2}px, ${previewRatio * 100}%, calc(100% - ${previewTile.width / 2}px))` : `${previewRatio * 100}%` }}
                       >
+                        {previewTile && (
+                          <div className="rounded-lg overflow-hidden ring-1 ring-white/25 shadow-elevated bg-black bg-no-repeat" style={previewTile.style} />
+                        )}
                         {hoverChapter && (
                           <div className="bg-black/75 backdrop-blur-md text-white/80 text-[10px] px-2 py-0.5 rounded-md whitespace-nowrap max-w-[160px] truncate">
                             {hoverChapter.title}
@@ -1008,7 +1190,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                       </button>
                     </>
                   )}
-                  <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
+                  <div ref={volumeGroupRef} className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
                     <button
                       onClick={toggleMute}
                       className="w-10 h-10 flex items-center justify-center rounded-full text-white hover:bg-white/10 transition-all active:scale-90"
@@ -1072,6 +1254,15 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
                       <Settings className="w-5 h-5" />
                     </button>
                   )}
+                  {pipSupported && !isMobile && (
+                    <button
+                      onClick={e => { e.stopPropagation(); void togglePictureInPicture() }}
+                      className="w-10 h-10 flex items-center justify-center rounded-full text-white/85 hover:text-white hover:bg-white/10 transition-all active:scale-90"
+                      title={t('player_pip')}
+                    >
+                      <PictureInPicture2 className="w-5 h-5" />
+                    </button>
+                  )}
                   <button
                     onClick={e => { e.stopPropagation(); toggleFullscreen() }}
                     className="w-10 h-10 flex items-center justify-center rounded-full text-white/85 hover:text-white hover:bg-white/10 transition-all active:scale-90"
@@ -1082,6 +1273,29 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Volume level while using the wheel or the arrow keys */}
+      {volumeHud !== null && (
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-40 pointer-events-none glass-chip rounded-full px-4 py-1.5 text-white text-sm font-semibold tabular-nums animate-fade-in">
+          {t('player_volume')} {volumeHud} %
+        </div>
+      )}
+
+      {/* SponsorBlock: what was skipped, with a way back */}
+      {skipNotice && (
+        <div
+          className="absolute left-4 bottom-24 z-40 flex items-center gap-2 bg-black/80 backdrop-blur-md border border-white/10 rounded-xl pl-3 pr-1.5 py-1.5 text-white text-xs shadow-elevated animate-fade-up"
+          onClick={e => e.stopPropagation()}
+          onDoubleClick={e => e.stopPropagation()}
+        >
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: SPONSOR_COLORS[skipNotice.category as SponsorCategory] ?? '#fff' }} />
+          <span>{t('sponsor_skipped').replace('{segment}', t(`sponsor_cat_${skipNotice.category}` as Parameters<typeof t>[0]))}</span>
+          <button onClick={undoSkip} className="px-2 py-1 rounded-lg font-semibold text-white hover:bg-white/10">{t('sponsor_undo')}</button>
+          <button onClick={() => setSkipNotice(null)} className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10" aria-label="OK">
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 

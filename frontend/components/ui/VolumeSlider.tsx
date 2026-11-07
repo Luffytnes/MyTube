@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
+import { sliderToVolume, volumeToSlider } from '@/lib/extensions'
 
 interface VolumeSliderProps {
   volume: number   // 0–1
@@ -12,13 +13,14 @@ interface VolumeSliderProps {
 export default function VolumeSlider({ volume, muted, onChange, className = 'w-16' }: VolumeSliderProps) {
   const barRef = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)
-  const pct = (muted ? 0 : volume) * 100
+  const pct = (muted ? 0 : volumeToSlider(volume)) * 100
 
+  /** Volume for a pointer position (the slider may follow a curve, see sliderToVolume) */
   function ratioFromX(clientX: number): number {
     const bar = barRef.current
     if (!bar) return volume
     const { left, width } = bar.getBoundingClientRect()
-    return Math.max(0, Math.min(1, (clientX - left) / width))
+    return sliderToVolume(Math.max(0, Math.min(1, (clientX - left) / width)))
   }
 
   return (

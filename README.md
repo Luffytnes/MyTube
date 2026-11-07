@@ -42,7 +42,12 @@ MyTube is a **self-hosted YouTube + IPTV frontend** that lets you browse, search
 - **Loop** — repeat the current video
 - **Video chapters** — timestamps parsed from the description, shown as markers on the progress bar with the current chapter name displayed
 - **Subtitles / CC** — manual and auto-generated tracks loaded on demand, proxied through your server
-- **Picture-in-picture** support via browser native API
+- **Click anywhere** on the video to pause / play, **double-click** for full screen
+- **Seek-bar previews** — hover the progress bar to see the picture at that moment (YouTube storyboards, proxied)
+- **SponsorBlock** — skips sponsors, self-promotion, subscribe reminders… (categories of your choice), with an undo button; looked up by hash prefix so SponsorBlock never learns which video plays
+- **Media keys** — play/pause/seek/next from the keyboard, macOS Control Center or headphones (Media Session API)
+- **Mouse-wheel volume** and a progressive volume curve
+- **Picture-in-picture** button when the browser supports it
 
 ### 📱 Shorts
 - Dedicated **Shorts section** at `/shorts` — vertical video feed with TikTok-style navigation
@@ -103,7 +108,9 @@ MyTube is a **self-hosted YouTube + IPTV frontend** that lets you browse, search
 - Browse trending **albums, artists, playlists**
 - Full **search** with filters (songs, albums, artists, playlists, podcasts, **radio**)
 - Inline **audio player** with queue, shuffle, repeat
-- **Full-screen player** — blurred album art background, queue panel, next track preview
+- **Full-screen player** — blurred album art background tinted with the cover's colour, queue panel, next track preview
+- **Synced lyrics** — from LRCLIB or YouTube Music, following the song; click a line to jump there
+- **Crossfade** between songs, **skip silences**, optional **visualizer**
 - **Podcasts** — browse & play episodes, personalised by language and search history
 - Follow/unfollow podcasts — stored locally in **My Podcasts**
 - Personalised suggestions on the home page (tracks, albums, artists, podcasts, radio)
@@ -122,6 +129,7 @@ MyTube is a **self-hosted YouTube + IPTV frontend** that lets you browse, search
 - **Live channels** — browse by category, watch with HLS via hls.js
 - **Films (VOD)** — browse by category, click any jacket to reach the film detail page (TMDB poster, synopsis, cast, rating) before playing
 - **Series** — season/episode navigation, play any episode directly
+- **Seek-bar previews** for films and episodes, made from the local download (never an extra provider connection)
 - **Real-time transcoding** — ffmpeg re-encodes on the fly to H.264 fMP4, so MKV/HEVC/AC3 content plays natively in every browser
   - VideoToolbox hardware encoder (macOS) with libx264 software fallback
   - Audio downmixed to stereo AAC — avoids Apple AudioToolbox multi-channel rejection in Firefox/Safari
@@ -155,7 +163,8 @@ MyTube is a **self-hosted YouTube + IPTV frontend** that lets you browse, search
 - **Grid density** — Compact / Normal / Comfortable
 - **Default subtitles** — choose a language applied automatically on every video
 - **History TTL** — keep watch history for 7, 30, 90 days, or forever
-- **Data tab** — export all local data as JSON (including Music playlists, search history, podcast subscriptions), import a backup, or clear individual sections
+- **Extensions tab** — SponsorBlock categories, seek-bar previews, 10-band **equalizer** with presets, **even volume** (leveller), crossfade, skip silences, cover colours, visualizer, volume curve and wheel
+- **Data tab** — export all local data as JSON (including Music playlists, search history, podcast subscriptions), import a backup, or clear individual sections. History, likes, playlists and settings are also kept by your MyTube server, so browsers that wipe site data on close (LibreWolf) get them back
 - **WireGuard VPN** — route all backend traffic through a personal VPN (e.g. ProtonVPN), no system impact
 
 ### ⌨️ Keyboard Shortcuts
@@ -173,7 +182,7 @@ MyTube is a **self-hosted YouTube + IPTV frontend** that lets you browse, search
 | `F` | Toggle fullscreen |
 | `M` | Toggle mute |
 | `←` `→` | Seek ±5 seconds |
-| `↑` `↓` | Volume ±10% |
+| `↑` `↓` | Volume ±5% |
 
 #### Shorts
 | Key | Action |

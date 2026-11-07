@@ -119,6 +119,54 @@ def cached_audio_tracks(video_id: str) -> Optional[List[Dict[str, Any]]]:
     return _audio_tracks_cache.get(video_id)
 
 
+_player_formats_cache: TTLCache = TTLCache(maxsize=1000, ttl=3 * 3600)
+
+
+def player_formats(formats: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """yt-dlp formats in the shape the web player uses (itag, quality, hasAudio…):
+    combined first, then video-only by height, then audio-only by bitrate."""
+    out: List[Dict[str, Any]] = []
+    seen = set()
+    for fmt in formats:
+        itag = fmt.get("format_id")
+        if not itag or itag in seen or not is_direct_format(fmt):
+            continue
+        seen.add(itag)
+        has_video = fmt.get("vcodec", "none") != "none"
+        has_audio = fmt.get("acodec", "none") != "none"
+        height = fmt.get("height")
+        if has_video:
+            quality = f"{height}p" if height else fmt.get("format_note", "unknown")
+        elif has_audio:
+            abr = fmt.get("abr")
+            quality = f"{int(abr)}k audio" if abr else fmt.get("format_note", "audio")
+        else:
+            continue
+        out.append({
+            "itag": itag,
+            "ext": fmt.get("ext", "mp4"),
+            "quality": quality,
+            "filesize": fmt.get("filesize") or fmt.get("filesize_approx"),
+            "hasAudio": has_audio,
+            "hasVideo": has_video,
+            "height": height or 0,
+            "abr": fmt.get("abr") or 0,
+        })
+
+    def sort_key(f: Dict[str, Any]) -> tuple:
+        if f["hasVideo"] and f["hasAudio"]:
+            return (0, -(f["height"] or 0))
+        if f["hasVideo"]:
+            return (1, -(f["height"] or 0))
+        return (2, -(f["abr"] or 0))
+
+    return sorted(out, key=sort_key)
+
+
+def cached_player_formats(video_id: str) -> Optional[List[Dict[str, Any]]]:
+    return _player_formats_cache.get(video_id)
+
+
 def hls_session_key(video_id: str, itag: str, start: int, audio_lang: Optional[str] = None) -> str:
     return f"{video_id}:{itag}:{start}:{audio_lang or ''}"
 
@@ -138,6 +186,7 @@ async def _extract_and_cache(video_id: str) -> Optional[dict]:
         stream_url_cache_set(f"stream:{video_id}:bestaudio_m4a", audio["url"], audio.get("ext", "m4a"))
     tracks = list_audio_tracks(formats)
     _audio_tracks_cache[video_id] = tracks
+    _player_formats_cache[video_id] = player_formats(formats)
     for track in tracks:
         if audio := _best_m4a_audio(formats, track["lang"]):
             stream_url_cache_set(f"stream:{video_id}:audio:{track['lang']}", audio["url"], audio.get("ext", "m4a"))
