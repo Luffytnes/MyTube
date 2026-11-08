@@ -492,7 +492,7 @@ async def _probe_vod_duration(path: str) -> float:
 _GROWING_FILE_ARGS = ["-follow", "1", "-rw_timeout", "30000000"]
 
 
-async def _choose_ffmpeg_input(vod_entry: dict, cache_path: str, start: int) -> tuple:
+async def _choose_ffmpeg_input(vod_entry: dict, cache_path: str, start: int, max_wait: float = 60) -> tuple:
     """Pick the fastest ffmpeg input strategy for this start position.
 
     For start > 0 with a partial cache, estimates the seek byte offset,
@@ -521,7 +521,7 @@ async def _choose_ffmpeg_input(vod_entry: dict, cache_path: str, start: int) -> 
             seek_byte = int(start / duration * total_size)
             # 20 MB safety buffer so ffmpeg isn't reading at the exact frontier
             target = min(seek_byte + 20 * 1024 * 1024, total_size)
-            deadline = asyncio.get_event_loop().time() + 60
+            deadline = asyncio.get_event_loop().time() + max_wait
             while (
                 vod_entry.get("written", 0) < target
                 and not vod_entry.get("done")
@@ -545,7 +545,7 @@ async def _choose_ffmpeg_input(vod_entry: dict, cache_path: str, start: int) -> 
 
 
 async def _start_iptv_vod_hls_session(
-    stream_id: str, ext: str, media: str, audio_idx: int, start: int
+    stream_id: str, ext: str, media: str, audio_idx: int, start: int, max_wait: float = 60
 ) -> Dict[str, Any]:
     session_key = f"{stream_id}:{ext}:{media}:{audio_idx}:{start}"
 
@@ -560,7 +560,7 @@ async def _start_iptv_vod_hls_session(
     vod_entry = await _ensure_vod_download(f"{stream_id}.{ext}", src)
     cache_path = vod_entry.get("path", "")
 
-    input_args, use_pipe = await _choose_ffmpeg_input(vod_entry, cache_path, start)
+    input_args, use_pipe = await _choose_ffmpeg_input(vod_entry, cache_path, start, max_wait)
 
     async with _iptv_vod_hls_lock:
         # Double-check: another concurrent request might have created this session

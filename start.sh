@@ -66,7 +66,8 @@ fi
 echo -e "${GREEN}Starting backend (FastAPI + yt-dlp) on port 8000...${NC}"
 cd "$BACKEND"
 # Editing tests must not restart the server (that drops the HLS sessions being watched)
-"$VENV/bin/python" -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload --reload-exclude tests &
+# (absolute path: uvicorn compares it with the absolute paths of changed files)
+"$VENV/bin/python" -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload --reload-exclude "$BACKEND/tests" &
 BACKEND_PID=$!
 
 # Wait for backend to be ready

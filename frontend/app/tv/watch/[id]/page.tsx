@@ -247,7 +247,9 @@ export default function TvWatchPage() {
         } else {
           // Fetch total duration from backend
           try {
-            const res = await fetch(`${API_BASE}/api/iptv/vod_stream/${id}?ext=${ext}&media=${media}&audio_idx=${audioIdx}`)
+            // series_id: the catalogue knows the episode's length when the file can't tell yet
+            const seriesParam = seriesId ? `&series_id=${encodeURIComponent(seriesId)}` : ''
+            const res = await fetch(`${API_BASE}/api/iptv/vod_stream/${id}?ext=${ext}&media=${media}&audio_idx=${audioIdx}${seriesParam}`)
             if (res.ok) {
               const data = await res.json()
               const dur = data.duration ?? 0
@@ -265,7 +267,17 @@ export default function TvWatchPage() {
           setStartOffsetBoth(startSec)
 
           const hlsUrl = `${API_BASE}/api/iptv/vod_hls2/${id}/playlist.m3u8?ext=${ext}&media=${media}&audio_idx=${audioIdxRef.current}&start=${startSec}`
-          await player.load(hlsUrl)
+          try {
+            await player.load(hlsUrl)
+          } catch (err) {
+            if (cancelled || !isRetryableShakaError(err)) throw err
+            // A far resume can take the server longer than one try (download to
+            // reach, session restarted): once more before the error screen
+            console.warn('[shaka] first load failed, retrying', describeShakaError(err))
+            clearLoadTimeout()
+            loadTimeout = setTimeout(onError, 100000)
+            await player.load(hlsUrl)
+          }
         }
 
         if (!cancelled) video.play().catch(() => {})

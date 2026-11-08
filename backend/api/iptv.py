@@ -478,9 +478,43 @@ async def iptv_vod_subtitle(stream_id: str, ext: str = "mp4", media: str = "movi
     )
 
 
+_catalog_cache: TTLCache = TTLCache(maxsize=64, ttl=600)
+
+
+async def _catalog_duration(stream_id: str, media: str, series_id: str | None) -> float | None:
+    """Duration the provider's catalogue gives for a film or an episode.
+
+    An API call, not a stream connection: free on single-connection accounts.
+    Used when the file can't tell yet (download just started, AVI, provider
+    still refusing the stream)."""
+    try:
+        if media == "movie":
+            key = ("vod", stream_id)
+            if key not in _catalog_cache:
+                _catalog_cache[key] = await _xtream_api("get_vod_info", extra={"vod_id": stream_id}, timeout=10.0)
+            info = (_catalog_cache[key] or {}).get("info") or {}
+        elif series_id:
+            key = ("series", series_id)
+            if key not in _catalog_cache:
+                _catalog_cache[key] = await _xtream_api("get_series_info", extra={"series_id": series_id}, timeout=10.0)
+            episodes = ((_catalog_cache[key] or {}).get("episodes") or {}).values()
+            info = next((e.get("info") or {} for season in episodes for e in season if str(e.get("id")) == stream_id), {})
+        else:
+            return None
+        seconds = float(info.get("duration_secs") or 0)
+        if seconds <= 0 and isinstance(info.get("duration"), str):
+            parts = [float(x) for x in info["duration"].split(":") if x.strip().replace(".", "", 1).isdigit()]
+            for part in parts:
+                seconds = seconds * 60 + part
+        return seconds if seconds > 0 else None
+    except Exception:
+        return None
+
+
 @router.get("/api/iptv/vod_stream/{stream_id}")
-async def iptv_vod_stream_url(stream_id: str, request: Request, ext: str = "mp4", media: str = "movie", audio_idx: int = 0):
-    """Return the ffmpeg-transcoded proxy URL + duration via ffprobe (3 s timeout)."""
+async def iptv_vod_stream_url(stream_id: str, request: Request, ext: str = "mp4", media: str = "movie", audio_idx: int = 0,
+                              series_id: Optional[str] = Query(None, pattern=r"^[0-9]{1,12}$")):
+    """Return the ffmpeg-transcoded proxy URL + duration (ffprobe, else the catalogue)."""
     if not config._xtream_cfg.get("server"):
         raise HTTPException(status_code=400, detail="IPTV not configured")
     _check_vod_params(ext, media, stream_id)
@@ -538,6 +572,10 @@ async def iptv_vod_stream_url(stream_id: str, request: Request, ext: str = "mp4"
                 pass
     except Exception:
         pass
+
+    if duration_secs is None:
+        # Without it the player shows the growing length of what is transcoded
+        duration_secs = await _catalog_duration(stream_id, media, series_id)
 
     # Pre-start the file download so vod_proxy can reuse it immediately
     await free_xtream_connection(keep_key=f"{stream_id}.{ext}")

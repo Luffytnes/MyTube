@@ -682,8 +682,9 @@ class TestFarResumeInPartialDownload:
             d = tmp_path / f"s{len(sessions)}"
             d.mkdir()
             (d / "playlist.m3u8").write_text(content)
+            # Download complete by the time the empty first attempt is seen
             sessions.append({"dir": str(d), "process": MagicMock(returncode=code), "pipe_task": None,
-                             "key": "5:mp4:movie:0:1800", "vod_entry": {"written": 1, "done": False}})
+                             "key": "5:mp4:movie:0:1800", "vod_entry": {"written": 1, "done": True}})
         start = AsyncMock(side_effect=sessions)
         with patch.dict(config._xtream_cfg, {"server": "http://iptv.example", "username": "u", "password": "p"}), \
              patch.object(iptv, "free_xtream_connection", AsyncMock()), \
@@ -697,7 +698,7 @@ class TestFarResumeInPartialDownload:
         import api.iptv as iptv
         from core import config
 
-        def dead_session(*_):
+        def dead_session(*_, **__):
             d = tmp_path / f"d{dead_session.n}"
             dead_session.n += 1
             d.mkdir()
@@ -712,3 +713,63 @@ class TestFarResumeInPartialDownload:
             resp = _youtube_client().get("/api/iptv/vod_hls2/5/playlist.m3u8?ext=mp4&media=movie&start=1800")
         assert resp.status_code == 503
         assert start.await_count == 2
+
+    def test_restart_waits_for_the_download(self, tmp_path):
+        """ffmpeg can't open some partial files (MP4 index at the end): retry once complete."""
+        import api.iptv as iptv
+        from core import config
+        entry = {"written": 1, "done": False}
+        first = tmp_path / "a"
+        first.mkdir()
+        second = tmp_path / "b"
+        second.mkdir()
+        (second / "playlist.m3u8").write_text(self.GOOD)
+
+        async def start_session(*_, **__):
+            if not start_session.calls:
+                start_session.calls = 1
+                asyncio.get_running_loop().call_later(0.3, entry.update, {"done": True})
+                return {"dir": str(first), "process": MagicMock(returncode=1), "pipe_task": None,
+                        "key": "5:mp4:movie:0:1800", "vod_entry": entry}
+            start_session.calls += 1
+            return {"dir": str(second), "process": MagicMock(returncode=None), "pipe_task": None,
+                    "key": "5:mp4:movie:0:1800", "vod_entry": entry}
+        start_session.calls = 0
+        import asyncio
+        with patch.dict(config._xtream_cfg, {"server": "http://iptv.example", "username": "u", "password": "p"}), \
+             patch.object(iptv, "free_xtream_connection", AsyncMock()), \
+             patch("api.youtube._start_iptv_vod_hls_session", start_session):
+            resp = _youtube_client().get("/api/iptv/vod_hls2/5/playlist.m3u8?ext=mp4&media=movie&start=1800")
+        assert resp.status_code == 200
+        assert start_session.calls == 2
+
+
+class TestCatalogDuration:
+    SERIES = {"episodes": {"1": [{"id": "30308", "info": {"duration": "00:41:39", "duration_secs": 2499}},
+                                 {"id": "30309", "info": {"duration": "00:40:58"}}]}}
+
+    def _duration(self, stream_id, media, series_id, payload):
+        import asyncio
+        import api.iptv as iptv
+        iptv._catalog_cache.clear()
+        with patch.object(iptv, "_xtream_api", AsyncMock(return_value=payload)) as api:
+            return asyncio.run(iptv._catalog_duration(stream_id, media, series_id)), api
+
+    def test_episode_seconds(self):
+        seconds, api = self._duration("30308", "series", "565", self.SERIES)
+        assert seconds == 2499
+        assert api.await_args.kwargs["extra"] == {"series_id": "565"}
+
+    def test_episode_hms_string(self):
+        seconds, _ = self._duration("30309", "series", "565", self.SERIES)
+        assert seconds == 40 * 60 + 58
+
+    def test_movie(self):
+        seconds, api = self._duration("77", "movie", None, {"info": {"duration_secs": "5400"}})
+        assert seconds == 5400
+        assert api.await_args.kwargs["extra"] == {"vod_id": "77"}
+
+    def test_unknown_episode_or_no_series(self):
+        assert self._duration("1", "series", "565", self.SERIES)[0] is None
+        assert self._duration("1", "series", None, self.SERIES)[0] is None
+
