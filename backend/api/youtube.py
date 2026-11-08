@@ -861,6 +861,16 @@ async def hls_stop(video_id: VideoId, itag: FormatId):
     return {"ok": True}
 
 
+_EXTINF = re.compile(r"^#EXTINF:([0-9.]+)", re.MULTILINE)
+
+
+def _has_media_segment(playlist: str) -> bool:
+    """At least one segment with some duration. ffmpeg ends an input it could
+    not read with a single 0 s segment, which Shaka drops, then fails on the
+    empty list ("can't access property …, c is undefined")."""
+    return any(float(d) > 0 for d in _EXTINF.findall(playlist))
+
+
 @router.get("/api/iptv/vod_hls2/{stream_id}/playlist.m3u8")
 async def iptv_vod_hls2_playlist(
     request: Request,
@@ -891,36 +901,50 @@ async def iptv_vod_hls2_playlist(
         raise HTTPException(status_code=500, detail=str(e))
     session["last_access"] = _time()
 
-    playlist_path = Path(session["dir"]) / "playlist.m3u8"
-    vod_entry = session.get("vod_entry") or {}
+    def drop(sess: dict) -> None:
+        _iptv_vod_hls_sessions.pop(sess["key"], None)
+        pt = sess.get("pipe_task")
+        if pt and not pt.done():
+            pt.cancel()
+        shutil.rmtree(sess["dir"], ignore_errors=True)
 
-    # 15 s to produce the first segment once data flows. While the provider is
-    # still refusing the stream (the download retries, see VOD_REFUSED_RETRY_SECS)
-    # keep waiting, up to 85 s in all: the player gives a manifest 90 s.
+    # 15 s to produce the first segment once data flows. While the download has
+    # not started (provider refusing, see VOD_REFUSED_RETRY_SECS) or ffmpeg waits
+    # for it to reach a far start position, keep waiting: up to 85 s in all, the
+    # player gives a manifest 90 s.
     loop = asyncio.get_running_loop()
     started = loop.time()
     ready_by = started + 15
-    while not (playlist_path.exists() and playlist_path.stat().st_size > 10):
+    restarted = False
+    while True:
+        playlist_path = Path(session["dir"]) / "playlist.m3u8"
+        vod_entry = session.get("vod_entry") or {}
+        content = playlist_path.read_text() if playlist_path.exists() else ""
+        if _has_media_segment(content):
+            break
         proc = session["process"]
-        if proc.returncode is not None and proc.returncode != 0:
+        if proc.returncode is not None:
+            # Ended without a single real segment (e.g. nothing to read at the
+            # start position): an empty playlist crashes the player, so start
+            # over once — the download has moved on — then report it
             async with _iptv_vod_hls_lock:
-                _iptv_vod_hls_sessions.pop(session["key"], None)
-            pt = session.get("pipe_task")
-            if pt and not pt.done():
-                pt.cancel()
-            shutil.rmtree(session["dir"], ignore_errors=True)
+                drop(session)
+            if proc.returncode == 0 and not restarted and loop.time() < started + 60:
+                restarted = True
+                session = await _start_iptv_vod_hls_session(stream_id, ext, media, audio_idx, start)
+                session["last_access"] = _time()
+                continue
             if vod_entry.get("done") and not vod_entry.get("written"):
                 reason = vod_entry.get("error") or "no data"
                 raise HTTPException(status_code=502, detail=f"IPTV provider refused the stream ({reason})")
-            raise HTTPException(status_code=503, detail="ffmpeg failed to start")
+            raise HTTPException(status_code=503, detail="ffmpeg produced no video")
         now = loop.time()
-        if not vod_entry.get("written") and not vod_entry.get("done"):
+        if not vod_entry.get("done"):
             ready_by = max(ready_by, min(now + 15, started + 85))
         if now >= ready_by:
             raise HTTPException(status_code=504, detail="HLS transcoding timeout")
         await asyncio.sleep(0.1)
 
-    content = playlist_path.read_text()
     # Declare EVENT so Shaka starts from the first segment, not the live edge
     if "#EXT-X-PLAYLIST-TYPE" not in content:
         content = content.replace("#EXTM3U", "#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT", 1)

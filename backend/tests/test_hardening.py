@@ -638,3 +638,77 @@ class TestVodProbeInput:
     def test_multi_connection_account_may_read_the_provider(self):
         src, _, started = self._probe(2)
         assert src == "http://iptv.example/series/u/p/7.mp4" and not started
+
+
+class TestFarResumeInPartialDownload:
+    """Resuming far into a film still downloading: the byte estimate is linear,
+    the bitrate is not, so the start may lie past what is downloaded."""
+
+    EMPTY = "#EXTM3U\n#EXT-X-TARGETDURATION:0\n#EXT-X-DISCONTINUITY\n#EXTINF:0.000000,\nseg00000.ts\n#EXT-X-ENDLIST\n"
+    GOOD = "#EXTM3U\n#EXT-X-TARGETDURATION:20\n#EXTINF:20.000000,\nseg00000.ts\n"
+
+    def test_empty_playlist_detected(self):
+        from api.youtube import _has_media_segment
+        assert not _has_media_segment(self.EMPTY)
+        assert not _has_media_segment("")
+        assert _has_media_segment(self.GOOD)
+
+    def test_partial_file_is_followed_while_it_grows(self, tmp_path):
+        import asyncio
+        import services.ffmpeg as ff
+        path = tmp_path / "mytube_5.mp4"
+        path.write_bytes(b"\0" * 1024)
+        entry = {"path": str(path), "written": 400 * 1024 * 1024, "total_size": 500 * 1024 * 1024, "done": False}
+        with patch.object(ff, "_probe_vod_duration", AsyncMock(return_value=3600.0)):
+            args, use_pipe = asyncio.run(ff._choose_ffmpeg_input(entry, str(path), 1800))
+        assert not use_pipe
+        assert args[:4] == ["-follow", "1", "-rw_timeout", "30000000"]
+        assert args[-2:] == ["-i", str(path)]
+
+    def test_complete_file_is_read_plainly(self, tmp_path):
+        import asyncio
+        import services.ffmpeg as ff
+        path = tmp_path / "mytube_6.mp4"
+        path.write_bytes(b"\0" * 1024)
+        entry = {"path": str(path), "written": 1024, "total_size": 1024, "done": True}
+        args, _ = asyncio.run(ff._choose_ffmpeg_input(entry, str(path), 60))
+        assert "-follow" not in args
+
+    def test_session_without_video_is_started_again(self, tmp_path):
+        import api.iptv as iptv
+        from core import config
+        sessions = []
+        for content, code in ((self.EMPTY, 0), (self.GOOD, None)):
+            d = tmp_path / f"s{len(sessions)}"
+            d.mkdir()
+            (d / "playlist.m3u8").write_text(content)
+            sessions.append({"dir": str(d), "process": MagicMock(returncode=code), "pipe_task": None,
+                             "key": "5:mp4:movie:0:1800", "vod_entry": {"written": 1, "done": False}})
+        start = AsyncMock(side_effect=sessions)
+        with patch.dict(config._xtream_cfg, {"server": "http://iptv.example", "username": "u", "password": "p"}), \
+             patch.object(iptv, "free_xtream_connection", AsyncMock()), \
+             patch("api.youtube._start_iptv_vod_hls_session", start):
+            resp = _youtube_client().get("/api/iptv/vod_hls2/5/playlist.m3u8?ext=mp4&media=movie&start=1800")
+        assert resp.status_code == 200
+        assert start.await_count == 2
+        assert "/api/iptv/vod_hls2/5/1800/seg00000.ts" in resp.text
+
+    def test_gives_up_after_one_restart(self, tmp_path):
+        import api.iptv as iptv
+        from core import config
+
+        def dead_session(*_):
+            d = tmp_path / f"d{dead_session.n}"
+            dead_session.n += 1
+            d.mkdir()
+            (d / "playlist.m3u8").write_text(self.EMPTY)
+            return {"dir": str(d), "process": MagicMock(returncode=0), "pipe_task": None,
+                    "key": "5:mp4:movie:0:1800", "vod_entry": {"written": 1, "done": True}}
+        dead_session.n = 0
+        start = AsyncMock(side_effect=dead_session)
+        with patch.dict(config._xtream_cfg, {"server": "http://iptv.example", "username": "u", "password": "p"}), \
+             patch.object(iptv, "free_xtream_connection", AsyncMock()), \
+             patch("api.youtube._start_iptv_vod_hls_session", start):
+            resp = _youtube_client().get("/api/iptv/vod_hls2/5/playlist.m3u8?ext=mp4&media=movie&start=1800")
+        assert resp.status_code == 503
+        assert start.await_count == 2

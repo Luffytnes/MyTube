@@ -487,6 +487,11 @@ async def _probe_vod_duration(path: str) -> float:
         return 0.0
 
 
+# Read a file that is still being downloaded: wait at its end for more data,
+# give up after 30 s without growth (microseconds)
+_GROWING_FILE_ARGS = ["-follow", "1", "-rw_timeout", "30000000"]
+
+
 async def _choose_ffmpeg_input(vod_entry: dict, cache_path: str, start: int) -> tuple:
     """Pick the fastest ffmpeg input strategy for this start position.
 
@@ -529,7 +534,12 @@ async def _choose_ffmpeg_input(vod_entry: dict, cache_path: str, start: int) -> 
                     f"written={vod_entry['written']//1024//1024}MB → file seek",
                     flush=True,
                 )
-                return [*seek, "-i", cache_path], False
+                # The byte estimate is linear but bitrates are not: the target
+                # may lie past what is downloaded. ffmpeg then hit the end of the
+                # file and wrote an empty playlist, which crashed the player.
+                # -follow makes it wait for the file to grow; once the download
+                # is over, rw_timeout ends the read.
+                return [*_GROWING_FILE_ARGS, *seek, "-i", cache_path], False
 
     return ["-fflags", "+ignidx", *seek, "-i", "pipe:0"], True
 
