@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 import os
 import sys
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
@@ -273,6 +273,20 @@ class TestPlayerFormats:
             resp = _client(yt.router).get("/api/formats/dQw4w9WgXcQ")
         assert [f["itag"] for f in resp.json()["formats"]] == ["18", "137", "140"]
 
+    def test_duration_from_the_extraction(self):
+        """YouTube sometimes leaves the length out too: the seek bar then grew
+        with what the server had transcoded."""
+        import api.youtube as yt
+        import services.ffmpeg as ff
+        ff._player_formats_cache.clear()
+        ff._durations_cache.clear()
+        info = {"duration": 503, "formats": self.FORMATS}
+        with patch.object(ff, "ydl_extract", AsyncMock(return_value=info)), \
+             patch.object(ff, "stream_url_cache_set", lambda *a, **k: None):
+            resp = _client(yt.router).get("/api/formats/dQw4w9WgXcQ")
+        assert resp.json()["duration"] == 503.0
+        assert len(resp.json()["formats"]) == 3
+
     def test_unplayable_video_gives_empty_lists(self):
         import api.youtube as yt
         import services.ffmpeg as ff
@@ -284,7 +298,7 @@ class TestPlayerFormats:
 
         with patch.object(yt, "prefetch_stream_urls", lambda vid: asyncio.ensure_future(fail(vid))):
             c = _client(yt.router)
-            assert c.get("/api/formats/dQw4w9WgXcQ").json() == {"formats": []}
+            assert c.get("/api/formats/dQw4w9WgXcQ").json() == {"formats": [], "duration": None}
             assert c.get("/api/audio_tracks/dQw4w9WgXcQ").json() == {"tracks": []}
 
 

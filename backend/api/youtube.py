@@ -61,6 +61,7 @@ from services.ffmpeg import (
     audio_rank,
     cached_audio_tracks,
     cached_player_formats,
+    cached_video_duration,
     hls_session_key,
     hls_session_lead,
     is_direct_format,
@@ -728,17 +729,19 @@ async def audio_tracks(video_id: VideoId):
 
 @router.get("/api/formats/{video_id}")
 async def video_formats(video_id: VideoId):
-    """Playable formats according to yt-dlp. YouTube sometimes sends YouTube.js
-    the player data without any stream list; the player then falls back on
-    these (from the extraction shared with playback)."""
+    """Playable formats and duration according to yt-dlp. YouTube sometimes
+    sends YouTube.js the player data without the stream list or the length;
+    the player then falls back on these (from the extraction shared with
+    playback). Without the length, the seek bar showed the growing length of
+    what the server had transcoded so far."""
     formats = cached_player_formats(video_id)
     if formats is None:
         try:
             await asyncio.shield(prefetch_stream_urls(video_id))
         except Exception:
-            return {"formats": []}
+            return {"formats": [], "duration": None}
         formats = cached_player_formats(video_id) or []
-    return {"formats": formats}
+    return {"formats": formats, "duration": cached_video_duration(video_id)}
 
 
 @router.post("/api/prefetch/{video_id}", status_code=202)

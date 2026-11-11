@@ -167,6 +167,13 @@ def cached_player_formats(video_id: str) -> Optional[List[Dict[str, Any]]]:
     return _player_formats_cache.get(video_id)
 
 
+_durations_cache: TTLCache = TTLCache(maxsize=1000, ttl=3 * 3600)
+
+
+def cached_video_duration(video_id: str) -> Optional[float]:
+    return _durations_cache.get(video_id)
+
+
 def hls_session_key(video_id: str, itag: str, start: int, audio_lang: Optional[str] = None) -> str:
     return f"{video_id}:{itag}:{start}:{audio_lang or ''}"
 
@@ -187,6 +194,8 @@ async def _extract_and_cache(video_id: str) -> Optional[dict]:
     tracks = list_audio_tracks(formats)
     _audio_tracks_cache[video_id] = tracks
     _player_formats_cache[video_id] = player_formats(formats)
+    if info.get("duration"):
+        _durations_cache[video_id] = float(info["duration"])
     for track in tracks:
         if audio := _best_m4a_audio(formats, track["lang"]):
             stream_url_cache_set(f"stream:{video_id}:audio:{track['lang']}", audio["url"], audio.get("ext", "m4a"))
