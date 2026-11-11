@@ -157,6 +157,9 @@ export interface TvVideoPlayerProps {
   artist?: string
   /** Called every few minutes while paused, so the server keeps the film's session */
   onKeepAlive?: () => void
+  /** Shown under the spinner while loading (download progress), and a warning */
+  loadingDetail?: string
+  loadingWarning?: string
 }
 
 export default function TvVideoPlayer({
@@ -170,7 +173,7 @@ export default function TvVideoPlayer({
   queue = [], currentQueueId, queueTitle = 'Liste de lecture',
   onEnded, onPrev, onNext,
   timeOffset = 0, externalDuration, onNeedNewSession,
-  previewUrl, artwork, artist, onKeepAlive,
+  previewUrl, artwork, artist, onKeepAlive, loadingDetail, loadingWarning,
 }: TvVideoPlayerProps) {
   const { t } = useRegion()
   const ext = useExtensions()
@@ -523,8 +526,14 @@ export default function TvVideoPlayer({
 
       {/* Spinner */}
       {(loading || waiting) && !error && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none px-6 text-center">
           <Loader2 className="w-12 h-12 text-white/80 animate-spin" />
+          {loading && loadingDetail && (
+            <p className="text-white/75 text-xs sm:text-sm tabular-nums bg-black/50 rounded-full px-3 py-1">{loadingDetail}</p>
+          )}
+          {loading && loadingWarning && (
+            <p className="text-amber-300 text-xs sm:text-sm max-w-md">{loadingWarning}</p>
+          )}
         </div>
       )}
 

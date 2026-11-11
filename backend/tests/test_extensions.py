@@ -286,3 +286,22 @@ class TestPlayerFormats:
             c = _client(yt.router)
             assert c.get("/api/formats/dQw4w9WgXcQ").json() == {"formats": []}
             assert c.get("/api/audio_tracks/dQw4w9WgXcQ").json() == {"tracks": []}
+
+
+class TestVodDownloadProgress:
+    def test_progress_of_a_running_download(self):
+        import api.iptv as iptv
+        import services.ffmpeg as ff
+        ff._vod_dl_cache["91.avi"] = {"path": "/x", "written": 3 * 2**20, "total_size": 351 * 2**20,
+                                      "speed": 8192.0, "done": False}
+        try:
+            resp = _client(iptv.router).get("/api/iptv/vod_download/91?ext=avi")
+        finally:
+            ff._vod_dl_cache.pop("91.avi", None)
+        assert resp.json() == {"written": 3 * 2**20, "total": 351 * 2**20, "speed": 8192.0, "done": False, "error": None}
+
+    def test_no_download(self):
+        import api.iptv as iptv
+        c = _client(iptv.router)
+        assert c.get("/api/iptv/vod_download/92?ext=avi").status_code == 404
+        assert c.get("/api/iptv/vod_download/92?ext=exe").status_code == 400

@@ -683,6 +683,8 @@ async def _download_to_file(url: str, path: str, entry: dict) -> None:
     """Download *url* with reconnection and write to *path*."""
     offset = 0
     retry_until: Optional[float] = None
+    # Download speed over the last few seconds, shown while a film loads
+    window_start, window_bytes = _time(), 0
     try:
         with open(path, 'wb') as f:
             for _ in range(300):
@@ -721,6 +723,10 @@ async def _download_to_file(url: str, path: str, entry: dict) -> None:
                                     f.flush()
                                     entry["written"] += len(chunk)
                                     offset += len(chunk)
+                                    window_bytes += len(chunk)
+                                    if _time() - window_start >= 3:
+                                        entry["speed"] = window_bytes / (_time() - window_start)
+                                        window_start, window_bytes = _time(), 0
                                     entry["event"].set()
                                     entry["event"].clear()
                                 if offset == 0:

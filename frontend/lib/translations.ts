@@ -122,6 +122,7 @@ export interface Translations {
   nav_library: string; nav_apps: string
   player_click_to_play: string
   player_audio_language: string; player_audio_original: string; player_no_format: string
+  iptv_download_progress: string; iptv_download_speed: string; iptv_slow_warning: string; iptv_too_slow: string
   // Extensions (Settings → Extensions), lyrics, server copy of the data
   settings_tab_extensions: string; ext_intro: string; ext_sponsorblock_desc: string; sponsor_cat_sponsor: string; sponsor_cat_selfpromo: string; sponsor_cat_interaction: string
   sponsor_cat_intro: string; sponsor_cat_outro: string; sponsor_cat_preview: string; sponsor_cat_filler: string; sponsor_cat_music_offtopic: string; sponsor_skipped: string
@@ -264,6 +265,7 @@ export const translations: Record<Lang, Translations> = {
     player_click_to_play: 'Click to play',
     player_audio_language: 'Audio language', player_audio_original: 'Original',
     player_no_format: 'YouTube did not provide any playable stream for this video.',
+    iptv_download_progress: 'Downloading from the provider: {done} / {total} MB', iptv_download_speed: '{speed} KB/s', iptv_slow_warning: 'The provider is sending this video slower than it plays.', iptv_too_slow: 'The IPTV provider is sending this video too slowly ({speed} KB/s). Try again later or pick another episode.',
     settings_tab_extensions: 'Extensions', ext_intro: 'Optional player features. They apply right away.', ext_sponsorblock_desc: 'Skips the parts flagged by the SponsorBlock community. Only an anonymous fragment of the video ID leaves MyTube.',
     sponsor_cat_sponsor: 'Sponsor', sponsor_cat_selfpromo: 'Self-promotion', sponsor_cat_interaction: 'Like/subscribe reminder',
     sponsor_cat_intro: 'Intro', sponsor_cat_outro: 'Outro / end cards', sponsor_cat_preview: 'Preview / recap',
@@ -408,6 +410,7 @@ export const translations: Record<Lang, Translations> = {
     player_click_to_play: 'Cliquer pour lire',
     player_audio_language: 'Langue audio', player_audio_original: 'Originale',
     player_no_format: 'YouTube n\'a fourni aucun flux lisible pour cette vidéo.',
+    iptv_download_progress: 'Téléchargement depuis le fournisseur : {done} / {total} Mo', iptv_download_speed: '{speed} Ko/s', iptv_slow_warning: 'Le fournisseur envoie cette vidéo plus lentement qu\'elle ne se lit.', iptv_too_slow: 'Le fournisseur IPTV envoie cette vidéo trop lentement ({speed} Ko/s). Réessaie plus tard ou choisis un autre épisode.',
     settings_tab_extensions: 'Extensions', ext_intro: 'Fonctions facultatives des lecteurs. Elles s\'appliquent tout de suite.', ext_sponsorblock_desc: 'Saute les passages signalés par la communauté SponsorBlock. Seul un fragment anonyme de l\'identifiant de la vidéo sort de MyTube.',
     sponsor_cat_sponsor: 'Sponsor', sponsor_cat_selfpromo: 'Autopromo', sponsor_cat_interaction: 'Rappel d\'abonnement',
     sponsor_cat_intro: 'Intro', sponsor_cat_outro: 'Fin / écrans de fin', sponsor_cat_preview: 'Aperçu / récap',
@@ -552,6 +555,7 @@ export const translations: Record<Lang, Translations> = {
     player_click_to_play: 'Haz clic para reproducir',
     player_audio_language: 'Idioma del audio', player_audio_original: 'Original',
     player_no_format: 'YouTube no ha proporcionado ningún flujo reproducible para este vídeo.',
+    iptv_download_progress: 'Descargando del proveedor: {done} / {total} MB', iptv_download_speed: '{speed} KB/s', iptv_slow_warning: 'El proveedor envía este vídeo más despacio de lo que se reproduce.', iptv_too_slow: 'El proveedor IPTV envía este vídeo demasiado despacio ({speed} KB/s). Vuelve a intentarlo más tarde o elige otro episodio.',
     settings_tab_extensions: 'Extensiones', ext_intro: 'Funciones opcionales de los reproductores. Se aplican al instante.', ext_sponsorblock_desc: 'Salta los fragmentos marcados por la comunidad de SponsorBlock. Solo sale de MyTube un fragmento anónimo del ID del vídeo.',
     sponsor_cat_sponsor: 'Patrocinio', sponsor_cat_selfpromo: 'Autopromoción', sponsor_cat_interaction: 'Recordatorio de suscripción',
     sponsor_cat_intro: 'Intro', sponsor_cat_outro: 'Final / pantallas finales', sponsor_cat_preview: 'Avance / resumen',
@@ -696,6 +700,7 @@ export const translations: Record<Lang, Translations> = {
     player_click_to_play: 'Zum Abspielen klicken',
     player_audio_language: 'Audiosprache', player_audio_original: 'Original',
     player_no_format: 'YouTube hat für dieses Video keinen abspielbaren Stream geliefert.',
+    iptv_download_progress: 'Download vom Anbieter: {done} / {total} MB', iptv_download_speed: '{speed} KB/s', iptv_slow_warning: 'Der Anbieter sendet dieses Video langsamer, als es abgespielt wird.', iptv_too_slow: 'Der IPTV-Anbieter sendet dieses Video zu langsam ({speed} KB/s). Versuche es später erneut oder wähle eine andere Folge.',
     settings_tab_extensions: 'Erweiterungen', ext_intro: 'Optionale Player-Funktionen. Sie gelten sofort.', ext_sponsorblock_desc: 'Überspringt die von der SponsorBlock-Community markierten Abschnitte. Nur ein anonymes Fragment der Video-ID verlässt MyTube.',
     sponsor_cat_sponsor: 'Sponsor', sponsor_cat_selfpromo: 'Eigenwerbung', sponsor_cat_interaction: 'Abo-Erinnerung',
     sponsor_cat_intro: 'Intro', sponsor_cat_outro: 'Abspann / Endcards', sponsor_cat_preview: 'Vorschau / Rückblick',
@@ -840,6 +845,7 @@ export const translations: Record<Lang, Translations> = {
     player_click_to_play: 'Clique para reproduzir',
     player_audio_language: 'Idioma do áudio', player_audio_original: 'Original',
     player_no_format: 'O YouTube não forneceu nenhum fluxo reproduzível para este vídeo.',
+    iptv_download_progress: 'Baixando do provedor: {done} / {total} MB', iptv_download_speed: '{speed} KB/s', iptv_slow_warning: 'O provedor está enviando este vídeo mais devagar do que ele é reproduzido.', iptv_too_slow: 'O provedor IPTV está enviando este vídeo devagar demais ({speed} KB/s). Tente mais tarde ou escolha outro episódio.',
     settings_tab_extensions: 'Extensões', ext_intro: 'Funções opcionais dos reprodutores. Aplicam-se na hora.', ext_sponsorblock_desc: 'Pula os trechos marcados pela comunidade SponsorBlock. Só um fragmento anônimo do ID do vídeo sai do MyTube.',
     sponsor_cat_sponsor: 'Patrocínio', sponsor_cat_selfpromo: 'Autopromoção', sponsor_cat_interaction: 'Lembrete de inscrição',
     sponsor_cat_intro: 'Introdução', sponsor_cat_outro: 'Encerramento', sponsor_cat_preview: 'Prévia / resumo',
@@ -984,6 +990,7 @@ export const translations: Record<Lang, Translations> = {
     player_click_to_play: 'Clicca per riprodurre',
     player_audio_language: 'Lingua audio', player_audio_original: 'Originale',
     player_no_format: 'YouTube non ha fornito alcun flusso riproducibile per questo video.',
+    iptv_download_progress: 'Download dal fornitore: {done} / {total} MB', iptv_download_speed: '{speed} KB/s', iptv_slow_warning: 'Il fornitore invia questo video più lentamente di quanto venga riprodotto.', iptv_too_slow: 'Il fornitore IPTV invia questo video troppo lentamente ({speed} KB/s). Riprova più tardi o scegli un altro episodio.',
     settings_tab_extensions: 'Estensioni', ext_intro: 'Funzioni facoltative dei lettori. Si applicano subito.', ext_sponsorblock_desc: 'Salta i passaggi segnalati dalla community di SponsorBlock. Da MyTube esce solo un frammento anonimo dell\'ID del video.',
     sponsor_cat_sponsor: 'Sponsor', sponsor_cat_selfpromo: 'Autopromozione', sponsor_cat_interaction: 'Promemoria iscrizione',
     sponsor_cat_intro: 'Intro', sponsor_cat_outro: 'Finale / schermate finali', sponsor_cat_preview: 'Anteprima / riepilogo',
@@ -1128,6 +1135,7 @@ export const translations: Record<Lang, Translations> = {
     player_click_to_play: 'クリックして再生',
     player_audio_language: '音声の言語', player_audio_original: 'オリジナル',
     player_no_format: 'YouTube はこの動画の再生可能なストリームを提供しませんでした。',
+    iptv_download_progress: 'プロバイダーからダウンロード中: {done} / {total} MB', iptv_download_speed: '{speed} KB/s', iptv_slow_warning: 'プロバイダーの送信速度が再生速度より遅くなっています。', iptv_too_slow: 'IPTV プロバイダーの送信が遅すぎます（{speed} KB/s）。後でもう一度試すか、別のエピソードを選んでください。',
     settings_tab_extensions: '拡張機能', ext_intro: 'プレーヤーの追加機能です。すぐに反映されます。', ext_sponsorblock_desc: 'SponsorBlock コミュニティが報告した区間をスキップします。MyTube の外に出るのは動画 ID の匿名の断片だけです。',
     sponsor_cat_sponsor: 'スポンサー', sponsor_cat_selfpromo: '自己宣伝', sponsor_cat_interaction: '高評価・登録の催促',
     sponsor_cat_intro: 'イントロ', sponsor_cat_outro: 'エンディング', sponsor_cat_preview: '予告・振り返り',
@@ -1272,6 +1280,7 @@ export const translations: Record<Lang, Translations> = {
     player_click_to_play: '클릭하여 재생',
     player_audio_language: '오디오 언어', player_audio_original: '원본',
     player_no_format: 'YouTube가 이 동영상의 재생 가능한 스트림을 제공하지 않았습니다.',
+    iptv_download_progress: '제공자에서 다운로드 중: {done} / {total} MB', iptv_download_speed: '{speed} KB/s', iptv_slow_warning: '제공자가 재생 속도보다 느리게 이 동영상을 보내고 있습니다.', iptv_too_slow: 'IPTV 제공자가 이 동영상을 너무 느리게 보내고 있습니다 ({speed} KB/s). 나중에 다시 시도하거나 다른 에피소드를 선택하세요.',
     settings_tab_extensions: '확장 기능', ext_intro: '플레이어의 선택 기능입니다. 바로 적용됩니다.', ext_sponsorblock_desc: 'SponsorBlock 커뮤니티가 표시한 구간을 건너뜁니다. MyTube 밖으로는 동영상 ID의 익명 조각만 나갑니다.',
     sponsor_cat_sponsor: '스폰서', sponsor_cat_selfpromo: '자체 홍보', sponsor_cat_interaction: '구독 요청',
     sponsor_cat_intro: '인트로', sponsor_cat_outro: '아웃트로', sponsor_cat_preview: '미리보기 / 요약',
@@ -1416,6 +1425,7 @@ export const translations: Record<Lang, Translations> = {
     player_click_to_play: 'Нажмите, чтобы воспроизвести',
     player_audio_language: 'Язык аудио', player_audio_original: 'Оригинал',
     player_no_format: 'YouTube не предоставил воспроизводимого потока для этого видео.',
+    iptv_download_progress: 'Загрузка от провайдера: {done} / {total} МБ', iptv_download_speed: '{speed} КБ/с', iptv_slow_warning: 'Провайдер передаёт это видео медленнее, чем оно воспроизводится.', iptv_too_slow: 'IPTV-провайдер передаёт это видео слишком медленно ({speed} КБ/с). Попробуйте позже или выберите другую серию.',
     settings_tab_extensions: 'Расширения', ext_intro: 'Дополнительные функции плееров. Применяются сразу.', ext_sponsorblock_desc: 'Пропускает фрагменты, отмеченные сообществом SponsorBlock. За пределы MyTube уходит только анонимная часть ID видео.',
     sponsor_cat_sponsor: 'Спонсор', sponsor_cat_selfpromo: 'Самореклама', sponsor_cat_interaction: 'Призыв подписаться',
     sponsor_cat_intro: 'Вступление', sponsor_cat_outro: 'Концовка', sponsor_cat_preview: 'Анонс / пересказ',

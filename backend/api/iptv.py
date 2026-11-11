@@ -588,6 +588,25 @@ async def iptv_vod_stream_url(stream_id: str, request: Request, ext: str = "mp4"
     }
 
 
+@router.get("/api/iptv/vod_download/{stream_id}")
+async def iptv_vod_download(stream_id: str, ext: str = "mp4"):
+    """Progress of a film/episode download from the provider, shown while it loads.
+
+    `speed` (bytes/s, over the last seconds) is None until measured. A provider
+    sending slower than the film plays is the usual reason for a long start."""
+    _check_vod_params(ext=ext, stream_id=stream_id)
+    entry = _vod_dl_cache.get(f"{stream_id}.{ext}")
+    if not entry:
+        raise HTTPException(status_code=404, detail="No download")
+    return {
+        "written": entry.get("written", 0),
+        "total": entry.get("total_size", 0),
+        "speed": entry.get("speed"),
+        "done": bool(entry.get("done")),
+        "error": entry.get("error"),
+    }
+
+
 _thumb_cache: TTLCache = TTLCache(maxsize=1000, ttl=3600)
 # Hovering the seek bar fires many requests; a couple of ffmpeg at a time is plenty
 _thumb_slots = asyncio.Semaphore(2)

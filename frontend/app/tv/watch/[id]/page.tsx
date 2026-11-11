@@ -46,6 +46,8 @@ export default function TvWatchPage() {
 
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  // Provider download progress, shown while a film loads
+  const [download, setDownload] = useState<{ written: number; total: number; speed: number | null; done: boolean } | null>(null)
   const [iconErr, setIconErr] = useState(false)
   const [startOffset, setStartOffset] = useState(0)
   const [totalDuration, setTotalDuration] = useState(0)
@@ -314,6 +316,33 @@ export default function TvWatchPage() {
 
   const isLive = type === 'live'
 
+  useEffect(() => {
+    setDownload(null)
+    if (type === 'live' || (!loading && !error)) return
+    let stopped = false
+    const poll = () => {
+      fetch(`${API_BASE}/api/iptv/vod_download/${id}?ext=${ext}`)
+        .then(r => (r.ok ? r.json() : null))
+        .then(d => { if (!stopped) setDownload(d) })
+        .catch(() => {})
+    }
+    poll()
+    const timer = setInterval(poll, 2000)
+    return () => { stopped = true; clearInterval(timer) }
+  }, [id, ext, type, loading, error])
+
+  const mb = (bytes: number) => Math.round(bytes / 1048576)
+  const kbps = download?.speed != null ? Math.round(download.speed / 1024) : null
+  const downloading = !!download && !download.done && download.total > 0
+  // Slower than the film plays (its size over its length): it can't start or keep up
+  const tooSlow = downloading && kbps !== null && totalDuration > 0
+    && download!.speed! < 0.8 * (download!.total / totalDuration)
+  const loadingDetail = downloading
+    ? t('iptv_download_progress').replace('{done}', String(mb(download!.written))).replace('{total}', String(mb(download!.total)))
+      + (kbps !== null ? ` · ${t('iptv_download_speed').replace('{speed}', String(kbps))}` : '')
+    : undefined
+  const shownError = error && tooSlow ? t('iptv_too_slow').replace('{speed}', String(kbps)) : error
+
   const queue: { id: string; label: string; sublabel?: string; href: string; icon?: string }[] = isLive
     ? queueChannels.map(ch => ({
         id: String(ch.stream_id),
@@ -405,7 +434,7 @@ export default function TvWatchPage() {
         <TvVideoPlayer
           videoRef={videoRef}
           loading={loading}
-          error={error}
+          error={shownError}
           onErrorBack={() => router.back()}
           title={name}
           audioTracks={tracks?.audio ?? []}
@@ -428,6 +457,8 @@ export default function TvWatchPage() {
           previewUrl={isLive ? undefined : (time: number) => `${API_BASE}/api/iptv/vod_thumb/${id}?ext=${ext}&t=${time}`}
           artwork={icon ? `${API_BASE}/api/iptv/icon?url=${encodeURIComponent(icon)}` : undefined}
           artist={isLive ? t('iptv_live') : seriesName || undefined}
+          loadingDetail={loadingDetail}
+          loadingWarning={tooSlow ? t('iptv_slow_warning') : undefined}
           onKeepAlive={isLive ? undefined : () => {
             fetch(`${API_BASE}/api/iptv/vod_hls2/${id}/playlist.m3u8?ext=${ext}&media=${media}&audio_idx=${audioIdxRef.current}&start=${startOffsetRef.current}`).catch(() => {})
           }}
