@@ -683,6 +683,9 @@ _vod_dl_cache: dict[str, dict] = {}
 # about a minute. Keep retrying the first request for that long instead of
 # failing the playback with an empty file.
 VOD_REFUSED_RETRY_SECS = 75.0
+# Download as a video player: some IPTV panels slow down or limit clients
+# that announce a library (httpx's default is "python-httpx/x.y")
+VOD_USER_AGENT = "VLC/3.0.21 LibVLC/3.0.21"
 VOD_REFUSED_RETRY_DELAY = 3.0
 # Statuses that won't change by waiting (missing file, bad request)
 _VOD_FINAL_STATUSES = (400, 404, 410)
@@ -697,7 +700,7 @@ async def _download_to_file(url: str, path: str, entry: dict) -> None:
     try:
         with open(path, 'wb') as f:
             for _ in range(300):
-                headers: dict[str, str] = {}
+                headers: dict[str, str] = {"User-Agent": VOD_USER_AGENT}
                 if offset > 0:
                     headers["Range"] = f"bytes={offset}-"
                 refused = None
@@ -717,6 +720,8 @@ async def _download_to_file(url: str, path: str, entry: dict) -> None:
                             elif resp.status_code == 200 and offset > 0:
                                 break
                             else:
+                                # The panel often redirects to a storage server: name it in diagnostics
+                                entry["host"] = resp.url.host
                                 if not entry.get("total_size"):
                                     cl = int(resp.headers.get("content-length", 0) or 0)
                                     cr = resp.headers.get("content-range", "")
@@ -736,6 +741,10 @@ async def _download_to_file(url: str, path: str, entry: dict) -> None:
                                     if _time() - window_start >= 3:
                                         entry["speed"] = window_bytes / (_time() - window_start)
                                         window_start, window_bytes = _time(), 0
+                                        if entry["speed"] < 50 * 1024 and not entry.get("slow_logged"):
+                                            entry["slow_logged"] = True
+                                            print(f"[vod_cache] {Path(path).name}: provider sending "
+                                                  f"{entry['speed'] / 1024:.0f} KB/s from {entry.get('host')}", flush=True)
                                     entry["event"].set()
                                     entry["event"].clear()
                                 if offset == 0:

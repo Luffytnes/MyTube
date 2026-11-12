@@ -915,7 +915,8 @@ async def iptv_vod_hls2_playlist(
         # One line per failure, to tell next time what kept a film from starting
         print(f"[vod_hls] playlist {stream_id}@{start}s: {status} {detail} after {loop.time() - started:.0f}s "
               f"(download {vod.get('written', 0) // 2**20}/{vod.get('total_size', 0) // 2**20} MB, "
-              f"done={bool(vod.get('done'))}, error={vod.get('error')})", flush=True)
+              f"done={bool(vod.get('done'))}, error={vod.get('error')}, "
+              f"speed={(vod.get('speed') or 0) / 1024:.0f} KB/s from {vod.get('host')})", flush=True)
         return HTTPException(status_code=status, detail=detail)
 
     def drop(sess: dict) -> None:

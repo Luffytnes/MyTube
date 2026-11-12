@@ -773,3 +773,24 @@ class TestCatalogDuration:
         assert self._duration("1", "series", "565", self.SERIES)[0] is None
         assert self._duration("1", "series", None, self.SERIES)[0] is None
 
+
+
+def test_vod_download_identifies_as_a_player(tmp_path):
+    import asyncio
+    import httpx as _httpx
+    import services.ffmpeg as ff
+    seen = []
+
+    def handler(request):
+        seen.append(request.headers.get("user-agent"))
+        return _httpx.Response(200, content=b"x" * 10)
+
+    def client(**kw):
+        kw.pop("follow_redirects", None)
+        return _httpx.AsyncClient(transport=_httpx.MockTransport(handler), **kw)
+
+    entry = {"path": str(tmp_path / "f"), "written": 0, "done": False, "total_size": 0, "event": asyncio.Event()}
+    with patch.object(ff, "httpx_client", client):
+        asyncio.run(ff._download_to_file("http://iptv.example/series/u/p/1.avi", entry["path"], entry))
+    assert seen[0] == ff.VOD_USER_AGENT
+    assert entry["host"] == "iptv.example"
