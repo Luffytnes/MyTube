@@ -504,6 +504,7 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
         }
         sessionErrors++
         if (sessionErrors === 1 && data.type === 'mediaError') {
+          console.warn('[hd] recovering from', data.details)
           hls.recoverMediaError()
         } else if (hlsRestartRef.current < 2) {
           restartQueued = true
@@ -512,6 +513,8 @@ export default function VideoPlayer({ videoId, formats, title, isLive, knownDura
           hls.destroy()
           hdHlsRef.current = null
           const currentPos = hlsStartOffsetRef.current + (videoRef.current?.currentTime ?? 0)
+          // A restart resumes at the keyframe before, a few seconds back: say why
+          console.warn(`[hd] session restarted at ${currentPos.toFixed(1)}s after ${data.type} / ${data.details}`)
           stopHlsSession(videoId, itag).then(() => startHdHlsRef.current?.(currentPos, autoplay, true))
         } else {
           setError(`Erreur HD : ${data.details}`)
