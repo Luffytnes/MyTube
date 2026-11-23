@@ -16,6 +16,19 @@ import {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 
+const VPN_FAILURE_DISMISSED = 'mytube-vpn-failure-dismissed'
+
+function dismissedVpnFailure(): boolean {
+  try { return sessionStorage.getItem(VPN_FAILURE_DISMISSED) === '1' } catch { return false }
+}
+
+function setDismissedVpnFailure(dismissed: boolean) {
+  try {
+    if (dismissed) sessionStorage.setItem(VPN_FAILURE_DISMISSED, '1')
+    else sessionStorage.removeItem(VPN_FAILURE_DISMISSED)
+  } catch { /* storage disabled: the notice may come back */ }
+}
+
 export default function Header() {
   const router = useRouter()
   const { t } = useRegion()
@@ -40,7 +53,10 @@ export default function Header() {
         const newConf: string | null = data.conf_name ?? null
         setVpnConnected(!!data.running)
         setVpnConfName(newConf)
-        setVpnAllFailed(!!data.all_failed)
+        // Closed notices stay closed (the poll used to bring them back every 10 s)
+        // until the server reports a failure again after a recovery
+        if (!data.all_failed) setDismissedVpnFailure(false)
+        setVpnAllFailed(!!data.all_failed && !dismissedVpnFailure())
         if (
           data.running &&
           newConf !== null &&
@@ -159,7 +175,7 @@ export default function Header() {
       <div role="alert" className="fixed top-[72px] left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-red-600/95 backdrop-blur-xl text-white text-sm shadow-elevated max-w-sm w-[calc(100%-2rem)] animate-fade-up">
         <AlertTriangle className="w-4 h-4 flex-shrink-0" />
         <span className="flex-1">{t('settings_vpn_all_failed')}</span>
-        <button onClick={() => setVpnAllFailed(false)} className="ml-1 p-1 rounded-full hover:bg-white/15 transition-colors" aria-label="Close">
+        <button onClick={() => { setDismissedVpnFailure(true); setVpnAllFailed(false) }} className="ml-1 p-1 rounded-full hover:bg-white/15 transition-colors" aria-label="Close">
           <X className="w-4 h-4" />
         </button>
       </div>

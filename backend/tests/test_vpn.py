@@ -293,3 +293,90 @@ class TestYdlExtract:
             import pytest
             with pytest.raises(Exception, match="Video unavailable"):
                 asyncio.run(ydl_extract("https://www.youtube.com/watch?v=test", {}))
+
+
+# ---------------------------------------------------------------------------
+# "No .conf can reach YouTube" notice: cleared once Wireproxy runs again
+# ---------------------------------------------------------------------------
+
+class TestExhaustedFailoverNotice:
+    def _client(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from api.vpn import router
+        app = FastAPI()
+        app.include_router(router)
+        return TestClient(app)
+
+    def test_not_reported_while_wireproxy_runs(self):
+        _reset_state()
+        vpn_svc._vpn_all_failed = True
+        with patch("api.vpn.is_wireproxy_active", return_value=True):
+            assert self._client().get("/api/vpn/status").json()["all_failed"] is False
+        with patch("api.vpn.is_wireproxy_active", return_value=False):
+            assert self._client().get("/api/vpn/status").json()["all_failed"] is True
+        _reset_state()
+
+    def test_manual_start_clears_it(self, tmp_path):
+        _reset_state()
+        conf = tmp_path / "a.conf"
+        conf.write_text("[Interface]\n")
+        vpn_svc._wireproxy_conf_path = str(conf)
+        vpn_svc._vpn_all_failed = True
+        vpn_svc._vpn_failed_confs = {"a.conf"}
+        with patch("api.vpn.is_wireproxy_active", return_value=False), \
+             patch("api.vpn.WIREPROXY_HOST", "wireproxy"), \
+             patch("api.vpn._start_wireproxy_sync", return_value=True), \
+             patch("api.vpn._vpn_state_update") as save:
+            assert self._client().post("/api/vpn/start").status_code == 200
+        save.assert_called_with(running=True)
+        assert vpn_svc._vpn_all_failed is False and vpn_svc._vpn_failed_confs == set()
+        _reset_state()
+
+    def test_selecting_a_config_clears_it(self, tmp_path):
+        _reset_state()
+        (tmp_path / "b.conf").write_text("[Interface]\n")
+        vpn_svc._vpn_all_failed = True
+        with patch("api.vpn.VPN_CONFIGS_DIR", str(tmp_path)), \
+             patch("api.vpn.is_wireproxy_active", return_value=False), \
+             patch("api.vpn._vpn_state_update"):
+            assert self._client().post("/api/vpn/select", json={"name": "b.conf"}).status_code == 200
+        assert vpn_svc._vpn_all_failed is False
+        _reset_state()
+
+
+class TestVpnSurvivesRestart:
+    """A restart used to leave Wireproxy off: YouTube traffic then went out
+    without the VPN, with nothing saying so."""
+
+    def _restore(self, state, tmp_path, host=""):
+        conf = tmp_path / "a.conf"
+        conf.write_text("[Interface]\n")
+        vpn_svc._wireproxy_conf_path = str(conf)
+        with patch.object(vpn_svc, "_vpn_state_load", return_value=state), \
+             patch.object(vpn_svc, "WIREPROXY_HOST", host), \
+             patch.object(vpn_svc, "WIREPROXY_BIN", str(conf)), \
+             patch.object(vpn_svc, "_start_wireproxy_sync", return_value=True) as start:
+            asyncio.run(vpn_svc.restore_vpn_on_startup())
+        _reset_state()
+        return start
+
+    def test_restarted_when_it_was_on(self, tmp_path):
+        assert self._restore({"active": "a.conf", "running": True}, tmp_path).called
+
+    def test_left_off_when_it_was_off(self, tmp_path):
+        assert not self._restore({"active": "a.conf", "running": False}, tmp_path).called
+        assert not self._restore({"active": "a.conf"}, tmp_path).called
+
+    def test_container_mode_is_left_alone(self, tmp_path):
+        assert not self._restore({"running": True}, tmp_path, host="wireproxy").called
+
+    def test_stop_remembers_it_is_off(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from api.vpn import router
+        app = FastAPI()
+        app.include_router(router)
+        with patch("api.vpn._stop_wireproxy_sync"), patch("api.vpn._vpn_state_update") as save:
+            assert TestClient(app).post("/api/vpn/stop").status_code == 200
+        save.assert_called_with(running=False)

@@ -60,6 +60,10 @@ def _vpn_state_save(state: dict):
         pass
 
 
+def _vpn_state_update(**changes) -> None:
+    _vpn_state_save({**_vpn_state_load(), **changes})
+
+
 def _restore_active_conf():
     """On startup: restore last active config if it still exists."""
     global _wireproxy_conf_path, _wireproxy_conf_name
@@ -221,6 +225,26 @@ def _start_wireproxy_sync(conf_path: str) -> bool:
         return False
 
 
+async def restore_vpn_on_startup() -> None:
+    """Start Wireproxy again if it was on when the server stopped.
+
+    Only the chosen .conf used to be restored: after a restart YouTube traffic
+    went out without the VPN, with nothing saying so."""
+    if WIREPROXY_HOST or not _vpn_state_load().get("running"):
+        return  # container mode: the wireproxy container keeps running on its own
+    if not _wireproxy_conf_path or not os.path.exists(_wireproxy_conf_path) or not os.path.exists(WIREPROXY_BIN):
+        return
+    ok = await asyncio.get_event_loop().run_in_executor(None, _start_wireproxy_sync, _wireproxy_conf_path)
+    print(f"[vpn] Wireproxy restored at startup ({_wireproxy_conf_name}): {'ok' if ok else 'failed'}", flush=True)
+
+
+def stop_wireproxy_on_shutdown() -> None:
+    """Stop the wireproxy subprocess with the server (its state stays "running",
+    so the next start brings it back); a leftover one would hold the port."""
+    if not WIREPROXY_HOST:
+        _stop_wireproxy_sync()
+
+
 async def _vpn_failover():
     """Try the next available conf. If all exhausted, disable wireproxy."""
     global _wireproxy_conf_path, _wireproxy_conf_name
@@ -242,6 +266,7 @@ async def _vpn_failover():
             _stop_wireproxy_sync()
             _vpn_all_failed = True
             _vpn_error_count = 0
+            _vpn_state_update(running=False)
             return
 
         # Try next candidate
@@ -256,7 +281,7 @@ async def _vpn_failover():
         if success:
             _wireproxy_conf_path = next_path
             _wireproxy_conf_name = next_conf
-            _vpn_state_save({"active": next_conf})
+            _vpn_state_update(active=next_conf, running=True)
             _vpn_error_count = 0
         else:
             _vpn_failed_confs.add(next_conf)

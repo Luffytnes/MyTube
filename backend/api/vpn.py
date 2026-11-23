@@ -13,6 +13,7 @@ from services.vpn import (
     _prepare_conf,
     _vpn_state_load,
     _vpn_state_save,
+    _vpn_state_update,
     _start_wireproxy_sync,
     _stop_wireproxy_sync,
     _ytm_cache,
@@ -32,6 +33,13 @@ def _safe_conf_name(raw: str) -> str:
     return name or "vpn.conf"
 
 
+def _clear_failover() -> None:
+    """Forget an exhausted failover: the user picked or started a config."""
+    vpn_svc._vpn_error_count = 0
+    vpn_svc._vpn_failed_confs = set()
+    vpn_svc._vpn_all_failed = False
+
+
 @router.get("/api/vpn/status")
 async def vpn_status():
     running = is_wireproxy_active()
@@ -42,7 +50,8 @@ async def vpn_status():
         "error": None,
         "proxy": _get_proxy_url(),
         "auto_mode": vpn_svc._vpn_auto_mode,
-        "all_failed": vpn_svc._vpn_all_failed,
+        # "Wireproxy has been disabled" is wrong once it runs again
+        "all_failed": vpn_svc._vpn_all_failed and not running,
         "error_count": vpn_svc._vpn_error_count,
     }
 
@@ -52,18 +61,14 @@ async def vpn_set_auto_mode(body: dict):
     enabled = bool(body.get("enabled", False))
     vpn_svc._vpn_auto_mode = enabled
     # Reset failover state when toggling
-    vpn_svc._vpn_error_count = 0
-    vpn_svc._vpn_failed_confs = set()
-    vpn_svc._vpn_all_failed = False
+    _clear_failover()
     return {"auto_mode": vpn_svc._vpn_auto_mode}
 
 
 @router.post("/api/vpn/reset_failover")
 async def vpn_reset_failover():
     """Reset the failover state so all confs are candidates again."""
-    vpn_svc._vpn_error_count = 0
-    vpn_svc._vpn_failed_confs = set()
-    vpn_svc._vpn_all_failed = False
+    _clear_failover()
     return {"ok": True}
 
 
@@ -104,8 +109,9 @@ async def vpn_upload_conf(file: UploadFile = File(...)):
 
     vpn_svc._wireproxy_conf_path = path
     vpn_svc._wireproxy_conf_name = name
-    _vpn_state_save({"active": name})
+    _vpn_state_update(active=name)
     _ytm_cache.clear()
+    _clear_failover()
 
     configs = sorted(f for f in os.listdir(VPN_CONFIGS_DIR) if f.endswith(".conf"))
     return {"ok": True, "conf_name": name, "configs": configs}
@@ -128,7 +134,8 @@ async def vpn_select_conf(body: dict):
 
     vpn_svc._wireproxy_conf_path = path
     vpn_svc._wireproxy_conf_name = name
-    _vpn_state_save({"active": name})
+    _vpn_state_update(active=name)
+    _clear_failover()
 
     return {"ok": True, "conf_name": name}
 
@@ -164,6 +171,7 @@ async def vpn_start():
         raise HTTPException(status_code=400, detail="No VPN config loaded. Upload a .conf file first.")
 
     if is_wireproxy_active():
+        _clear_failover()
         return {"running": True, "message": "Already running"}
 
     if not WIREPROXY_HOST and not os.path.exists(WIREPROXY_BIN):
@@ -177,7 +185,9 @@ async def vpn_start():
     success = await loop.run_in_executor(None, _start_wireproxy_sync, vpn_svc._wireproxy_conf_path)
     if not success:
         raise HTTPException(status_code=500, detail="wireproxy failed to start")
-
+    # Started by hand: the exhausted-failover notice no longer applies
+    _clear_failover()
+    _vpn_state_update(running=True)
     return {"running": True}
 
 
@@ -186,6 +196,7 @@ async def vpn_stop():
     import asyncio
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _stop_wireproxy_sync)
+    _vpn_state_update(running=False)
     return {"running": False}
 
 
