@@ -130,6 +130,42 @@ export default function TvWatchPage() {
   }, [id, type, name, icon, ext, media, seriesId, seriesSeason, seriesName, seriesIcon])
 
   const lastRecoveryRef = useRef(0)
+
+  /** Load a film/episode session. A position the provider download has not
+   *  reached yet makes the server answer "not downloaded yet" (or exceed the
+   *  player's patience): try again for as long as the download moves on — the
+   *  spinner shows it — instead of failing after one try. */
+  const loadWhileDownloading = useCallback(async (
+    player: { load: (url: string) => Promise<unknown> },
+    url: string,
+    alive: () => boolean,
+    onRetry?: () => void,
+  ) => {
+    let lastWritten = -1
+    let retriedComplete = false
+    for (;;) {
+      try {
+        await player.load(url)
+        return
+      } catch (err) {
+        if (!alive() || !isRetryableShakaError(err)) throw err
+        const d = await fetch(`${API_BASE}/api/iptv/vod_download/${id}?ext=${ext}`)
+          .then(r => (r.ok ? r.json() : null))
+          .catch(() => null) as { written: number; done: boolean } | null
+        const progressing = !!d && !d.done && d.written > lastWritten
+        // Complete since the last try: worth one more (the server reads it whole)
+        const justCompleted = !!d && d.done && !retriedComplete
+        if (!alive() || (!progressing && !justCompleted)) throw err
+        if (d!.done) retriedComplete = true
+        lastWritten = d!.written
+        console.warn('[shaka] position not downloaded yet, waiting for the download', describeShakaError(err))
+        onRetry?.()
+      }
+    }
+  }, [id, ext])
+  const loadWhileDownloadingRef = useRef(loadWhileDownloading)
+  loadWhileDownloadingRef.current = loadWhileDownloading
+
   const handleNeedNewSession = useCallback(async (absoluteT: number) => {
     const player = playerRef.current
     if (!player || abortedRef.current) return
@@ -139,7 +175,7 @@ export default function TvWatchPage() {
     setLoading(true)
     const url = `${API_BASE}/api/iptv/vod_hls2/${id}/playlist.m3u8?ext=${ext}&media=${media}&audio_idx=${audioIdxRef.current}&start=${newStart}`
     try {
-      await player.load(url)
+      await loadWhileDownloading(player, url, () => !abortedRef.current && seq === sessionSeqRef.current)
       if (!abortedRef.current && seq === sessionSeqRef.current) {
         setLoading(false)
         videoRef.current?.play().catch(() => {})
@@ -149,10 +185,10 @@ export default function TvWatchPage() {
       const code = (e as { code?: number } | null)?.code
       if (seq !== sessionSeqRef.current || code === 7000 || abortedRef.current) return
       // shaka.util.Error has no enumerable message: log its code and data
-      console.error('[shaka] seek-to-new-session failed:', code, (e as { data?: unknown } | null)?.data)
+      console.error('[shaka] seek-to-new-session failed:', describeShakaError(e))
       setLoading(false)
     }
-  }, [id, ext, media])
+  }, [id, ext, media, loadWhileDownloading])
   const needNewSessionRef = useRef(handleNeedNewSession)
   needNewSessionRef.current = handleNeedNewSession
 
@@ -269,17 +305,12 @@ export default function TvWatchPage() {
           setStartOffsetBoth(startSec)
 
           const hlsUrl = `${API_BASE}/api/iptv/vod_hls2/${id}/playlist.m3u8?ext=${ext}&media=${media}&audio_idx=${audioIdxRef.current}&start=${startSec}`
-          try {
-            await player.load(hlsUrl)
-          } catch (err) {
-            if (cancelled || !isRetryableShakaError(err)) throw err
-            // A far resume can take the server longer than one try (download to
-            // reach, session restarted): once more before the error screen
-            console.warn('[shaka] first load failed, retrying', describeShakaError(err))
+          // A far resume may wait for the download: each new try re-arms the
+          // error screen's timer
+          await loadWhileDownloadingRef.current(player, hlsUrl, () => !cancelled, () => {
             clearLoadTimeout()
             loadTimeout = setTimeout(onError, 100000)
-            await player.load(hlsUrl)
-          }
+          })
         }
 
         if (!cancelled) video.play().catch(() => {})
@@ -339,7 +370,9 @@ export default function TvWatchPage() {
     && download!.speed! < 0.8 * (download!.total / totalDuration)
   const loadingDetail = downloading
     ? t('iptv_download_progress').replace('{done}', String(mb(download!.written))).replace('{total}', String(mb(download!.total)))
-      + (kbps !== null ? ` · ${t('iptv_download_speed').replace('{speed}', String(kbps))}` : '')
+      + (kbps === null ? ''
+        : kbps >= 1024 ? ` · ${t('iptv_download_speed_mb').replace('{speed}', (kbps / 1024).toFixed(1))}`
+        : ` · ${t('iptv_download_speed').replace('{speed}', String(kbps))}`)
     : undefined
   const shownError = error && tooSlow ? t('iptv_too_slow').replace('{speed}', String(kbps)) : error
 

@@ -794,3 +794,48 @@ def test_vod_download_identifies_as_a_player(tmp_path):
         asyncio.run(ff._download_to_file("http://iptv.example/series/u/p/1.avi", entry["path"], entry))
     assert seen[0] == ff.VOD_USER_AGENT
     assert entry["host"] == "iptv.example"
+
+
+class TestFarSeekWaitsForTheDownload:
+    """A far seek used to pipe the film from byte 0 and decode everything up to
+    the position: in a 4.7 GB film at 43 %, it never started."""
+
+    def _choose(self, tmp_path, written, start=8046, duration=9000.0, done=False, max_wait=0):
+        import asyncio
+        import services.ffmpeg as ff
+        path = tmp_path / "mytube_47912.mkv"
+        path.write_bytes(b"\0" * 1024)
+        entry = {"path": str(path), "written": written, "total_size": 4683 * 2**20, "done": done}
+        with patch.object(ff, "_probe_vod_duration", AsyncMock(return_value=duration)):
+            return asyncio.run(ff._choose_ffmpeg_input(entry, str(path), start, max_wait))
+
+    def test_not_reached_yet(self, tmp_path):
+        import services.ffmpeg as ff
+        with pytest.raises(ff.VodPositionNotDownloaded):
+            self._choose(tmp_path, written=1993 * 2**20)
+
+    def test_reached_reads_the_file_in_place(self, tmp_path):
+        args, use_pipe = self._choose(tmp_path, written=4300 * 2**20)
+        assert not use_pipe and "-follow" in args and "pipe:0" not in args
+
+    def test_unknown_length_waits_for_the_whole_file(self, tmp_path):
+        import services.ffmpeg as ff
+        with pytest.raises(ff.VodPositionNotDownloaded):
+            self._choose(tmp_path, written=4300 * 2**20, duration=0.0)
+        args, _ = self._choose(tmp_path, written=4683 * 2**20, duration=0.0, done=True)
+        assert "-follow" not in args and "pipe:0" not in args
+
+    def test_start_of_the_film_still_streams_from_the_download(self, tmp_path):
+        args, use_pipe = self._choose(tmp_path, written=10 * 2**20, start=0)
+        assert use_pipe and args[-1] == "pipe:0"
+
+    def test_playlist_says_not_downloaded_yet(self):
+        import api.iptv as iptv
+        import services.ffmpeg as ff
+        from core import config
+        with patch.dict(config._xtream_cfg, {"server": "http://iptv.example", "username": "u", "password": "p"}), \
+             patch.object(iptv, "free_xtream_connection", AsyncMock()), \
+             patch("api.youtube._start_iptv_vod_hls_session", AsyncMock(side_effect=ff.VodPositionNotDownloaded())):
+            resp = _youtube_client().get("/api/iptv/vod_hls2/47912/playlist.m3u8?ext=mkv&media=movie&start=8046")
+        assert resp.status_code == 503
+        assert resp.json()["detail"] == "position not downloaded yet"

@@ -501,13 +501,20 @@ async def _probe_vod_duration(path: str) -> float:
 _GROWING_FILE_ARGS = ["-follow", "1", "-rw_timeout", "30000000"]
 
 
-async def _choose_ffmpeg_input(vod_entry: dict, cache_path: str, start: int, max_wait: float = 60) -> tuple:
-    """Pick the fastest ffmpeg input strategy for this start position.
+class VodPositionNotDownloaded(Exception):
+    """The start position lies past what the download has reached so far."""
 
-    For start > 0 with a partial cache, estimates the seek byte offset,
-    waits (up to 60s) for the download to cover it, then returns file-input
-    args so ffmpeg can use the MKV cue table for a near-instant seek instead
-    of reading the entire file linearly through a pipe.
+
+async def _choose_ffmpeg_input(vod_entry: dict, cache_path: str, start: int, max_wait: float = 60) -> tuple:
+    """Input arguments for a film/episode session starting at `start` seconds.
+
+    From the start, the download is piped to ffmpeg as it arrives. Further in,
+    the partial file is read in place once the download has reached the
+    position (up to `max_wait` s), so ffmpeg jumps there through the index.
+    Raises VodPositionNotDownloaded if it has not got there yet: the player
+    asks again while the download moves on. (Piping the file from byte 0
+    instead made ffmpeg decode everything up to the position: a far seek in a
+    film never started.)
     """
     seek = ["-ss", str(start)] if start > 0 else []
     cache_done = (
@@ -522,35 +529,34 @@ async def _choose_ffmpeg_input(vod_entry: dict, cache_path: str, start: int, max
     if not cache_path or not os.path.exists(cache_path) or start == 0:
         return ["-fflags", "+ignidx", *seek, "-i", "pipe:0"], True
 
-    # start > 0, partial cache — try to fast-seek via file input
+    # Where the position should be in the file. Unknown (no size yet, or a
+    # container that can't be probed partially): wait for the whole file.
+    target = None
     total_size = vod_entry.get("total_size", 0)
     if total_size > 0 and vod_entry.get("written", 0) >= 5 * 1024 * 1024:
         duration = await _probe_vod_duration(cache_path)
         if duration > 1.0:
-            seek_byte = int(start / duration * total_size)
-            # 20 MB safety buffer so ffmpeg isn't reading at the exact frontier
-            target = min(seek_byte + 20 * 1024 * 1024, total_size)
-            deadline = asyncio.get_event_loop().time() + max_wait
-            while (
-                vod_entry.get("written", 0) < target
-                and not vod_entry.get("done")
-                and asyncio.get_event_loop().time() < deadline
-            ):
-                await asyncio.sleep(0.5)
-            if vod_entry.get("written", 0) >= seek_byte or vod_entry.get("done"):
-                print(
-                    f"[vod_hls] seek={start}s seek_byte={seek_byte//1024//1024}MB "
-                    f"written={vod_entry['written']//1024//1024}MB → file seek",
-                    flush=True,
-                )
-                # The byte estimate is linear but bitrates are not: the target
-                # may lie past what is downloaded. ffmpeg then hit the end of the
-                # file and wrote an empty playlist, which crashed the player.
-                # -follow makes it wait for the file to grow; once the download
-                # is over, rw_timeout ends the read.
-                return [*_GROWING_FILE_ARGS, *seek, "-i", cache_path], False
+            # 20 MB past the linear estimate: bitrates vary along a film
+            target = min(int(start / duration * total_size) + 20 * 1024 * 1024, total_size)
 
-    return ["-fflags", "+ignidx", *seek, "-i", "pipe:0"], True
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + max_wait
+    while (
+        not vod_entry.get("done")
+        and (target is None or vod_entry.get("written", 0) < target)
+        and loop.time() < deadline
+    ):
+        await asyncio.sleep(0.5)
+
+    if vod_entry.get("done") and vod_entry.get("written", 0) > 0:
+        return [*seek, "-i", cache_path], False
+    if target is not None and vod_entry.get("written", 0) >= target:
+        print(f"[vod_hls] seek={start}s target={target // 2**20}MB "
+              f"written={vod_entry['written'] // 2**20}MB → file seek", flush=True)
+        # Still growing: -follow waits at its end instead of stopping there (an
+        # estimate a little short), rw_timeout ends the read once it stops
+        return [*_GROWING_FILE_ARGS, *seek, "-i", cache_path], False
+    raise VodPositionNotDownloaded()
 
 
 async def _start_iptv_vod_hls_session(

@@ -73,6 +73,8 @@ from services.ffmpeg import (
     _proxychains_prefix,
     _start_ffmpeg,
     _start_iptv_vod_hls_session,
+    _vod_dl_cache,
+    VodPositionNotDownloaded,
 )
 from services.vpn import _get_proxy_url, record_youtube_error
 router = APIRouter()
@@ -902,22 +904,27 @@ async def iptv_vod_hls2_playlist(
         for k in to_kill:
             _kill_vod_session(_iptv_vod_hls_sessions.pop(k))
 
-    try:
-        # Leave time after the wait for the download to transcode a first segment
-        session = await _start_iptv_vod_hls_session(stream_id, ext, media, audio_idx, start,
-                                                    max_wait=max(0.0, budget_end - loop.time() - 30))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    session["last_access"] = _time()
+    session: Dict[str, Any] = {}
 
     def fail(status: int, detail: str):
-        vod = session.get("vod_entry") or {}
+        vod = session.get("vod_entry") or _vod_dl_cache.get(f"{stream_id}.{ext}") or {}
         # One line per failure, to tell next time what kept a film from starting
         print(f"[vod_hls] playlist {stream_id}@{start}s: {status} {detail} after {loop.time() - started:.0f}s "
               f"(download {vod.get('written', 0) // 2**20}/{vod.get('total_size', 0) // 2**20} MB, "
               f"done={bool(vod.get('done'))}, error={vod.get('error')}, "
               f"speed={(vod.get('speed') or 0) / 1024:.0f} KB/s from {vod.get('host')})", flush=True)
         return HTTPException(status_code=status, detail=detail)
+
+    try:
+        # Leave time after the wait for the download to transcode a first segment
+        session = await _start_iptv_vod_hls_session(stream_id, ext, media, audio_idx, start,
+                                                    max_wait=max(0.0, budget_end - loop.time() - 30))
+    except VodPositionNotDownloaded:
+        # The player asks again while the download moves on (it shows it)
+        raise fail(503, "position not downloaded yet")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    session["last_access"] = _time()
 
     def drop(sess: dict) -> None:
         _iptv_vod_hls_sessions.pop(sess["key"], None)
@@ -954,7 +961,10 @@ async def iptv_vod_hls2_playlist(
                 while not vod_entry.get("done") and loop.time() < budget_end - 20:
                     await asyncio.sleep(0.5)
                 if loop.time() < budget_end - 15:
-                    session = await _start_iptv_vod_hls_session(stream_id, ext, media, audio_idx, start, max_wait=0)
+                    try:
+                        session = await _start_iptv_vod_hls_session(stream_id, ext, media, audio_idx, start, max_wait=0)
+                    except VodPositionNotDownloaded:
+                        raise fail(503, "position not downloaded yet")
                     session["last_access"] = _time()
                     ready_by = loop.time() + 15
                     continue
